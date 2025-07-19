@@ -773,7 +773,11 @@
         }
     });
 
-    document.addEventListener('DOMContentLoaded', renderPosts);
+    document.addEventListener('DOMContentLoaded', () => {
+    // 记录用户查看动态的时间
+    localStorage.setItem('lastMomentsViewTimestamp', Date.now().toString());
+    renderPosts();
+});
 
     </script>
 </body>

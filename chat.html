@@ -78,6 +78,15 @@
 
     <script type="module">
         import { db } from './db.js';
+        const notificationChannel = new BroadcastChannel('xphone_notifications');
+
+        // 监听来自后台的消息
+        notificationChannel.onmessage = (event) => {
+            if (event.data && event.data.type === 'new_message') {
+                console.log('接收到新消息广播，正在刷新聊天列表...');
+                loadAndRenderChats();
+            }
+        };
 
         const chatListContainer = document.getElementById('chat-list');
 
@@ -226,6 +235,13 @@
 
         window.addEventListener('pageshow', (event) => {
             if (event.persisted) {
+                loadAndRenderChats();
+            }
+        });
+
+        // 当用户切换浏览器标签页回到此页面时，也刷新列表
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
                 loadAndRenderChats();
             }
         });

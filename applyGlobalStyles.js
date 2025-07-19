@@ -112,9 +112,19 @@ async function checkAndRunBackgroundSimulation() {
         console.error("后台活动模拟检查失败:", error);
     }
     }
+async function checkFooterNotifications() {
+    const lastView = parseInt(localStorage.getItem('lastMomentsViewTimestamp') || '0');
+    const newMomentsCount = await db.xzonePosts.where('timestamp').above(lastView).count();
 
+    const momentsDockItem = document.querySelector('.dock-item[href="moments.html"]');
+    if (momentsDockItem) {
+        momentsDockItem.classList.toggle('has-unread-glow', newMomentsCount > 0);
+    }
+}
     // 在页面加载时，同时执行样式应用和后台模拟启动
 document.addEventListener('DOMContentLoaded', async() => {
     applyGlobalStyles();
+    checkFooterNotifications();
     await checkAndRunBackgroundSimulation();
 });
+

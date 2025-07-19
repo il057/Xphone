@@ -1,4 +1,5 @@
 import { db } from './db.js';
+const notificationChannel = new BroadcastChannel('xphone_notifications');
 
 
 /**
@@ -474,6 +475,7 @@ ${recentPostsSummary}
                     chat.history.push(textMessage);
                     chat.unreadCount = (chat.unreadCount || 0) + 1;
                     await db.chats.put(chat);
+                    notificationChannel.postMessage({ type: 'new_message' });
                     if (Notification.permission === 'granted') {
                         const senderChat = allChatsMap.get(charId);
                         const notificationOptions = {
@@ -692,6 +694,7 @@ async function triggerInactiveGroupAiAction(actor, group) {
                     groupToUpdate.history.push(message);
                     groupToUpdate.unreadCount = (groupToUpdate.unreadCount || 0) + 1;
                     await db.chats.put(groupToUpdate);
+                    notificationChannel.postMessage({ type: 'new_message' });
                     
                     console.log(`后台群聊活动: "${actor.name}" 在 "${group.name}" 中执行了 ${action.type} 动作。`);
                     break;

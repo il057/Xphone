@@ -125,3 +125,24 @@ body {
     border-radius: 50%;
     border: 2px solid white;
 }
+
+/* -- Glow Animation for Notifications -- */
+@keyframes glow {
+    0%, 100% {
+        text-shadow: 0 0 5px var(--theme-color), 0 0 10px var(--theme-color);
+    }
+    50% {
+        text-shadow: 0 0 10px var(--theme-color), 0 0 20px var(--theme-color);
+    }
+}
+
+.has-unread-glow span, .has-unread-glow svg {
+    color: var(--theme-color) !important;
+    animation: glow 1.5s ease-in-out infinite;
+}
+
+/* For Index Page Icons */
+.app-icon-link.has-unread-glow .icon-container {
+    box-shadow: 0 0 15px 3px var(--theme-color);
+    animation: glow 1.5s ease-in-out infinite;
+}
