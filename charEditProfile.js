@@ -511,7 +511,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 id: finalCharId,
                 history: [], 
-                isGroup: false,
+                isGroup: 0,
                 signature: '',
                 status: { text: '在线', color: '#2ecc71' },
                 blockStatus: null

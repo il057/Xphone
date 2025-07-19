@@ -599,39 +599,6 @@ function convertMessageForAI(msg) {
     return msg.content;
 }
 
-/**
- * Intelligently parses the AI's response string.
- * It handles single JSON objects, JSON arrays, and even malformed or plain text responses.
- * @param {string} content - The raw string from the AI.
- * @returns {Array<object>} - An array of action objects, guaranteed to be an array.
- */
-function parseAiResponse(content) {
-    const trimmedContent = content.trim();
-
-    // Attempt to find and parse a JSON structure within markdown backticks
-    const jsonMatch = trimmedContent.match(/```json\s*([\s\S]*?)\s*```/);
-    const textToParse = jsonMatch ? jsonMatch[1].trim() : trimmedContent;
-
-    try {
-        const parsed = JSON.parse(textToParse);
-        // If the AI returns a single object, wrap it in an array to standardize the format
-        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
-            return [parsed];
-        }
-        // If it's already an array, just return it
-        if (Array.isArray(parsed)) {
-            return parsed;
-        }
-    } catch (e) {
-        // If JSON.parse fails, it's likely plain text.
-        console.warn("AI response was not valid JSON, treating as plain text.", e);
-        const fallbackName = currentChat.isGroup ? currentChat.members[0]?.name : currentChat.name;
-        return [{ type: 'text', name: fallbackName, content: content }];
-    }
-    
-    // Fallback for plain text: wrap the content in a standard text action object
-    return [{ type: 'text', content: content }];
-}
 
 function scrollToBottom() {
     chatContainer.scrollTop = chatContainer.scrollHeight;

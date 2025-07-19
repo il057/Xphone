@@ -240,8 +240,17 @@ export async function runActiveSimulationTick() {
 
     // --- 处理私聊 ---
     const allSingleChats = await db.chats.where('isGroup').equals(0).toArray();
-    if (allSingleChats.length > 0) {
-        for (const chat of allSingleChats) {
+    // 筛选出可以进行后台活动的角色（未被拉黑）
+    const eligibleChats = allSingleChats.filter(chat => !chat.blockStatus || (chat.blockStatus.status !== 'blocked_by_ai' && chat.blockStatus.status !== 'blocked_by_user'));
+
+    if (eligibleChats.length > 0) {
+        // 随机打乱数组
+        eligibleChats.sort(() => 0.5 - Math.random());
+        // 每次心跳只唤醒1到2个角色，避免API过载
+        const chatsToWake = eligibleChats.slice(0, Math.min(eligibleChats.length, 2)); 
+        console.log(`本次唤醒 ${chatsToWake.length} 个角色:`, chatsToWake.map(c => c.name).join(', '));
+
+        for (const chat of chatsToWake) {
            // 1. 处理被用户拉黑的角色
             if (chat.blockStatus?.status === 'blocked_by_user') {
                 const blockedTimestamp = chat.blockStatus.timestamp;
@@ -333,16 +342,19 @@ async function triggerInactiveAiAction(charId) {
                 const commentAuthor = allChatsMap.get(comment.author);
                 return comment.author === 'user' || (commentAuthor && commentAuthor.groupId === charGroupId);
             });
-            const commentSummary = visibleComments.length > 0
-                ? ` (有 ${visibleComments.length} 条你可见的评论)`
+            const commentSummary = (p.comments && p.comments.length > 0)
+                ? `\n    已有评论:\n` + p.comments.map(c => {
+                    const commentAuthorName = c.author === 'user' ? (xzoneSettings.nickname || '我') : (allChatsMap.get(c.author)?.name || '未知');
+                    return `    - ${commentAuthorName}: "${c.text}"`;
+                }).join('\n')
                 : '';
-
+            
             let relationContext = "";
             const relation = p.authorId === 'user' ? userRelation : relationsMap.get(p.authorId);
             if (relation) {
                 relationContext = ` (你和${authorName}是${relation.type}关系, 好感度: ${relation.score})`;
             }
-            return `- [Post ID: ${p.id}] by ${authorName}: "${(p.publicText || p.content).substring(0, 40)}..."${relationContext}`;
+            return `- [Post ID: ${p.id}] by ${authorName}: "${(p.publicText || p.content).substring(0, 40)}..."${relationContext}${commentSummary}`;
         }).join('\n');
     }
 
@@ -398,13 +410,27 @@ async function triggerInactiveAiAction(charId) {
                 model: apiConfig.model,
                 messages: [{ role: 'system', content: systemPrompt }],
                 temperature: 0.9,
+                response_format: { type: "json_object" }
             })
         });
 
         if (!response.ok) throw new Error(await response.text());
         
         const data = await response.json();
-        const responseArray = JSON.parse(data.choices[0].message.content);
+        // 1. 调用 extractAndParseJson 函数
+        const responseContent = data.choices[0].message.content;
+        const parsedJson = extractAndParseJson(responseContent);
+
+        // 2. **核心修复**：检查解析结果是否是一个数组
+        if (!parsedJson || !Array.isArray(parsedJson)) {
+            console.error(`角色 "${chat.name}" 的独立行动失败: AI返回的内容无法解析为JSON数组。`, {
+                originalResponse: responseContent,
+                parsedResult: parsedJson
+            });
+            return; // 安全退出，防止程序崩溃
+        }
+
+        const responseArray = parsedJson;
 
         for (const action of responseArray) {
             const actorName = action.name || chat.name;
@@ -644,5 +670,54 @@ async function triggerInactiveGroupAiAction(actor, group) {
         }
     } catch (error) {
         console.error(`角色 "${actor.name}" 在群聊 "${group.name}" 的独立行动失败:`, error);
+    }
+}
+
+/**
+ * 从可能包含 markdown 或其他文本的字符串中提取并解析JSON。
+ * 此版本能正确处理对象（{}）和数组（[]）。
+ * @param {string} raw - The raw string from the AI.
+ * @returns {object|array|null} - The parsed JSON object/array or null if parsing fails.
+ */
+function extractAndParseJson(raw) {
+    if (typeof raw !== 'string' || !raw.trim()) {
+        return null;
+    }
+
+    // 1. 优先处理被 markdown 代码块包裹的 JSON
+    const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/);
+    let s = jsonMatch ? jsonMatch[1].trim() : raw.trim();
+
+    // 2. 寻找JSON结构的起始位置 (寻找第一个 '{' 或 '[')
+    const startIndex = s.search(/[\{\[]/);
+    if (startIndex === -1) {
+        console.error('extractJson() failed: No JSON start character found.', { originalString: raw });
+        return null;
+    }
+
+    // 3. 根据起始符号，确定对应的结束符号
+    const startChar = s[startIndex];
+    const endChar = startChar === '{' ? '}' : ']';
+    
+    // 4. 寻找最后一个匹配的结束符号
+    const endIndex = s.lastIndexOf(endChar);
+    if (endIndex === -1 || endIndex < startIndex) {
+        console.error('extractJson() failed: No matching JSON end character found.', { originalString: raw });
+        return null;
+    }
+
+    // 5. 截取有效的JSON子串
+    s = s.substring(startIndex, endIndex + 1);
+
+    // 6. 尝试解析
+    try {
+        return JSON.parse(s);
+    } catch (e) {
+        console.error('extractJson() failed: JSON.parse error after cleanup.', {
+            error: e.message,
+            stringAttemptedToParse: s,
+            originalString: raw
+        });
+        return null;
     }
 }

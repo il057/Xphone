@@ -83,11 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
             state.globalSettings.blockCooldownHours = parseFloat(document.getElementById('block-cooldown-input').value) || 1;
             await db.globalSettings.put(state.globalSettings);
 
-            if (state.globalSettings.enableBackgroundActivity) {
-                startActiveSimulation();
-            } else {
-                stopActiveSimulation();
-            }
             alert('设置已成功保存！');
         } catch (error) {
             console.error("保存设置失败:", error);
@@ -282,9 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('export-data-btn').addEventListener('click', exportBackup);
         document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-data-input').click());
         document.getElementById('import-data-input').addEventListener('change', e => importBackup(e.target.files[0]));
-        if (state.globalSettings.enableBackgroundActivity) {
-            startActiveSimulation();
-        }
     }
 
     main();

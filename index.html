@@ -127,7 +127,7 @@
 
         <script type = 'module'>
             import { db } from './db.js';
-            import { runOfflineSimulation } from './simulationEngine.js';
+            import { runOfflineSimulation, startActiveSimulation } from './simulationEngine.js';
             
             function updateMainScreenClock() {
                 const now = new Date();
@@ -146,8 +146,7 @@
                 }
             };
             document.addEventListener('visibilitychange', recordOfflineTime);
-            window.addEventListener('pagehide', recordOfflineTime);
-
+            window.addEventListener('pagehide', recordOfflineTime);     
         
             document.addEventListener('DOMContentLoaded', async () => {
                 updateMainScreenClock();

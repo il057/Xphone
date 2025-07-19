@@ -1,6 +1,7 @@
 // settings.js
 // Import the shared database instance from db.js
 import { db } from './db.js';
+import { runActiveSimulationTick } from './simulationEngine.js';
 
 
 /**
@@ -86,4 +87,34 @@ function shadeColor(color, percent) {
     return "#" + RR + GG + BB;
 }
 
-document.addEventListener('DOMContentLoaded', applyGlobalStyles);
+
+async function checkAndRunBackgroundSimulation() {
+    try {
+        const settings = await db.globalSettings.get('main');
+        
+        // 检查功能是否开启
+        if (!settings || !settings.enableBackgroundActivity) {
+            return;
+        }
+
+        const now = Date.now();
+        const lastTick = settings.lastActiveSimTick || 0;
+        const interval = (settings.backgroundActivityInterval || 60) * 1000; // 转换为毫秒
+
+        // 如果距离上次心跳的时间超过了设定的间隔
+        if (now - lastTick > interval) {
+            // 更新时间戳，防止重复执行
+            await db.globalSettings.update('main', { lastActiveSimTick: now });
+            // 执行心跳任务
+            await runActiveSimulationTick();
+        }
+    } catch (error) {
+        console.error("后台活动模拟检查失败:", error);
+    }
+    }
+
+    // 在页面加载时，同时执行样式应用和后台模拟启动
+document.addEventListener('DOMContentLoaded', async() => {
+    applyGlobalStyles();
+    await checkAndRunBackgroundSimulation();
+});
