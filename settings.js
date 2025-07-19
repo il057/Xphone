@@ -204,8 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const text = await file.text();
             const data = JSON.parse(text);
-
-            // 检查版本兼容性等
+            
+            const singleObjectTables = ['apiConfig', 'globalSettings', 'musicLibrary', 'xzoneSettings'];
 
             await db.transaction('rw', db.tables, async () => {
                 // 清空所有表
@@ -215,14 +215,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 导入数据
                 for (const tableName in data) {
+                    // 跳过元数据字段，不把它们当作表来处理
+                    if (tableName === 'version' || tableName === 'timestamp') {
+                        continue;
+                    }
+                    
                     if (db.table(tableName)) {
-                         // 检查是数组（批量导入）还是对象（单条导入）
-                        if (Array.isArray(data[tableName])) {
-                            if (data[tableName].length > 0) {
+                        if (singleObjectTables.includes(tableName)) {
+                            if (data[tableName]) {
+                                await db.table(tableName).put(data[tableName]);
+                            }
+                        } else {
+                            if (Array.isArray(data[tableName]) && data[tableName].length > 0) {
                                 await db.table(tableName).bulkPut(data[tableName]);
                             }
-                        } else if (data[tableName]) { // 确保对象不是null
-                            await db.table(tableName).put(data[tableName]);
                         }
                     }
                 }
