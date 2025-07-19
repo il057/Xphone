@@ -1,4 +1,3 @@
-// phone/music.js (已修改)
 import * as spotifyManager from './spotifyManager.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,7 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
             musicContainer.innerHTML = `
                 <div id="login-view" class="text-center py-16">
                     <button id="login-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-full inline-flex items-center">
-                        <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.19 14.37c-.24.37-.76.49-1.13.24-2.82-1.72-6.38-2.1-10.57-.98-.46.06-.85-.29-.9-.75s.29-.85.75-.9c4.5-1.18 8.35-.69 11.45 1.18.38.24.49.76.25 1.13zm.88-2.32c-.3.46-1.02.6-1.48.3-3.23-1.98-7.85-2.5-11.53-1.37-.55.17-.98-.29-.81-.84s.29-.98.84-.81c4.13-1.23 9.11-.6 12.68 1.6.46.29.6 1.01.3 1.48zm.3-2.5c-.35.53-1.18.72-1.73.37-3.7-2.3-9.75-2.8-13.43-1.53-.63.22-1.28-.2-1.06-.83s.2-1.28.83-1.06c4.14-1.4 10.65-.82 14.85 1.78.55.35.73 1.18.38 1.73z"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-spotify" viewBox="0 0 16 16">
+                        <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0m3.669 11.538a.5.5 0 0 1-.686.165c-1.879-1.147-4.243-1.407-7.028-.77a.499.499 0 0 1-.222-.973c3.048-.696 5.662-.397 7.77.892a.5.5 0 0 1 .166.686m.979-2.178a.624.624 0 0 1-.858.205c-2.15-1.321-5.428-1.704-7.972-.932a.625.625 0 0 1-.362-1.194c2.905-.881 6.517-.454 8.986 1.063a.624.624 0 0 1 .206.858m.084-2.268C10.154 5.56 5.9 5.419 3.438 6.166a.748.748 0 1 1-.434-1.432c2.825-.857 7.523-.692 10.492 1.07a.747.747 0 1 1-.764 1.288"/>
+                        </svg>
                         使用 Spotify 登录
                     </button>
                 </div>
