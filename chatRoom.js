@@ -586,7 +586,7 @@ function convertMessageForAI(msg) {
             case 'voice_message':
                 return `[用户发送了语音，内容是: "${msg.content}"]`;
             case 'transfer':
-                return `[用户发起了转账，金额¥${msg.amount}，备注: "${msg.note || '无'}"]`;
+                return `[用户发起了转账，金额¥${msg.amount}，备注: "${msg.note || '无'}"] {timestamp: ${toMillis(msg.timestamp)}}`;
             case 'share_link':
                  return `[用户分享了链接，标题: "${msg.title}"]`;
             case 'sticker':
@@ -1340,7 +1340,7 @@ async function getAiResponse( charIdToTrigger = null ) {
 - **【【【绝对禁止】】】**: 用户的身份是【${userNickname}】。在任何情况下，你都【绝对不能】生成 'name' 字段为 **"${userNickname}"** 的消息或动作。你的职责范围【仅限于】下方“角色手册”中列出的AI角色。
 - **【【【禁止出戏】】】**: 严格禁止透露你是AI、模型、程序或机器人。严禁使用“扮演”、“生成”、“设定”等词语。所有非语言信息都必须通过“可用工具箱”中的JSON指令来执行。
 - **【【【语言规则】】】**: 除非角色设定明确要求，否则请【优先使用中文】进行交流。
-
+- **【【【第一人称铁律】】】**: 当你生成任何角色的发言（即 "type": "text" 的内容）时，【必须】使用第一人称视角（“我”），绝对禁止使用第三人称（如“他”、“她”或直接称呼角色自己的名字）来描述角色自己的行为或想法。
 ## 1.2 核心输出格式 (Mandatory Output Format)
 - 【【【最高优先级铁律】】】 你的每一次、每一个回复都【绝对必须】是一个符合JSON格式的、完整的字符串。这是本程序唯一能够解析的格式。任何非JSON的纯文本回复都会导致程序错误。
 - 顶层JSON对象必须包含 'response' 和 'relationship_adjustments' 两个键。
@@ -1398,13 +1398,14 @@ ${currentChat.members.map(m => `
 - **中性影响 (0)**: 如果没有明显的情感互动，可以不提供此项。
 - **负面影响 (-1 到 -10)**: 当 target 的行为让 source 感到被冒犯、伤心、愤怒或被无视时。
 - **理由 (reason)**: 必须用一句话简要说明好感度变化的原因。
+- **【【【格式要求】】】**: 每个好感度调整对象都必须包含 'source_char_name', 'target_char_name', 'score_change', 和 'reason' 四个键。
+- **示例**: {"source_char_name": "角色A", "target_char_name": "User", "score_change": 2, "reason": "用户赞同了我的观点，很开心。"}
 
 
 # PART 5: 可用工具箱 (Unified Toolbox of Actions)
 ## 5.1 基础交流
 - **发送文本**: {"type": "text", "senderId": "角色的ID", "content": "文本内容"}
-- **引用回复**: {"type": "quote_reply", "senderId": "角色的ID", "target_timestamp": 1688888888888, "reply_content": "你的回复内容"}
-
+- **引用回复**: {"type": "quote_reply", "senderId": "角色的ID", "target_timestamp": [要引用的消息时间戳], "reply_content": "你的回复内容"}
 ## 5.2 丰富表达
 - **发送表情**: {"type": "send_sticker", "senderId": "角色的ID", "name": "表情描述文字"}
 - **发送语音**: {"type": "voice_message", "senderId": "角色的ID", "content": "语音的文字内容"}
@@ -1420,9 +1421,9 @@ ${currentChat.members.map(m => `
 ## 5.4 群组功能互动
 - **发拼手气红包**: {"type": "red_packet", "packetType": "lucky", "senderId": "角色的ID", "amount": 8.88, "count": 5, "greeting": "祝福语"}
 - **发专属红包**: {"type": "red_packet", "packetType": "direct", "senderId": "角色的ID", "amount": 5.20, "receiverName": "接收者名", "greeting": "祝福语"}
-- **打开红包**: {"type": "open_red_packet", "senderId": "你的ID", "packet_timestamp": 1688888888888}
+- **打开红包**: {"type": "open_red_packet", "senderId": "你的ID", "packet_timestamp": [红包消息的时间戳]}
 - **发起外卖代付**: {"type": "waimai_request", "senderId": "角色的ID", "productInfo": "一杯咖啡", "amount": 25}
-- **回应外卖代付**: {"type": "waimai_response", "senderId": "角色的ID", "target_timestamp": 1688888888888, "decision": "paid" | "rejected"}
+- **回应外卖代付**: {"type": "waimai_response", "senderId": "角色的ID", "target_timestamp": [外卖请求消息的时间戳], "decision": "paid" | "rejected"}
 - **音乐控制**: {"type": "spotify_toggle_play", "senderId": "角色的ID"}, {"type": "spotify_next_track", "senderId": "角色的ID"}
 
 ## 5.5 个人状态与记忆
@@ -1583,8 +1584,7 @@ ${relationsContext}
 # PART 5: 可用工具箱 (Unified Toolbox of Actions)
 ## 5.1 基础交流
 - **发送文本**: {"type": "text", "content": "文本内容"}
-- **引用回复**: {"type": "quote_reply", "target_timestamp": 1688888888888, "reply_content": "你的回复内容"}
-
+- **引用回复**: {"type": "quote_reply", "target_timestamp": [要引用的消息时间戳], "reply_content": "你的回复内容"}
 ## 5.2 丰富表达
 - **发送表情**: {"type": "send_sticker", "name": "表情的描述文字"}
 - **发送语音**: {"type": "voice_message", "content": "语音的文字内容"}（发送语音时可以对背景音进行描述）
@@ -1609,9 +1609,9 @@ ${relationsContext}
 
 ## 5.5 功能性与关系互动
 - **发起转账**: {"type": "transfer", "amount": 5.20, "note": "一点心意"}
-- **回应转账**: {"type": "respond_to_transfer", "target_timestamp": 1688888888888, "decision": "accept" or "decline"} (target_timestamp 是用户转账消息的时间戳)
+- **回应转账**: {"type": "respond_to_transfer", "target_timestamp": [用户的转账消息时间戳], "decision": "accept" | "decline"}
 - **发起外卖代付**: {"type": "waimai_request", "productInfo": "一杯咖啡", "amount": 25}
-- **回应外卖代付**: {"type": "waimai_response", "target_timestamp": 1688888888888, "decision": "paid" | "rejected"}
+- **回应外卖代付**: {"type": "waimai_response", "target_timestamp": [外卖请求消息的时间戳], "decision": "paid" | "rejected"}
 - **音乐控制**: {"type": "spotify_toggle_play"}, {"type": "spotify_next_track"}, {"type": "spotify_previous_track"}
 - **拉黑用户**: {"type": "block_user"} (仅在关系极度恶化时使用)
 - **回应好友申请**: {"type": "friend_request_response", "decision": "accept" | "reject"} (仅在收到特定系统提示时使用)
@@ -1658,12 +1658,12 @@ ${musicPromptSection}
 3.  只有当【你，AI角色】自己想要某样东西，并且想让【用户】为你付款时，才使用此指令。
 
 # 如何处理用户转账:
-1.  **感知事件**: 当对话历史中出现 \`[用户发起了转账...]\` 的系统提示时，意味着你刚刚收到了一笔钱。
-2.  **做出决策**: 你【必须】根据自己的人设、当前对话的氛围以及转账的金额和备注，来决定是“接受”还是“拒绝”这笔转账。
-3.  **使用指令回应**:
- -   如果决定接受，你【必须】使用指令：\`{"type": "accept_transfer", "for_timestamp": (收到转账的那条消息的时间戳)}\`。
--   如果决定拒绝，你【必须】使用指令：\`{"type": "decline_transfer", "for_timestamp": (收到转账的那条消息的时间戳)}\`。这个指令会自动为你生成一个“退款”的转账卡片。
-4.  **【【【至关重要】】】**: 在使用上述任一指令后，你还【必须】紧接着发送一条或多条 \`text\` 消息，来对你的决定进行解释或表达感谢/歉意。
+1.  **感知事件**: 当对话历史中出现格式为 \`[用户发起了转账...] {timestamp: 1721382490123}\` 的系统提示时，你收到了转账。
+2.  **提取时间戳**: 你【必须】从该提示中准确地提取出那个独一无二的数字时间戳 (timestamp)。
+3.  **做出决策**: 根据你的人设和当前情景，决定是“接受”(\`accept\`) 还是“拒绝”(\`decline\`) 这笔转账。
+4.  **使用统一指令回应**: 你【必须】使用 PART 5 中定义的 \`respond_to_transfer\` 指令，并将提取到的时间戳填入 \`target_timestamp\` 字段。
+    - 示例: \`{"type": "respond_to_transfer", "target_timestamp": 1721382490123, "decision": "accept"}\`
+5.  **【【【至关重要】】】**: 在使用该指令后，你还【必须】紧接着发送一条或多条 \`text\` 消息，来对你的决定进行解释或表达感谢/歉意。
 
 #更换昵称
 -昵称是你在这个线上聊天软件使用的网名，你可以按照自己的喜好修改
@@ -1816,7 +1816,7 @@ ${musicPromptSection}
                         role: 'assistant',
                         senderName: actorName, // actorName 变量确保了在群聊和私聊中都能正确显示发送者
                         type: 'text_photo', // 复用现有类型来显示图片消息
-                        content: `[图片]: "${action.description}"`, // 将AI的描述作为内容
+                        content: `"${action.description}"`, // 将AI的描述作为内容
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(photoMessage);

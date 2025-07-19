@@ -454,7 +454,9 @@
                 ? (displayPersona?.avatar || defaultAvatar)
                 : (allChats[post.authorId]?.settings.aiAvatar || defaultAvatar);
             
-            let contentHtml = post.publicText ? `<p class="text-gray-800 whitespace-pre-wrap mb-2">${post.publicText}</p>` : '';
+            const postText = post.publicText || post.content || '';
+            let contentHtml = postText ? `<p class="text-gray-800 whitespace-pre-wrap mb-2">${postText}</p>` : '';
+
             if (post.type === 'image_post') {
                 contentHtml += `<div class="image-desc-placeholder">${post.imageDescription || '图片描述为空'}</div>`;
             }
