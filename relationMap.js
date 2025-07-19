@@ -17,6 +17,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 应用主题色
     const themeColor = globalSettings?.themeColor || '#3b82f6';
 
+    // ---  Create a map to link a character ID to its specific Persona ID ---
+    const charIdToPersonaId = new Map();
+    allPersonas.forEach(persona => {
+        if (persona.appliedChats && persona.appliedChats.length > 0) {
+            const appliedSet = new Set(persona.appliedChats.map(String)); // Ensure all IDs are strings for comparison
+            allChats.forEach(chat => {
+                const chatGroupIdStr = chat.groupId ? String(chat.groupId) : null;
+                // A character belongs to a persona if its ID or its GroupID is in the persona's applied list
+                if (appliedSet.has(chat.id) || (chatGroupIdStr && appliedSet.has(chatGroupIdStr))) {
+                    charIdToPersonaId.set(chat.id, persona.id);
+                }
+            });
+        }
+    });
+
+
     // --- 2. 准备节点 (Nodes) ---
     const nodes = new vis.DataSet();
     
@@ -57,21 +73,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         stranger: '#9e9e9e' // 灰色
     };
 
-    // --- 新增：处理角色与人格之间的关系 ---
+    // --- MODIFIED: 处理角色与人格之间的关系 ---
     const userRelations = allRelations.filter(r => r.targetCharId === 'user');
     userRelations.forEach(rel => {
         const charId = rel.sourceCharId;
         const charNode = nodes.get(charId);
         if (!charNode) return; // 如果角色节点不存在，则跳过
 
+        // Find the correct persona for this character using our map
+        const personaId = charIdToPersonaId.get(charId);
+        if (!personaId) {
+            // This is expected if a character with a user relationship isn't assigned to a persona
+            return; 
+        }
+
         const score = rel.score;
         const type = rel.type || 'stranger';
         const color = relationTypeColors[type] || '#9e9e9e';
         const width = Math.max(0.5, (Math.abs(score) / 1000) * 5);
 
-        // 为该角色创建一条指向【每一个】人格预设的连线
-        allPersonas.forEach(persona => {
-            const personaNodeId = `persona_${persona.id}`;
+        // Get the specific persona this character should connect to
+        const personaNodeId = `persona_${personaId}`;
+        const persona = allPersonas.find(p => p.id === personaId);
+        
+        // Create a single edge to the correct persona
+        if (persona) {
             edges.add({
                 from: charId,
                 to: personaNodeId,
@@ -80,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 smooth: { type: 'continuous' }, // 角色到人格的线使用直线
                 title: `${charNode.label} → ${persona.name}<br>关系: ${type}<br>好感度: ${score}`
             });
-        });
+        }
     });
 
     // --- 处理角色与角色之间的关系 ---
