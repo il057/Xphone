@@ -10,6 +10,30 @@ body {
     background-color: #f3f4f6; /* A light grey background for content pages */
 }
 
+html {
+    height: 100%;
+}
+
+body {
+    height: 100%;
+    overflow: hidden; /* Prevent body from scrolling */
+}
+
+/* Ensure the main container div in each page enforces the flex layout */
+.w-full.h-screen.mx-auto.flex.flex-col {
+    height: 100%;
+}
+
+/* Ensure main content areas scroll correctly */
+main.flex-grow {
+    flex: 1 1 auto;
+    overflow-y: auto;
+}
+
+header.app-header, footer.app-dock {
+    flex-shrink: 0;
+}
+
 /* --- Header --- */
 .app-header {
     background-color: rgba(255, 255, 255, 0.8);

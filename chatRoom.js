@@ -8,6 +8,13 @@ const urlParams = new URLSearchParams(window.location.search);
 const charId = urlParams.get('id');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+
+const INITIAL_LOAD_COUNT = 30;
+const LOAD_MORE_COUNT = 20;
+let renderedMessages = [];
+let isLoadingMore = false;
+let isInitialLoad = true;
+
 let currentChat;
 let apiConfig;
 let currentThemeSource = 'user'; // 'user' or 'ai'
@@ -27,8 +34,6 @@ let currentReplyContext = null;
 let globalSettings;
 let personaPresets;
 let activeUserPersona;
-
-
 
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-container');
@@ -152,7 +157,6 @@ async function init() {
     renderMessages();
     setupEventListeners();
     setupPlayerControls();
-    adjustChatContainerHeight();
 
     //在所有UI设置好之后，检查并处理离线事件
     await handleChatEntryLogic();
@@ -317,13 +321,19 @@ function setAccentColor() {
 }
 
 function renderMessages() {
+    isInitialLoad = true;
     chatContainer.innerHTML = '';
+    // Filter out hidden messages from the history
+    const visibleHistory = (currentChat.history || []).filter(msg => !msg.isHidden);
+
+    // Get the last 30 messages for the initial load
+    renderedMessages = visibleHistory.slice(-INITIAL_LOAD_COUNT);
+
     // This creates a flex container for our new message wrappers
     const flexContainer = document.createElement('div');
     flexContainer.className = 'flex flex-col message-content-column space-y-4 items-start';
 
-    (currentChat.history || []).forEach(msg => {
-        if (msg.isHidden) return;
+    renderedMessages.forEach(msg => {
         const bubbleWrapper = createBubble(msg);
         if (bubbleWrapper) flexContainer.appendChild(bubbleWrapper);
     });
@@ -334,12 +344,18 @@ function renderMessages() {
             m.name = m.name || '未知成员';
         });
     }
+
     chatContainer.appendChild(flexContainer);
-    scrollToBottom();
+    // Scroll to the bottom on initial load
+    scrollToBottom(true); 
+    isInitialLoad = false;
 }
 
 function appendMessage(msg) {
     if (msg.isHidden) return;
+    
+    // Add message to our rendered list
+    renderedMessages.push(msg);
 
     // 查找flex容器，如果不存在则创建一个
     let flexContainer = chatContainer.querySelector('.message-content-column');
@@ -355,6 +371,57 @@ function appendMessage(msg) {
         scrollToBottom(); // 添加新消息后立即滚动到底部
     }
 }
+
+async function loadMoreMessages() {
+    if (isLoadingMore) return;
+
+    const visibleHistory = (currentChat.history || []).filter(msg => !msg.isHidden);
+    // Check if all messages are already rendered
+    if (renderedMessages.length >= visibleHistory.length) {
+        console.log("All messages loaded.");
+        // Add a UI element indicating the top of the chat
+        if (!chatContainer.querySelector('.chat-start-indicator')) {
+             const startIndicator = document.createElement('p');
+             startIndicator.textContent = "对话开始";
+             startIndicator.className = "chat-start-indicator text-center text-xs text-gray-400 py-4";
+             chatContainer.prepend(startIndicator);
+        }
+        return;
+    }
+
+    isLoadingMore = true;
+    
+    const flexContainer = chatContainer.querySelector('.message-content-column');
+    const firstMessageNode = flexContainer.firstChild;
+    const oldScrollHeight = chatContainer.scrollHeight;
+
+    const currentTopMessageTimestamp = toMillis(renderedMessages[0].timestamp);
+    const topMessageIndex = visibleHistory.findIndex(m => toMillis(m.timestamp) === currentTopMessageTimestamp);
+    
+    const startIndex = Math.max(0, topMessageIndex - LOAD_MORE_COUNT);
+    const newMessages = visibleHistory.slice(startIndex, topMessageIndex);
+
+    // Prepend new messages to the rendered list and the DOM
+    renderedMessages.unshift(...newMessages);
+    
+    for (let i = newMessages.length - 1; i >= 0; i--) {
+        const bubbleWrapper = createBubble(newMessages[i]);
+        if (bubbleWrapper) {
+            flexContainer.prepend(bubbleWrapper);
+        }
+    }
+    
+    // Restore scroll position to prevent jarring jumps
+    chatContainer.scrollTop = chatContainer.scrollHeight - oldScrollHeight;
+
+    isLoadingMore = false;
+}
+
+chatContainer.addEventListener('scroll', () => {
+    if (chatContainer.scrollTop < 100 && !isLoadingMore) {
+        loadMoreMessages();
+    }
+});
 
 function createBubble(msg) {
     const isSystemMessage = msg.type === 'system_message';
@@ -596,7 +663,10 @@ function convertMessageForAI(msg) {
 }
 
 
-function scrollToBottom() {
+function scrollToBottom(force = false) {
+    // During lazy loading, we don't want to auto-scroll unless forced (e.g., initial load)
+    if (!force && isInitialLoad) return;
+    
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
@@ -604,6 +674,7 @@ function scrollToBottom() {
 
 async function setupEventListeners() {
     chatInput.addEventListener('input', () => {
+        // This fixes the blank space issue by adjusting padding when the textarea resizes.
         sendBtn.disabled = chatInput.value.trim() === '';
         chatInput.style.height = 'auto';
         chatInput.style.height = (chatInput.scrollHeight) + 'px';
@@ -620,6 +691,8 @@ async function setupEventListeners() {
             chatForm.requestSubmit(); 
         }
     });
+
+    
     
     document.getElementById('wait-reply-btn').addEventListener('click', getAiResponse);
 
@@ -807,6 +880,11 @@ async function setupEventListeners() {
         
         pressEvent = e; // 保存触发事件
         pressTimer = setTimeout(() => {
+            // This now prevents the native menu from showing up
+            // after the long press is recognized.
+            if (pressEvent) {
+                pressEvent.preventDefault();
+            }
             const timestamp = parseInt(wrapper.dataset.timestamp);
             const msg = currentChat.history.find(m => toMillis(m.timestamp) === timestamp);
             if (msg) {
@@ -997,6 +1075,7 @@ async function addUserMessageToDb(message, triggerAI = false, charIdOverride = n
 
     // If the update is for the currently viewed chat, update the UI
     if (targetChatId === charId) {
+        currentChat = chatToUpdate; 
         appendMessage(message);
     }
 
@@ -2627,28 +2706,35 @@ async function handlePacketClick(timestamp) {
  */
 function showLongPressMenu(e, msg) {
     activeMessageMenu.timestamp = toMillis(msg.timestamp);
+    const wrapper = e.target.closest('.message-wrapper');
+    if (!wrapper) return;
     
     // Position the menu
     const menu = messageActionsMenu;
     menu.classList.remove('hidden');
     
-    const rect = e.target.closest('.message-wrapper').getBoundingClientRect();
+    // Get dimensions of the message bubble and the menu
+    const rect = wrapper.getBoundingClientRect();
     const menuRect = menu.getBoundingClientRect();
 
-    let top = rect.top - menuRect.height - 10;
+    // Calculate position to be centered above the bubble
+    let top = rect.top - menuRect.height - 10; // 10px above the bubble
     if (top < 10) { // If there's not enough space on top, show below
         top = rect.bottom + 10;
     }
-    let left = e.clientX - menuRect.width / 2;
+
+    // THIS IS THE KEY CHANGE: Center horizontally on the bubble, not the click point
+    let left = rect.left + (rect.width / 2) - (menuRect.width / 2);
+
+    // Ensure the menu doesn't go off-screen
     left = Math.max(10, Math.min(left, window.innerWidth - menuRect.width - 10));
 
     menu.style.top = `${top}px`;
     menu.style.left = `${left}px`;
     
     activeMessageMenu.element = menu;
-    activeMessageMenu.triggerElement = e.target.closest('.message-wrapper');
+    activeMessageMenu.triggerElement = wrapper;
 }
-
 /**
  * Hides the long-press action menu.
  */
@@ -2931,13 +3017,6 @@ function setupPlayerControls() {
 // --- Sticker Panel Logic ---
 let stickerPanelRendered = false;
 
-
-// 调整聊天容器高度以适应表情面板
-function adjustChatContainerHeight() {
-    const footerHeight = document.querySelector('footer').offsetHeight;
-    chatContainer.style.paddingBottom = `${footerHeight}px`;
-}
-
 async function toggleStickerPanel() {
     const panel = document.getElementById('sticker-panel');
     const isOpen = panel.style.maxHeight !== '0px';
@@ -2946,17 +3025,15 @@ async function toggleStickerPanel() {
         if (!stickerPanelRendered) {
             await renderStickerPanel();
             stickerPanelRendered = true;
+            setTimeout(() => {
+                scrollToBottom();
+            }, 300);
         }
         panel.style.maxHeight = '192px'; // h-48
-        setTimeout(adjustChatContainerHeight, 300);
         // 添加一个全局监听器
         document.addEventListener('click', closeStickerPanelOnClickOutside, true);
     } else { // 关闭面板
         panel.style.maxHeight = '0px';
-        setTimeout(() => {
-            adjustChatContainerHeight();
-            scrollToBottom();
-        }, 300);
         // 移除全局监听器
         document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
     }
@@ -2969,7 +3046,6 @@ function closeStickerPanelOnClickOutside(event) {
         const panel = document.getElementById('sticker-panel');
         if (panel.style.maxHeight !== '0px') {
             panel.style.maxHeight = '0px';
-            setTimeout(adjustChatContainerHeight, 300);
             document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
         }
     }
@@ -3040,7 +3116,6 @@ async function sendSticker(sticker) {
     const panel = document.getElementById('sticker-panel');
     panel.style.maxHeight = '0px';
     document.removeEventListener('click', closeStickerPanelOnClickOutside);
-    setTimeout(adjustChatContainerHeight, 300); // 等待动画结束后再调整高度
 
     await addUserMessageToDb(stickerMessage, false);
 }
