@@ -19,20 +19,23 @@
 
         .unread-dot {
             position: absolute;
-            top: -2px;      /* 向上偏移一点 */
-            right: -2px;    /* 向右偏移一点 */
-            min-width: 20px; /* 最小宽度，让单个数字也好看 */
-            height: 20px;
-            padding: 0 6px; /* 左右内边距，让数字两边有空间 */
+            top: -4px;
+            right: -4px;
+            height: 18px;
+            min-width: 18px;
+            padding: 0 5px;
             background-color: #ef4444; /* 红色 */
             color: white;
-            font-size: 12px;
-            font-weight: 500;
-            line-height: 20px;
-            text-align: center;
-            border-radius: 9999px; /* 圆角 */
-            box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-            display: none; /* 默认隐藏 */
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 9999px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+
+            /* 使用 Flexbox 完美居中数字 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1; /* 重置 line-height */
         }
     </style>
 </head>
@@ -144,9 +147,13 @@
 
                     chatItem.innerHTML = `
                         <div class="flex items-start p-4 hover:bg-gray-50">
-                            <div class="flex-shrink-0 mr-3 avatar-link-target" data-id="${chat.id}">
+                            <div class="flex-shrink-0 mr-3 avatar-container avatar-link-target" data-id="${chat.id}"> 
                                 <img src="${avatarUrl}" class="avatar">
-                                <span class="unread-dot"></span>
+                                <div class = "unread-dot"> 
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-circle-fill" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="8" r="8"/>
+                                    </svg>
+                                </div>
                             </div>
                             <div class="pt-1 flex-grow">
                                 <div class="flex justify-between items-baseline">
@@ -177,11 +184,10 @@
                     const unreadCount = chat.unreadCount || 0;
                     if (unreadCount > 0) {
                         unreadDot.textContent = unreadCount > 99 ? '99+' : unreadCount;
-                        unreadDot.style.display = 'block';
+                        unreadDot.style.display = 'flex';
                     } else {
                         unreadDot.style.display = 'none';
                     }
-                    chatListContainer.appendChild(chatItem);
                 });
             }
         }

@@ -116,10 +116,27 @@ async function checkFooterNotifications() {
     const lastView = parseInt(localStorage.getItem('lastMomentsViewTimestamp') || '0');
     const newMomentsCount = await db.xzonePosts.where('timestamp').above(lastView).count();
 
+    const unreadChatsCount = await db.chats.where('unreadCount').above(0).count();
+    const chatDockItem = document.querySelector('.dock-item[href="chat.html"]');
+    if (chatDockItem) {
+        chatDockItem.classList.toggle('has-unread-glow', unreadChatsCount > 0);
+    }
+
     const momentsDockItem = document.querySelector('.dock-item[href="moments.html"]');
     if (momentsDockItem) {
         momentsDockItem.classList.toggle('has-unread-glow', newMomentsCount > 0);
     }
+
+    const chatIconLink = document.querySelector('a.app-icon-link[href="chat.html"]');
+    if (chatIconLink) {
+        chatIconLink.classList.toggle('has-unread-glow', unreadChatsCount > 0);
+    }
+    const summaryCount = await db.offlineSummary.count();
+    const summaryIconLink = document.querySelector('a.app-icon-link[href="summary.html"]');
+    if (summaryIconLink) {
+        summaryIconLink.classList.toggle('has-unread-glow', summaryCount > 0);
+    }
+    
 }
     // 在页面加载时，同时执行样式应用和后台模拟启动
 document.addEventListener('DOMContentLoaded', async() => {

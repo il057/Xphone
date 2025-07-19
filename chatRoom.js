@@ -1813,7 +1813,7 @@ ${musicPromptSection}
                         role: 'assistant',
                         senderName: actorName, // actorName 变量确保了在群聊和私聊中都能正确显示发送者
                         type: 'text_photo', // 复用现有类型来显示图片消息
-                        content: `"${action.description}"`, // 将AI的描述作为内容
+                        content: `${action.description}`, // 将AI的描述作为内容
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(photoMessage);
