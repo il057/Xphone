@@ -337,7 +337,8 @@ async function triggerInactiveAiAction(charId) {
     if (visiblePosts.length > 0) {
         recentPostsSummary = visiblePosts.slice(0, 10).map(p => {
             const authorName = p.authorId === 'user' ? (xzoneSettings.nickname || '我') : (allChatsMap.get(p.authorId)?.name || '未知');
-            
+            const selfPostMarker = (p.authorId === charId) ? " [这是你发布的动态]" : "";
+
             const visibleComments = (p.comments || []).filter(comment => {
                 const commentAuthor = allChatsMap.get(comment.author);
                 return comment.author === 'user' || (commentAuthor && commentAuthor.groupId === charGroupId);
@@ -354,7 +355,7 @@ async function triggerInactiveAiAction(charId) {
             if (relation) {
                 relationContext = ` (你和${authorName}是${relation.type}关系, 好感度: ${relation.score})`;
             }
-            return `- [Post ID: ${p.id}] by ${authorName}: "${(p.publicText || p.content).substring(0, 40)}..."${relationContext}${commentSummary}`;
+            return `- [Post ID: ${p.id}] by ${authorName}${selfPostMarker}: "${(p.publicText || p.content).substring(0, 40)}..."${relationContext}${commentSummary}`;
         }).join('\n');
     }
 
@@ -447,18 +448,18 @@ ${recentPostsSummary}
         const data = await response.json();
         // 1. 调用 extractAndParseJson 函数
         const responseContent = data.choices[0].message.content;
-        const parsedJson = extractAndParseJson(responseContent);
+        const parsedObject = extractAndParseJson(responseContent); // 为了清晰，重命名变量
 
-        // 2. **核心修复**：检查解析结果是否是一个数组
-        if (!parsedJson || !Array.isArray(parsedJson)) {
-            console.error(`角色 "${chat.name}" 的独立行动失败: AI返回的内容无法解析为JSON数组。`, {
+        // 检查解析结果是否为包含 "actions" 数组的对象
+        if (!parsedObject || !Array.isArray(parsedObject.actions)) {
+            console.error(`角色 "${chat.name}" 的独立行动失败: AI返回的内容不是预期的 { "actions": [...] } 格式。`, {
                 originalResponse: responseContent,
-                parsedResult: parsedJson
+                parsedResult: parsedObject
             });
-            return; // 安全退出，防止程序崩溃
+            return; // 安全退出
         }
 
-        const responseArray = parsedJson;
+        const responseArray = parsedObject.actions;
 
         for (const action of responseArray) {
             const actorName = action.name || chat.name;

@@ -26,7 +26,7 @@ let currentReplyContext = null;
 
 let globalSettings;
 let personaPresets;
-let defaultUserPersona;
+let activeUserPersona;
 
 
 
@@ -125,29 +125,25 @@ async function init() {
         await db.chats.put(currentChat);
     }
 
-    let personaToApply = null;
+    let foundPersona = null;
 
-    // 1. 最高优先级：检查当前聊天是否被直接应用了某个人格
     if (personaPresets) {
-        personaToApply = personaPresets.find(p => p.appliedChats && p.appliedChats.includes(charId));
-    }
+        // 1. Highest Priority: Check for a persona applied directly to this chat ID.
+        foundPersona = personaPresets.find(p => p.appliedChats && p.appliedChats.includes(charId));
 
-    // 2. 第二优先级：如果没找到，再检查全局设置的默认人格
-    if (!personaToApply && globalSettings && globalSettings.defaultPersonaId && personaPresets) {
-        personaToApply = personaPresets.find(p => p.id === globalSettings.defaultPersonaId);
-    }
-    
-    // 3. 应用找到的人格（如果有的话）
-    if (personaToApply) {
-        defaultUserPersona = personaToApply; // 将其设置为当前聊天中的“我”
-        // 并且，如果当前聊天没有设置过“我”的设定，就自动填充
-        if (!currentChat.settings.myPersona) {
-            currentChat.settings.myPersona = personaToApply.persona;
+        // 2. Second Priority: If not found, check if this chat's group has a persona applied.
+        if (!foundPersona && currentChat.groupId) {
+            const groupIdStr = String(currentChat.groupId);
+            foundPersona = personaPresets.find(p => p.appliedChats && p.appliedChats.includes(groupIdStr));
         }
-        if (!currentChat.settings.myAvatar) {
-            currentChat.settings.myAvatar = personaToApply.avatar;
+
+        // 3. Third Priority: Fallback to the global default persona.
+        if (!foundPersona && globalSettings && globalSettings.defaultPersonaId) {
+            foundPersona = personaPresets.find(p => p.id === globalSettings.defaultPersonaId);
         }
     }
+    activeUserPersona = foundPersona; // Set the active persona for this session.
+    // We no longer save myPersona or myAvatar to the chat object.
 
     isGroupChat = currentChat.isGroup;
     
@@ -400,7 +396,7 @@ function createBubble(msg) {
         const avatar = document.createElement('img');
         avatar.className = 'avatar';
         if (isUser) {
-            avatar.src = currentChat.settings.myAvatar || (defaultUserPersona ? defaultUserPersona.avatar : null) || 'https://files.catbox.moe/kkll8p.svg';
+            avatar.src = activeUserPersona?.avatar || 'https://files.catbox.moe/kkll8p.svg';
         } else if (isGroupChat) {
             const member = currentChat.members.find(m => m.name === msg.senderName);
             avatar.src = member ? member.avatar : 'https://files.catbox.moe/kkll8p.svg';
@@ -1268,7 +1264,8 @@ async function getAiResponse( charIdToTrigger = null ) {
         if (relevantPosts.length > 0) {
             const postsText = relevantPosts.map(p => {
                 const authorName = p.authorId === 'user' ? 'User' : currentChat.name;
-                return `- ${authorName} 发布的动态: "${p.publicText || p.content}"`;
+                const selfPostMarker = (p.authorId === charId) ? " [这是你发布的动态]" : "";
+                return `- ${authorName} 发布的动态${selfPostMarker}: "${p.publicText || p.content}"`;
             }).join('\n');
             postsPromptSection = `\n\n# 你们最近的动态 (可作为聊天话题):\n${postsText}`;
         }
@@ -1301,8 +1298,8 @@ async function getAiResponse( charIdToTrigger = null ) {
         
         let systemPrompt;
         if (isGroupChat) {
-            const userNickname = currentChat.settings.myNickname || '我';
-            const userPersona = defaultUserPersona ? defaultUserPersona.persona : '用户的角色设定未知。';
+            const userNickname = activeUserPersona?.name || '我';
+            const userPersona = activeUserPersona?.persona || '用户的角色设定未知。';
             const membersList = currentChat.members.map(m => `- ${m.name}: ${m.settings?.aiPersona || '无'}`).join('\n');
 
             let privateChatsContextForPrompt = "";
@@ -1831,7 +1828,7 @@ ${musicPromptSection}
                             senderName: actorName,
                             content: action.reply_content,
                             quote: {
-                                senderName: targetMsg.senderName || (targetMsg.role === 'user' ? (defaultUserPersona?.name || '我') : currentChat.name),
+                                senderName: targetMsg.senderName || (targetMsg.role === 'user' ? (activeUserPersona?.name || '我') : currentChat.name),
                                 content: (typeof targetMsg.content === 'string' ? targetMsg.content : `[${targetMsg.type}]`).substring(0, 50) + '...'
                             },
                             timestamp: new Date(messageTimestamp++)
@@ -2775,7 +2772,7 @@ function startReply() {
     }
 
     currentReplyContext = {
-        senderName: message.senderName || (message.role === 'user' ? (defaultUserPersona?.name || '我') : currentChat.name),
+        senderName: message.senderName || (message.role === 'user' ? (activeUserPersona?.name || '我') : currentChat.name),        
         content: contentSnippet
     };
     
