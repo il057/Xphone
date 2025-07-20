@@ -127,7 +127,7 @@
                 chatListContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">没有聊天记录</p>`;
             } else {
                 chats.forEach(chat => {
-                    // Step 1: Create a DIV instead of an A tag for the main container.
+                    //Create a DIV instead of an A tag for the main container.
                     const chatItem = document.createElement('div');
                     chatItem.className = 'block border-b border-gray-100 cursor-pointer';
                     
@@ -180,6 +180,7 @@
                     chatItem.addEventListener('click', () => {
                         window.location.href = `chatRoom.html?id=${chat.id}`;
                     });
+
                     const unreadDot = chatItem.querySelector('.unread-dot');
                     const unreadCount = chat.unreadCount || 0;
                     if (unreadCount > 0) {
@@ -230,22 +231,21 @@
             });
         }
 
-        let hasInitialized = false;
+         // 1. 页面初次加载时，执行所有初始化
         document.addEventListener('DOMContentLoaded', () => {
-            if (!hasInitialized) {
-                loadAndRenderChats();
-                setupEventListeners();
-                hasInitialized = true;
-            }
+            loadAndRenderChats();
+            setupEventListeners();
         });
 
+        // 2. 每次页面从 bfcache 恢复或变为可见时，只刷新列表
         window.addEventListener('pageshow', (event) => {
+            // event.persisted 为 true 表示页面是从 bfcache 中恢复的
             if (event.persisted) {
                 loadAndRenderChats();
             }
         });
 
-        // 当用户切换浏览器标签页回到此页面时，也刷新列表
+        // 3. 当用户从其他标签页切换回来时，也刷新列表
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 loadAndRenderChats();

@@ -28,10 +28,10 @@ body {
     height: 100%; /* Use h-full instead of h-screen */
 }
 
-/* Ensure main content areas scroll correctly */
 main.flex-grow {
     flex: 1 1 auto;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* 在iOS上启用流畅滚动 */
 }
 
 header.app-header, footer.app-dock {
