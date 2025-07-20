@@ -447,6 +447,22 @@
         body.pat-animation {
             animation: pat-shake 0.4s ease-in-out;
         }
+
+        body, html {
+        height: 100%;
+        overflow: hidden;
+        }
+        body > .flex.flex-col.h-screen { /* 针对最外层的容器 */
+            height: 100%; /* 确保它占满由 JS --app-height 设定的 body 高度 */
+        }
+        main#chat-container {
+            padding-bottom: 1rem; /* 增加底部内边距，防止最后一条消息被输入框遮挡 */
+        }
+        footer {
+            /* 关键：为页脚增加内边距，以避开iOS的Home Indicator和浏览器的UI栏 */
+            /* env(safe-area-inset-bottom) 是一个专门为此设计的CSS变量 */
+            padding-bottom: env(safe-area-inset-bottom, 1rem);
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen">
