@@ -15,13 +15,17 @@ html {
 }
 
 body {
-    height: 100%;
+    /* Use the JS-calculated height variable. Fallback to 100vh for safety. */
+    height: var(--app-height, 100vh);
     overflow: hidden; /* Prevent body from scrolling */
 }
 
-/* Ensure the main container div in each page enforces the flex layout */
+/* This rule targets the main container div on almost every page.
+  By changing h-screen (100vh) to h-full (100%), it will now correctly
+  size itself to the body, which has our reliable --app-height.
+*/
 .w-full.h-screen.mx-auto.flex.flex-col {
-    height: 100%;
+    height: 100%; /* Use h-full instead of h-screen */
 }
 
 /* Ensure main content areas scroll correctly */

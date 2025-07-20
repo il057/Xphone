@@ -152,24 +152,6 @@
                 updateMainScreenClock();
                 setInterval(updateMainScreenClock, 30000); 
 
-                async function checkNotifications() {
-                    // 检查是否有未读聊天消息
-                    const unreadChatsCount = await db.chats.where('unreadCount').above(0).count();
-                    const chatIconLink = document.querySelector('a[href="chat.html"]');
-                    if (chatIconLink) {
-                        chatIconLink.classList.toggle('has-unread-glow', unreadChatsCount > 0);
-                    }
-
-                    // 检查是否有新的离线简报
-                    const summaryCount = await db.offlineSummary.count();
-                    const summaryIconLink = document.querySelector('a[href="summary.html"]');
-                    if (summaryIconLink) {
-                        summaryIconLink.classList.toggle('has-unread-glow', summaryCount > 0);
-                    }
-                }
-                
-                checkNotifications();
-
                 await runOfflineSimulation();
             });
         </script>

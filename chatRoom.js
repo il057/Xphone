@@ -1475,7 +1475,7 @@ ${currentChat.members.map(m => `
 - **负面影响 (-1 到 -10)**: 当 target 的行为让 source 感到被冒犯、伤心、愤怒或被无视时。
 - **理由 (reason)**: 必须用一句话简要说明好感度变化的原因。
 - **【【【格式要求】】】**: 每个好感度调整对象都必须包含 'source_char_name', 'target_char_name', 'score_change', 和 'reason' 四个键。
-- **示例**: {"source_char_name": "角色A", "target_char_name": "User", "score_change": 2, "reason": "用户赞同了我的观点，很开心。"}
+- **示例**: {"source_char_name": "角色A", "target_char_name": "角色B", "score_change": 2, "reason": "用户赞同了我的观点，很开心。"}
 
 
 # PART 5: 可用工具箱 (Unified Toolbox of Actions)
@@ -1606,6 +1606,7 @@ ${privateChatsContextForPrompt}
     ],
     "relationship_adjustment": {
       /* 一个好感度判断对象，遵循 PART 4.2 的指南 */
+      "source_char_name": "你的名字“,
       "target_char_name": "User",
       "score_change": 0,
       "reason": "如有变化，请用一句话解释你为什么会产生这种好感度变化。"
@@ -1655,6 +1656,8 @@ ${relationsContext}
 - **中性影响 (0)**: 当对话平淡、无实质情感交流，或只是在陈述事实时。
 - **负面影响 (-1 到 -10)**: 当用户的话让你感到被冒犯、伤心、愤怒、被误解或无视时。
 - **理由 (reason)**: 必须用一句话简要说明好感度变化的原因。
+- **【【【格式要求】】】**: 每个好感度调整对象都必须包含 'source_char_name', 'target_char_name', 'score_change', 和 'reason' 四个键。
+- **示例**: {"source_char_name": "角色A", "target_char_name": "User", "score_change": 2, "reason": "用户赞同了我的观点，很开心。"}
 
 
 # PART 5: 可用工具箱 (Unified Toolbox of Actions)
@@ -1815,18 +1818,32 @@ ${musicPromptSection}
         }
         
         const messagesArray = aiResponseContent.response || []; // 获取要发送的消息/动作
-        // 1. 应用关系更新 (新版双向逻辑)
-        const relationUpdates = aiResponseContent.relationship_adjustments || [];
+        // 1. 应用关系更新 
+        let relationUpdates = [];
+        // 首先检查群聊格式 (plural)
+        if (aiResponseContent.relationship_adjustments) {
+            relationUpdates = aiResponseContent.relationship_adjustments;
+        } 
+        // 如果没有，再检查单聊格式 (singular) 并将其包装成数组
+        else if (aiResponseContent.relationship_adjustment) {
+            relationUpdates = [aiResponseContent.relationship_adjustment];
+        }
+
         if (relationUpdates.length > 0) {
             // 创建一个包含所有成员和用户信息的查找表，方便通过名字找到ID
+            // 在单聊中, currentChat.members 是 undefined, 所以需要一个安全检查
+            const members = currentChat.members || []; 
             const allParticipants = [
-                ...currentChat.members.map(m => ({ id: m.id, name: m.name })),
-                { id: 'user', name: 'User' } // 将用户也加入查找表
+                ...members.map(m => ({ id: m.id, name: m.name })),
+                { id: 'user', name: 'User' }, // 用户
+                { id: charId, name: currentChat.name } // 当前AI角色 (对单聊很重要)
             ];
             const participantsMap = new Map(allParticipants.map(p => [p.name, p.id]));
 
             for (const update of relationUpdates) {
-                const sourceId = participantsMap.get(update.source_char_name);
+                 // 兼容单聊中 AI 可能用自己的昵称或 "你的名字"
+                const sourceName = update.source_char_name === "你的名字" ? currentChat.name : update.source_char_name;
+                const sourceId = participantsMap.get(sourceName);
                 const targetId = participantsMap.get(update.target_char_name);
                 const scoreChange = parseInt(update.score_change);
 
@@ -1834,10 +1851,10 @@ ${musicPromptSection}
                 if (sourceId && targetId && !isNaN(scoreChange) && scoreChange !== 0) {
                     console.log(`AI judged relationship change: ${update.source_char_name} -> ${update.target_char_name}, Score: ${scoreChange}. Reason: ${update.reason}`);
                     
-                    // 调用已有的 updateRelationshipScore 函数，它本身就支持双向更新
+                    // 调用已有的 updateRelationshipScore 函数
                     await updateRelationshipScore(sourceId, targetId, scoreChange);
                 } else {
-                    console.warn("AI返回了无效的好感度更新指令:", update);
+                    console.warn("AI返回了无效的好感度更新指令:", update, "Participants Map:", participantsMap);
                 }
             }
         }
