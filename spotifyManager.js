@@ -2,8 +2,7 @@
 
 const clientId = '5ca835c1531e4e6ba28decdd1913ca18';
 //const redirectUri = 'http://127.0.0.1:5500/music.html';
-//const redirectUri = 'https://il057.github.io/XphonePWA/music.html';
-const redirectUri = 'https://il057.github.io/PhoneX/music.html';
+const redirectUri = 'https://il057.github.io/Xphone/music.html';
 
 let player;
 let deviceId;
