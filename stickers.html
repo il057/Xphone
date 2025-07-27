@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Xphone">
+    <meta name="theme-color" content="#3b82f6"/>
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+    
+    <title>我的表情</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <link rel="stylesheet" href="sharedStyles.css">
+    <script type="module" src="applyGlobalStyles.js" defer></script>
+ 
+    <style>
+        .sticker-grid-item {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            background-color: #f3f4f6;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+        }
+        .sticker-grid-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .edit-mode .edit-mode-item {
+            display: flex;
+        }
+        /* 确保自定义模态框的样式可以被应用 */
+        .modal { display: none; position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; padding: 1rem; }
+        .modal.visible { display: flex; }
+        .modal-content { background-color: white; border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 24rem; display: flex; flex-direction: column; }
+        .modal-input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; }
+        .modal-input:focus { border-color: var(--theme-color); box-shadow: 0 0 0 1px var(--theme-color); outline: none; }
+        .modal-btn { padding: 0.75rem 1rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; text-align: center; }
+        .modal-btn-confirm { color: white; background-color: var(--theme-color); }
+        .modal-btn-cancel { background-color: #e5e7eb; }
+        textarea::placeholder {
+            white-space: pre-line;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <input type="file" id="local-sticker-input" class="hidden" accept="image/*">
+
+    <div class="w-full h-full mx-auto flex flex-col">
+        <header class="app-header">
+            <div class="flex items-center justify-between relative">
+                <a id="back-btn" href="me.html" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                </a>
+
+                <h1 id="default-title" class="text-base font-semibold text-gray-800">我的表情</h1>
+                
+                <div id="edit-mode-actions" class="hidden items-center gap-4">
+                    <button id="move-top-btn" class="header-btn text-sm font-semibold">移到最前</button>
+                    <button id="delete-selected-btn" class="text-red-500 text-sm font-semibold">删除</button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="bulk-add-btn" class="header-btn text-sm font-semibold px-2">批量添加</button>
+                    <button id="edit-stickers-btn" class="header-btn text-sm font-semibold px-2">编辑</button>
+                </div>
+            </div>
+        </header>
+        
+        <main class="flex-grow main-content overflow-y-auto">
+            <div id="sticker-grid-container" class="p-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4 content-start">
+                </div>
+        </main>
+    </div>
+
+    <script type="module" src="./stickers.js" defer></script>
+</body>
+</html>

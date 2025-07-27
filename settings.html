@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Xphone">
+    <meta name="theme-color" content="#3b82f6"/>
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+     
+    <title>设置</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <script type="module" src="applyGlobalStyles.js" defer></script> 
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script type="module" src="./spotifyManager.js" defer></script>
+    <link rel="stylesheet" href="sharedStyles.css">
+ 
+    <style>
+        :root {
+            /* 默认主题色，会被JS覆盖 */
+            --theme-color: #3b82f6; 
+            --theme-color-hover: #2563eb;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* 动态主题色应用 */
+        .secondary-btn:hover {
+            border-color: var(--theme-color);
+            color: var(--theme-color);
+        }
+        .form-input:focus {
+            border-color: var(--theme-color) !important;
+            box-shadow: 0 0 0 1px var(--theme-color) !important;
+            outline: none;
+        }
+        input[type="checkbox"]:checked {
+            background-color: var(--theme-color);
+            border-color: var(--theme-color);
+        }
+
+        .header-btn {
+        color: #888888; /* 默认灰色 */
+            transition: color 0.2s ease-in-out;
+        }
+
+        .header-btn:hover {
+            color: var(--theme-color); /* 鼠标悬停时显示主题色 */
+        }
+        .header-btn.active {
+            color: var(--theme-color);
+        }
+        input[type="range"] {
+            accent-color: var(--theme-color);
+        }
+
+        input[type="checkbox"] {
+            accent-color: var(--theme-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="w-full h-full mx-auto flex flex-col bg-gray-50">
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="flex items-center justify-between">
+                <a href="index.html" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                </a>
+                
+                <h1 class="text-base font-semibold text-gray-800">设置</h1>
+                
+                <button id="save-all-settings-btn" class="header-btn text-sm font-semibold px-2 py-1">保存</button>
+            </div>
+        </header>
+
+        <!-- 设置内容区 -->
+        <main class="flex-grow main-content overflow-y-auto">
+            <div class="space-y-6">
+
+                <!-- API 设置 -->
+                <section class="bg-white p-4 rounded-xl shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3 mb-4">API 连接</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="profile-selector" class="block text-sm font-medium text-gray-700 mb-1">当前方案</label>
+                            <div class="flex items-center gap-2">
+                                <select id="profile-selector" class="form-input block w-full rounded-md border-gray-300 p-2 shadow-sm"></select>
+                                <button id="add-profile-btn" class="secondary-btn flex-shrink-0 whitespace-nowrap bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">新增方案</button>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4 pt-4 border-t" id="profile-editor-container">
+                            <div>
+                                <label for="profile-name-input" class="block text-sm font-medium text-gray-700 mb-1">方案名称</label>
+                                <input type="text" id="profile-name-input" class="form-input block w-full p-2">
+                            </div>
+                            <div>
+                                <label for="api-provider" class="block text-sm font-medium text-gray-700 mb-1">API 服务商</label>
+                                <select id="api-provider" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+                                    <option value="default">默认/其他反代</option>
+                                    <option value="gemini">Google Gemini</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="proxy-url" class="block text-sm font-medium text-gray-700 mb-1">AI API 地址 (反代)</label>
+                                <input type="text" id="proxy-url" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+                            </div>
+                            <div>
+                                <label for="api-key" class="block text-sm font-medium text-gray-700 mb-1">AI API 密钥</label>
+                                <input type="password" id="api-key" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="sk-...">
+                            </div>
+                            <div>
+                                <label for="model-select" class="block text-sm font-medium text-gray-700 mb-1">AI 模型</label>
+                                <div class="flex gap-2">
+                                    <select id="model-select" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2"></select>
+                                    <button id="fetch-models-btn" class="secondary-btn flex-shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">拉取</button>
+                                </div>
+                            </div>
+                            <div class="pt-4 border-t mt-2">
+                                 <button id="delete-profile-btn" class="w-full font-semibold py-2 px-4 border rounded-md shadow-sm transition-colors bg-red-50 border-red-300 text-red-700 hover:bg-red-100">删除此方案</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                    <section class="bg-white p-4 rounded-xl shadow-sm">
+                        <h2 class="text-md font-semibold text-gray-800 mb-2">图片上传服务 (Cloudinary)</h2>                            
+                        <div class="pt-4 border-t">
+                            <p class="text-xs text-gray-500 mb-3">为了使用本地图片上传功能，你需要一个免费的<a href="https://cloudinary.com/invites/lpov9zyyucivvxsnalc5/orc1c6zjhbvdfn6e1xyb?t=default" target="_blank" class="text-blue-500">Cloudinary账户</a>。请前往Cloudinary官网注册，并在设置中创建一个<b class="text-red-500">无签名 (Unsigned)</b>的上传预设。</p>
+                            <div>
+                                <label for="cloudinary-cloud-name" class="block text-sm font-medium text-gray-700 mb-1">Cloud Name</label>
+                                <input type="text" id="cloudinary-cloud-name" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="在Dashboard页面查找">
+                            </div>
+                            <div>
+                                <label for="cloudinary-upload-preset" class="block text-sm font-medium text-gray-700 mb-1">Upload Preset</label>
+                                <input type="text" id="cloudinary-upload-preset" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="在“上传”设置中创建">
+                            </div>
+                        </div>
+                   
+                </section>
+
+                <!-- 后台活动设置 -->
+                <section class="bg-white p-4 rounded-xl shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3 mb-4">后台活动</h2>
+                    <div class="space-y-4">
+                        <div class="relative flex items-start">
+                            <div class="flex h-6 items-center">
+                                <input id="background-activity-switch" type="checkbox" class="h-4 w-4 rounded border-gray-300">
+                            </div>
+                            <div class="ml-3 text-sm leading-6">
+                                <label for="background-activity-switch" class="font-medium text-gray-900">启用后台角色活动</label>
+                                <p class="text-xs text-theme">警告：此功能会显著增加API调用和费用！</p>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="background-interval-input" class="block text-sm font-medium text-gray-700">后台活动检测间隔 (秒)</label>
+                            <input type="number" id="background-interval-input" value="60" min="30" class="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+                            <p class="mt-2 text-xs text-gray-500">建议值 60-300。值越大，费用越低，但角色反应越慢。</p>
+                        </div>
+                        
+                        <div>
+                            <label for="private-chat-prob-slider" class="block text-sm font-medium text-gray-700">私聊活动概率 (<span id="private-chat-prob-display">30</span>%)</label>
+                            <input type="range" id="private-chat-prob-slider" min="0" max="100" value="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <p class="mt-2 text-xs text-gray-500">每次检测时，单个私聊角色有多大概率进行独立思考和行动。</p>
+                        </div>
+                        <div>
+                            <label for="group-chat-prob-slider" class="block text-sm font-medium text-gray-700">群聊活动概率 (<span id="group-chat-prob-display">15</span>%)</label>
+                            <input type="range" id="group-chat-prob-slider" min="0" max="100" value="15" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <p class="mt-2 text-xs text-gray-500">每次检测时，单个群聊有多大概率发生一件群内事件。</p>
+                        </div>
+                        <div>
+                            <label for="block-cooldown-input" class="block text-sm font-medium text-gray-700">AI被拉黑后冷静期 (小时)</label>
+                            <input type="number" id="block-cooldown-input" value="1" min="0.1" step="0.1" class="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+                            <p class="mt-2 text-xs text-gray-500">被拉黑超过这个时间后，AI才有几率重新申请好友。</p>
+                        </div>
+                    </div>
+                </section>
+                <section class="bg-white p-4 rounded-xl shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3 mb-4">通知</h2>
+                    <div class="space-y-4">
+                       <button id="enable-notifications-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">启用桌面通知</button>
+                        <p class="mt-2 text-xs text-gray-500">当角色在后台主动给您发消息时，您会收到类似手机的推送通知。需要您的浏览器授权。</p>
+                    </div>
+                </section>
+
+                <!-- 数据管理 -->
+                  <section class="bg-white p-4 rounded-xl shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3 mb-4">数据管理</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                         <button id="export-data-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">导出备份</button>
+                         <button id="import-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">导入备份</button>
+                         <input id="import-data-input" type="file" accept="application/json" class="hidden">
+                    </div>
+
+                   <div class="pt-4 mt-4 border-t">
+                        <h3 class="text-md font-semibold text-gray-800 mb-2">云同步 (GitHub Gist)</h3>
+                        <p class="text-xs text-gray-500 mb-3">
+                            使用 <a href="https://gist.github.com/" target="_blank" class="text-blue-500 underline">GitHub Gist</a> 实现多设备数据同步。
+                            请按指引创建 Personal Access Token (PAT) 和 Secret Gist。
+                        </p>
+                        <div>
+                            <label for="sync-github-token" class="block text-sm font-medium text-gray-700 mb-1">GitHub Personal Access Token</label>
+                            <input type="password" id="sync-github-token" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="粘贴您的 PAT (需要 gist 权限)">
+                        </div>
+                        <div class="mt-4">
+                            <label for="sync-gist-id" class="block text-sm font-medium text-gray-700 mb-1">Gist ID</label>
+                            <input type="text" id="sync-gist-id" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="粘贴您的 Gist ID">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                            <button id="upload-data-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                                </svg>
+                                上传数据
+                            </button>
+                            <button id="download-data-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                </svg>
+                                下载数据
+                            </button>
+                       </div>
+                    </div>
+                    </div>
+                </section>
+            </div>
+             </div>
+        </main>
+    </div>
+
+    <!-- 引入外部JS文件 -->
+    <script type="module" src="settings.js" defer></script>
+</body>
+</html>
