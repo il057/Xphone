@@ -28,7 +28,7 @@ let currentChat;
 let apiConfig;
 let currentThemeSource = 'user'; // 'user' or 'ai'
 let isGroupChat = false; // 添加一个全局变量来标识是否为群聊
-
+let currentShuffleState = false;
 let customPresets = [];
 
 let isSelectionMode = false;
@@ -74,7 +74,7 @@ const playerProgressBar = document.getElementById('player-progress-bar');
 const playerPrevBtn = document.getElementById('player-prev-btn');
 const playerToggleBtn = document.getElementById('player-toggle-btn');
 const playerNextBtn = document.getElementById('player-next-btn');
-const shuffleBtn = document.getElementById('player-shuffle-btn'); // ✅ 添加这行
+let shuffleBtn = document.getElementById('player-shuffle-btn'); // ✅ 添加这行
 
 let playerUpdateInterval = null;
 let currentlyPlayingUri = null;
@@ -3344,13 +3344,19 @@ function setupPlayerControls() {
         musicPlayerBar.classList.remove('hidden');
         const { paused, duration, position, track_window, shuffle } = state; // 新增获取 shuffle 状态
         const current_track = track_window.current_track;
+        currentShuffleState = shuffle; 
 
         playerSongTitle.textContent = current_track.name;
         playerSongArtist.textContent = current_track.artists.map(a => a.name).join(', ');
-
+        
         const playIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M10.804 8 5 4.633v6.734L10.804 8zm.792-.696a.802.802 0 0 1 0 1.392l-6.363 3.692C4.713 12.69 4 12.345 4 11.692V4.308c0-.653.713-.998 1.233-.696l6.363 3.692z"/></svg>`;
         const pauseIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-pause" viewBox="0 0 16 16"><path d="M6 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5m4 0a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5"/></svg>`;
         shuffleBtn.style.color = shuffle ? 'var(--accent-color)' : '#6b7280';
+
+         const newShuffleBtn = shuffleBtn.cloneNode(true);
+        shuffleBtn.parentNode.replaceChild(newShuffleBtn, shuffleBtn);
+        shuffleBtn = newShuffleBtn; // 更新对按钮的引用
+        shuffleBtn.addEventListener('click', () => spotifyManager.toggleShuffle(!currentShuffleState));
 
         playerToggleBtn.innerHTML = paused ? playIcon : pauseIcon;
 
@@ -3389,7 +3395,6 @@ function setupPlayerControls() {
     playerPrevBtn.addEventListener('click', spotifyManager.previousTrack);
     playerNextBtn.addEventListener('click', spotifyManager.nextTrack);
     playerToggleBtn.addEventListener('click', spotifyManager.togglePlay);
-    shuffleBtn.addEventListener('click', () => spotifyManager.toggleShuffle(!shuffle));
 }
 
 // --- Sticker Panel Logic ---

@@ -1,8 +1,8 @@
 // spotifyManager.js
 
 const clientId = 'c256072b5ce84cab842e7ab6b3f8d8b7';
-//const redirectUri = 'http://127.0.0.1:5500/music.html';
-const redirectUri = 'https://il057.github.io/Xphone/music.html';
+const redirectUri = 'http://127.0.0.1:5500/music.html';
+//const redirectUri = 'https://il057.github.io/Xphone/music.html';
 
 let player;
 let deviceId;
