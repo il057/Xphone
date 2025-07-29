@@ -33,7 +33,7 @@ export async function runOfflineSimulation() {
     }
 
     console.log(`离线 ${elapsedHours.toFixed(2)} 小时，开始模拟...`);
-
+    let simulationSuccess = false;
     // 1. 按分组获取所有角色
     const allChats = await db.chats.toArray();
     const allGroups = await db.xzoneGroups.toArray();
@@ -53,8 +53,104 @@ export async function runOfflineSimulation() {
         const group = groupsMap.get(parseInt(groupId));
         const groupName = groupsMap.get(parseInt(groupId))?.name || `分组${groupId}`;
         const groupMembers = charsByGroup[groupId];
-        if (groupMembers.length < 2) continue; // 至少需要2个角色才能有互动
 
+       if (groupMembers.length === 1) {
+            // 当分组只有一个人时，执行单人离线行为模拟
+            const member = groupMembers[0];
+            console.log(`正在模拟单人分组【${groupName}】中角色【${member.name}】的离线行为...`);
+
+            const systemPrompt = `
+你是一个世界模拟器。距离用户上次在线已经过去了 ${elapsedHours.toFixed(1)} 小时。
+请基于以下角色信息，生成一段简短的总结，描述角色【${member.realName} (昵称: ${member.name})】在这段时间内【独自一人】可能做了什么事。
+
+【角色设定】
+- 姓名: ${member.realName} (昵称: ${member.name}, 性别: ${member.gender || '未知'})
+- 人设: ${member.settings.aiPersona}
+
+【你的任务】
+总结出1-2件符合该角色人设和当前情景的、在离线期间可能发生的个人事件或想法。
+
+【输出要求】
+请严格按照以下JSON格式返回你的模拟结果，不要有任何多余的文字：
+{
+  "new_events_summary": [
+    "用第一人称（'我'）来描述角色独自一人时发生的事件或心理活动。"
+  ]
+}
+            `;
+
+            try {
+                let response;
+                if (apiConfig.apiProvider === 'gemini') {
+                    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
+                    const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
+                    response = await fetch(geminiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: geminiContents,
+                            generationConfig: { temperature: 0.8, responseMimeType: "application/json" }
+                        })
+                    });
+                } else {
+                    response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                        body: JSON.stringify({
+                            model: apiConfig.model,
+                            messages: [{ role: 'system', content: systemPrompt }],
+                            temperature: 0.8,
+                            response_format: { type: "json_object" }
+                        })
+                    });
+                }
+
+                if (!response.ok) throw new Error(`API for single member ${member.name} failed.`);
+
+                const result = await response.json();
+                let rawContent;
+
+                if (apiConfig.apiProvider === 'gemini') {
+                     if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
+                        rawContent = result.candidates[0].content.parts[0].text;
+                    } else {
+                        throw new Error("Invalid Gemini API response structure.");
+                    }
+                } else {
+                    rawContent = result.choices[0].message.content;
+                }
+                const simulationData = JSON.parse(rawContent);
+
+                if (simulationData.new_events_summary && simulationData.new_events_summary.length > 0) {
+                    await db.offlineSummary.put({
+                        id: groupName,
+                        events: simulationData.new_events_summary,
+                        timestamp: Date.now()
+                    });
+                    
+                    // 将单人简报写入世界书
+                    if (group && group.worldBookIds) {
+                        const associatedBooks = allWorldBooks.filter(wb => group.worldBookIds.includes(wb.id));
+                        const chronicleBook = associatedBooks.find(wb => wb.name.includes('编年史'));
+                        if (chronicleBook) {
+                            const eventDateTime = new Date().toLocaleString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                            const mainEventsSummary = simulationData.new_events_summary.map(event => `- ${event}`).join('\n');
+                            const chronicleEntry = `\n\n【${eventDateTime} - ${member.name}的个人动态】\n${mainEventsSummary}`;
+
+                            await db.worldBooks.update(chronicleBook.id, {
+                                content: (chronicleBook.content || '') + chronicleEntry
+                            });
+                            console.log(`已将${member.name}的个人事件更新至《${chronicleBook.name}》。`);
+                        }
+                    }
+                }
+                simulationSuccess = true; // **修正点**: 标记成功
+            } catch (error) {
+                console.error(`模拟单人分组【${groupName}】时出错:`, error);
+                // 失败时不需要设置 simulationSuccess = false，因为它默认为false
+            }
+            continue; // 继续下一个分组
+        }
         console.log(`正在模拟【${groupName}】...`);
 
         // 3. 准备调用AI所需的数据
@@ -217,6 +313,7 @@ ${personas}
                     }
                 }
             }
+            simulationSuccess = true;
 
         } catch (error) {
             console.error(`模拟分组【${groupName}】时出错:`, error);
@@ -224,17 +321,22 @@ ${personas}
     }
 
     // 6. 模拟结束后，更新最后在线时间
-    await db.globalSettings.update('main', { lastOnlineTime: now });
-    console.log("离线模拟完成，已更新最后在线时间。");
-
-    if (toast) {
-        toast.querySelector('p:first-child').textContent = '简报已生成！';
-        toast.querySelector('p:last-of-type').classList.add('hidden');
-
-        // 3秒后自动隐藏提示框
-        setTimeout(() => {
-            toast.classList.add('hidden');
-        }, 3000);
+    if (simulationSuccess) {
+        await db.globalSettings.update('main', { lastOnlineTime: now });
+        console.log("离线模拟完成，已更新最后在线时间。");
+        if (toast) {
+            toast.querySelector('p:first-child').textContent = '简报已生成！';
+            toast.querySelector('p:last-of-type').classList.add('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+    } else {
+        console.log("离线模拟失败，未更新最后在线时间。");
+        if (toast) {
+            toast.querySelector('p:first-child').textContent = '简报生成失败';
+            toast.querySelector('p:last-of-type').textContent = '请检查API设置或网络连接';
+            // 失败的提示可以持续更长时间或需要手动关闭
+            setTimeout(() => toast.classList.add('hidden'), 5000);
+        }
     }
 }
 

@@ -373,8 +373,6 @@
             max-width: 100%;
         }
 
-        
-  
         .selection-checkbox {                     
             position: absolute; 
             left: 16px; 
@@ -389,15 +387,14 @@
             align-items:center; 
             justify-content:center;
         }
-        .message-wrapper.selected .selection-checkbox {
-            background: var(--accent-color); 
-            color:#fff;
-            
+       .selection-checkbox.checked {
+            background: var(--accent-color);
+            color: #fff;
         }
-        .message-wrapper.selected .selection-checkbox::after {
+        .selection-checkbox.checked::after {
             content: '✔';
-            font-size:14px;
-            line-height:18px;
+            font-size: 14px;
+            line-height: 18px;
         }
 
         /* Quoted message style */

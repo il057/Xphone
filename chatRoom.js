@@ -95,7 +95,7 @@ const bubbleThemes = [
 ];
 
 function toMillis(t) {
-    return t instanceof Date ? t.getTime() : Number(t);
+    return new Date(t).getTime();
 }
 
 // --- Initialization ---
@@ -538,7 +538,7 @@ function createBubble(msg) {
         // --- Bubble ---
         const bubble = document.createElement('div');
         bubble.className = `chat-bubble ${isUser ? 'user-bubble' : 'ai-bubble'}`;        
-        // --- Quoted Message (New) ---
+        // --- Quoted Message ---
         if (msg.quote) {
             const quoteDiv = document.createElement('div');
             quoteDiv.className = 'quoted-message';
@@ -685,6 +685,7 @@ function createBubble(msg) {
 
             wrapper.appendChild(avatar);
             wrapper.appendChild(contentAndNameContainer);
+            wrapper.appendChild(innerWrapper);
             wrapper.appendChild(timestamp);
 
         }
@@ -2251,7 +2252,7 @@ ${musicPromptSection}
 
             switch (action.type) {
                 case 'text': {
-                    const textMessage = { role: 'assistant', senderName: actorName, content: action.content, timestamp: new Date(messageTimestamp++) };
+                    const textMessage = { role: 'assistant', senderName: actorName, content: action.content, timestamp: messageTimestamp++ };
                     currentChat.history.push(textMessage);
                     appendMessage(textMessage);
                     break;
@@ -2281,7 +2282,7 @@ ${musicPromptSection}
                                 senderName: targetMsg.senderName || (targetMsg.role === 'user' ? (activeUserPersona?.name || '我') : currentChat.name),
                                 content: (typeof targetMsg.content === 'string' ? targetMsg.content : `[${targetMsg.type}]`).substring(0, 50) + '...'
                             },
-                            timestamp: new Date(messageTimestamp++)
+                            timestamp: messageTimestamp++
                         };
                         currentChat.history.push(replyMessage);
                         appendMessage(replyMessage);
@@ -3348,17 +3349,22 @@ function toggleMessageSelection(rawTs) {
     const wrapper = document.querySelector(`.message-wrapper[data-timestamp="${ts}"]`);
     if (!wrapper) return;
 
+    // 直接获取复选框元素
+    const checkbox = wrapper.querySelector('.selection-checkbox');
+    if (!checkbox) return; // 安全检查
+
     if (selectedMessages.has(ts)) {
         selectedMessages.delete(ts);
         wrapper.classList.remove('selected');
+        checkbox.classList.remove('checked'); // 直接移除 checked 类
     } else {
         selectedMessages.add(ts);
         wrapper.classList.add('selected');
+        checkbox.classList.add('checked'); // 直接添加 checked 类
     }
     selectionCount.textContent = `已选择 ${selectedMessages.size} 项`;
     if (selectedMessages.size === 0) exitSelectionMode();
 }
-
 
 
 /**
