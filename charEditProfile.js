@@ -263,38 +263,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderThemePreview(theme, customCss = '') {
         let themeColors;
         const preset = bubbleThemes.find(t => t.value === theme) || customPresets.find(p => p.name === theme);
-        // 确保当 theme 是一个颜色对象时也能正确处理
+        
         if (typeof theme === 'object' && theme !== null && theme.userBg) {
             themeColors = theme;
         } else {
             themeColors = preset ? preset.colors : bubbleThemes[0].colors;
         }
 
-        // --- 不再使用内联style，而是设置CSS变量 ---
         themePreviewContainer.style.setProperty('--user-bubble-bg', themeColors.userBg);
         themePreviewContainer.style.setProperty('--user-bubble-text', themeColors.userText);
         themePreviewContainer.style.setProperty('--ai-bubble-bg', themeColors.aiBg);
         themePreviewContainer.style.setProperty('--ai-bubble-text', themeColors.aiText);
-        // 为 accent-color 也提供一个值，确保预览准确
+        
         const accentColor = (localStorage.getItem('chatAccentThemeSource') === 'ai') ? themeColors.aiBg : themeColors.userBg;
         themePreviewContainer.style.setProperty('--accent-color', accentColor);
 
-
-        // 渲染HTML时，移除内联的 background-color 和 color
+        // 与实际聊天室的HTML结构完全一致
         themePreviewContainer.innerHTML = `
-            <div class="chat-bubble ai-bubble" style="align-self: flex-start; padding: 5px 10px; border-radius: 8px; max-width: 70%;">对方气泡预览</div>
-            <div class="chat-bubble user-bubble" style="align-self: flex-end; padding: 5px 10px; border-radius: 8px; max-width: 70%;">我的气泡预览</div>
+            <div class="message-wrapper ai" data-timestamp="${Date.now()}">
+                <img class="avatar" src="${chatData?.settings?.aiAvatar || defaultAvatar}">
+                <div class="flex flex-col message-content-column">
+                    <div class="chat-bubble ai-bubble">
+                        <div class="quoted-message">
+                            <div class="quoted-sender">回复 User:</div>
+                            <div class="quoted-content">这是引用的消息...</div>
+                        </div>
+                        对方气泡预览
+                    </div>
+                </div>
+                <div class="message-content-group flex items-end gap-2"></div>
+                <span class="timestamp">12:34</span>
+            </div>
+            <div class="message-wrapper user" data-timestamp="${Date.now() + 1}">
+                <img class="avatar" src="https://files.catbox.moe/kkll8p.svg">
+                <div class="flex flex-col message-content-column">
+                    <div class="chat-bubble user-bubble">
+                        我的气泡预览，长消息换行展示，这是一条很长的信息。
+                    </div>
+                </div>
+                <div class="message-content-group flex items-end gap-2"></div>
+                <span class="timestamp">12:35</span>
+            </div>
         `;
         
-        // 这部分逻辑保持不变，它会应用自定义CSS
         applyLiveCssPreview(customCss || customBubbleCssInput.value);
     }
-
+    
     function applyLiveCssPreview(cssCode) {
+        // 智能地将用户CSS中的选择器映射到正确的预览结构上
         const scopedCss = (cssCode || '')
+            .replace(/\.message-wrapper/g, '#theme-preview-container .message-wrapper')
             .replace(/\.message-bubble\.user\s*\.content/g, '#theme-preview-container .user-bubble')
             .replace(/\.message-bubble\.ai\s*\.content/g, '#theme-preview-container .ai-bubble')
-            .replace(/\.message-bubble\s*\.content/g, '#theme-preview-container .chat-bubble');
+            .replace(/\.message-bubble\s*\.content/g, '#theme-preview-container .chat-bubble')
+            .replace(/\.message-bubble/g, '#theme-preview-container .chat-bubble'); // 将 .message-bubble 也指向 .chat-bubble
 
         livePreviewStyleTag.textContent = scopedCss;
     }

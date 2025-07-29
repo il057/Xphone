@@ -296,3 +296,10 @@ main.no-scroll {
 .modal-btn-cancel {
     background-color: #e5e7eb;
 }
+
+.message-content-column {
+    /* 1 1 auto: 允许增长，允许收缩，基础宽度自动 */
+    flex: 1 1 auto;
+    /* 关键修复：允许flex项收缩至小于其内容尺寸，从而触发内容换行 */
+    min-width: 0;
+}

@@ -110,13 +110,77 @@
             margin-right: 0.5rem;
             accent-color: var(--theme-color);
         }
-         #theme-preview-container .user-bubble {
+
+        .message-wrapper {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            position: relative;
+            max-width: 90%;
+            -webkit-user-select: none;  
+            user-select: none;          
+        }
+        .message-wrapper.ai {
+            align-self: flex-start;
+        }
+        .message-wrapper.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        .timestamp {
+            font-size: 11px;
+            color: #999;
+            white-space: nowrap;
+            margin-bottom: 5px;
+            flex-shrink: 0;
+        }
+        .message-content-column {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        /* 确保 .content 存在以便自定义CSS可以正确应用 */
+        .message-bubble .content {
+             padding: 0; /* 默认无内边距，让用户的CSS完全控制 */
+        }
+        .message-bubble.ai-bubble .content, .message-bubble.user-bubble .content {
+            padding: 10px 14px; /* 为默认主题提供内边距 */
+        }
+
+        .chat-bubble {
+            padding: 10px 14px;
+            border-radius: 18px; /* 整体使用较大的圆角 */
+            max-width: 100%;
+            overflow-wrap: break-word;
+        }
+        .user-bubble {
             background-color: var(--user-bubble-bg);
             color: var(--user-bubble-text);
+            border-bottom-right-radius: 4px; /* 用户气泡的右下角设为小圆角，形成“尖角” */
         }
-        #theme-preview-container .ai-bubble {
+        .ai-bubble {
             background-color: var(--ai-bubble-bg);
             color: var(--ai-bubble-text);
+            border-bottom-left-radius: 4px; /* AI气泡的左下角设为小圆角，形成“尖角” */
+        }
+
+        /* 为预览中的引用消息提供默认样式 */
+        .quoted-message {
+            background-color: rgba(0,0,0,0.05); /* 提供一个不依赖主题色的默认背景 */
+            border-left: 3px solid rgba(0,0,0,0.2);
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+        }
+        .quoted-sender {
+            font-weight: 600;
         }
     </style>
 </head>
