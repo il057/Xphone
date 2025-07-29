@@ -110,6 +110,14 @@
             margin-right: 0.5rem;
             accent-color: var(--theme-color);
         }
+         #theme-preview-container .user-bubble {
+            background-color: var(--user-bubble-bg);
+            color: var(--user-bubble-text);
+        }
+        #theme-preview-container .ai-bubble {
+            background-color: var(--ai-bubble-bg);
+            color: var(--ai-bubble-text);
+        }
     </style>
 </head>
 <body>
@@ -172,7 +180,13 @@
                         管理群成员
                     </a>
                 </div>
-                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">单人世界书</label>
+                    <select id="world-book-select" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2">
+                        <option value="">不使用</option>
+                        </select>
+                    <p class="text-xs text-gray-500 mt-1">为角色绑定一个独立的世界观设定，AI在私聊时会优先参考此设定。</p>
+                </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700">上下文记忆条数</label>
                     <input id="max-memory-input" type="number" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2" placeholder="默认10条">
@@ -227,6 +241,17 @@
 
                      <div id="theme-preview-container" class="mt-4 p-3 rounded-lg flex flex-col space-y-2" style="background-color: #f0f2f5;">
                         </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">自定义气泡 (CSS)</label>
+                        <textarea id="custom-bubble-css-input" rows="6" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2 font-mono text-xs" placeholder="在此输入自定义CSS代码..."></textarea>
+                        <p class="text-xs text-gray-500 mt-1">
+                            要使用主题色，请在CSS中使用
+                            <code class="bg-gray-200 px-1 rounded">var(--user-bubble-bg)</code>,
+                            <code class="bg-gray-200 px-1 rounded">var(--ai-bubble-bg)</code>,
+                            <code class="bg-gray-200 px-1 rounded">var(--accent-color)</code>
+                            等变量。如果输入了自定义代码但未使用这些变量，该角色的所有相关页面将退回使用全局主题色。
+                        </p>
+                    </div>
                 </div>
             </div>
 

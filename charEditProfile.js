@@ -45,6 +45,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const closeAvatarBtn = document.getElementById('close-avatar-modal-btn');
     const addAvatarBtn = document.getElementById('add-avatar-btn');
     
+    const worldBookSelect = document.getElementById('world-book-select');
+    const customBubbleCssInput = document.getElementById('custom-bubble-css-input');
+    const livePreviewStyleTag = document.createElement('style');
+    livePreviewStyleTag.id = 'live-preview-bubble-style';
+    document.head.appendChild(livePreviewStyleTag);
+
+
     const bubbleThemes = [
         { name: '默认', value: 'default', colors: { userBg: '#dcf8c6', userText: '#000000', aiBg: '#e9e9e9', aiText: '#000000' } },
         { name: '粉蓝', value: 'pink_blue', colors: { userBg: '#eff7ff', userText: '#263a4e', aiBg: '#fff0f6', aiText: '#432531' } },
@@ -91,6 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderThemePreview('default');
         renderRelationshipEditor(null);
         await applyPageTheme(chatData);
+        await loadWorldBooks();
     }
 
     async function loadData() {
@@ -168,13 +176,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             personaInput.value = chatData.settings.aiPersona || '';
             maxMemoryInput.value = chatData.settings.maxMemory || '';
             backgroundUrlInput.value = chatData.settings.background || '';
-    
+            
+            const loadedCss = chatData.settings.customBubbleCss || '';
+            customBubbleCssInput.value = loadedCss; // 填充文本框
             renderThemeSwatches(chatData.settings.theme);
-            renderThemePreview(chatData.settings.theme);
+            // 将CSS作为参数传入，确保初始加载时预览正确
+            renderThemePreview(chatData.settings.theme, loadedCss); 
             renderRelationshipEditor(chatData.groupId);
         }
         await applyPageTheme(chatData); 
+        await loadWorldBooks(chatData.settings.worldBookId);
+        customBubbleCssInput.value = chatData.settings.customBubbleCss || '';
        
+    }
+
+    async function loadWorldBooks(selectedBookId) {
+        const books = await db.worldBooks.toArray();
+        worldBookSelect.innerHTML = '<option value="">不使用</option>'; // 重置
+        books.forEach(book => {
+            const option = document.createElement('option');
+            option.value = book.id;
+            option.textContent = book.name;
+            if (book.id === selectedBookId) {
+                option.selected = true;
+            }
+            worldBookSelect.appendChild(option);
+        });
     }
 
     function renderThemeSwatches(activeTheme) {
@@ -233,26 +260,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    function renderThemePreview(theme) {
+    function renderThemePreview(theme, customCss = '') {
         let themeColors;
-        
-        if (typeof theme === 'string') {
-            // 可能是默认预设或自定义预设的名称
-            const preset = bubbleThemes.find(t => t.value === theme) || customPresets.find(t => t.name === theme);
-            themeColors = preset ? preset.colors : bubbleThemes[0].colors;
-        } else if (typeof theme === 'object' && theme !== null) {
-            // 是一个自定义颜色对象
+        const preset = bubbleThemes.find(t => t.value === theme) || customPresets.find(p => p.name === theme);
+        // 确保当 theme 是一个颜色对象时也能正确处理
+        if (typeof theme === 'object' && theme !== null && theme.userBg) {
             themeColors = theme;
         } else {
-            // 回退到默认
-            themeColors = bubbleThemes[0].colors;
+            themeColors = preset ? preset.colors : bubbleThemes[0].colors;
         }
 
+        // --- 不再使用内联style，而是设置CSS变量 ---
+        themePreviewContainer.style.setProperty('--user-bubble-bg', themeColors.userBg);
+        themePreviewContainer.style.setProperty('--user-bubble-text', themeColors.userText);
+        themePreviewContainer.style.setProperty('--ai-bubble-bg', themeColors.aiBg);
+        themePreviewContainer.style.setProperty('--ai-bubble-text', themeColors.aiText);
+        // 为 accent-color 也提供一个值，确保预览准确
+        const accentColor = (localStorage.getItem('chatAccentThemeSource') === 'ai') ? themeColors.aiBg : themeColors.userBg;
+        themePreviewContainer.style.setProperty('--accent-color', accentColor);
+
+
+        // 渲染HTML时，移除内联的 background-color 和 color
         themePreviewContainer.innerHTML = `
-            <div style="align-self: flex-start; background-color: ${themeColors.aiBg}; color: ${themeColors.aiText}; padding: 5px 10px; border-radius: 8px; max-width: 70%; transition: all 0.2s;">对方气泡预览</div>
-            <div style="align-self: flex-end; background-color: ${themeColors.userBg}; color: ${themeColors.userText}; padding: 5px 10px; border-radius: 8px; max-width: 70%; transition: all 0.2s;">我的气泡预览</div>
+            <div class="chat-bubble ai-bubble" style="align-self: flex-start; padding: 5px 10px; border-radius: 8px; max-width: 70%;">对方气泡预览</div>
+            <div class="chat-bubble user-bubble" style="align-self: flex-end; padding: 5px 10px; border-radius: 8px; max-width: 70%;">我的气泡预览</div>
         `;
+        
+        // 这部分逻辑保持不变，它会应用自定义CSS
+        applyLiveCssPreview(customCss || customBubbleCssInput.value);
     }
+
+    function applyLiveCssPreview(cssCode) {
+        const scopedCss = (cssCode || '')
+            .replace(/\.message-bubble\.user\s*\.content/g, '#theme-preview-container .user-bubble')
+            .replace(/\.message-bubble\.ai\s*\.content/g, '#theme-preview-container .ai-bubble')
+            .replace(/\.message-bubble\s*\.content/g, '#theme-preview-container .chat-bubble');
+
+        livePreviewStyleTag.textContent = scopedCss;
+    }
+
 
     function handleSwatchClick(themeValue, customThemeObject = null) {
         // 第1步：更新哪个色板被视觉选中
@@ -495,7 +541,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 themeSetting = themeValue;
             }
+        } else {
+            // 如果没有激活的 swatch，可能意味着正在编辑自定义CSS，也需要保存
+            themeSetting = chatData.settings.theme;
         }
+    
         const checkedBooks = document.querySelectorAll('#world-book-dropdown input[type="checkbox"]:checked');
         const selectedWorldBookIds = Array.from(checkedBooks).map(cb => cb.value);
 
@@ -503,7 +553,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             background: backgroundUrlInput.value.trim(),
             theme: themeSetting,
             maxMemory: parseInt(document.getElementById('max-memory-input').value) || 10,
-            worldBookIds: selectedWorldBookIds // 保存新的ID数组
+            worldBookIds: selectedWorldBookIds, // 保存新的ID数组
+            worldBookId: worldBookSelect.value,
+            customBubbleCss: customBubbleCssInput.value.trim()
         };
 
         const finalCharId = charId || (crypto.randomUUID ? crypto.randomUUID() : `fallback-${Date.now()}-${Math.random().toString(16).substr(2, 8)}`);
@@ -628,6 +680,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Event Listeners ---
+    customBubbleCssInput.addEventListener('input', () => applyLiveCssPreview(customBubbleCssInput.value));
     document.getElementById('save-custom-theme-btn').addEventListener('click', saveCustomTheme);
 
     Object.values(colorInputs).forEach(input => {

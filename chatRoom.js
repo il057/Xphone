@@ -44,6 +44,8 @@ let globalSettings;
 let personaPresets;
 let activeUserPersona;
 
+let customBubbleStyleTag = null;
+
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-container');
 const chatForm = document.getElementById('chat-form');
@@ -224,7 +226,7 @@ function shadeColor(color, percent) {
 }
 
 
-function setupUI() {
+async function setupUI() {
     charNameHeader.textContent = currentChat.name || currentChat.realName;
     charProfileLink.href = `charProfile.html?id=${charId}`;
     // Load backgroud
@@ -256,10 +258,49 @@ function setupUI() {
         document.getElementById('transfer-btn').title = "转账";
     }
 
-    applyTheme(currentChat.settings.theme);
+    await applyThemeAndStyles(currentChat.settings.theme, currentChat.settings.customBubbleCss);
     handleChatLock();
     updateHeaderStatus();
 }
+
+async function applyThemeAndStyles(theme, customCss) {
+    if (customBubbleStyleTag) {
+        customBubbleStyleTag.remove();
+        customBubbleStyleTag = null;
+    }
+
+    if (customCss && customCss.trim() !== '') {
+        const usesThemeVariables = /var\(--(user-bubble-bg|ai-bubble-bg|accent-color)\)/.test(customCss);
+
+        if (usesThemeVariables) {
+            applyTheme(theme);
+        } else {
+            console.warn("自定义气泡CSS未使用主题变量，将回退到全局主题色。");
+            // 现在 await 会正常工作
+            const globalSettings = await db.globalSettings.get('main');
+            const globalThemeColor = globalSettings?.themeColor || '#3b82f6';
+            const fallbackTheme = {
+                userBg: globalThemeColor, userText: '#ffffff',
+                aiBg: '#f0f2f5', aiText: '#000000'
+            };
+            applyTheme(fallbackTheme);
+        }
+
+        const scopedCss = customCss
+            .replace(/\.message-bubble\.user\s*\.content/g, '.chat-bubble.user-bubble')
+            .replace(/\.message-bubble\.ai\s*\.content/g, '.chat-bubble.ai-bubble')
+            .replace(/\.message-bubble\s*\.content/g, '.chat-bubble');
+
+        customBubbleStyleTag = document.createElement('style');
+        customBubbleStyleTag.id = 'custom-bubble-style';
+        customBubbleStyleTag.textContent = scopedCss;
+        document.head.appendChild(customBubbleStyleTag);
+        
+    } else {
+        applyTheme(theme);
+    }
+}
+
 
 function applyTheme(theme) {
     let themeColors;
@@ -1397,18 +1438,26 @@ async function getAiResponse( charIdToTrigger = null ) {
         }
 
         let worldBookContext = "";
-            if (currentChatForAPI.groupId) {
-                const group = await db.xzoneGroups.get(currentChatForAPI.groupId);
-                if (group && group.worldBookIds && group.worldBookIds.length > 0) {
-                    const worldBooks = await db.worldBooks.bulkGet(group.worldBookIds);
-                    worldBookContext += "\n\n# 你需要参考的世界观与历史背景:\n";
-                    worldBooks.forEach(book => {
-                        if (book) {
-                            worldBookContext += `## ${book.name}\n${book.content}\n\n`;
-                        }
-                    });
-                }
+        // 检查单人世界书
+        if (currentChatForAPI.settings && currentChatForAPI.settings.worldBookId) {
+            const personalBook = await db.worldBooks.get(currentChatForAPI.settings.worldBookId);
+            if (personalBook) {
+                worldBookContext += `\n\n# 你需要【绝对优先】参考的个人世界观与历史背景:\n`;
+                worldBookContext += `## ${personalBook.name}\n${personalBook.content}\n\n`;
             }
+        }
+        if (currentChatForAPI.groupId) {
+            const group = await db.xzoneGroups.get(currentChatForAPI.groupId);
+            if (group && group.worldBookIds && group.worldBookIds.length > 0) {
+                const worldBooks = await db.worldBooks.bulkGet(group.worldBookIds);
+                worldBookContext += "\n\n# 你需要参考的世界观与历史背景:\n";
+                worldBooks.forEach(book => {
+                    if (book) {
+                        worldBookContext += `## ${book.name}\n${book.content}\n\n`;
+                    }
+                });
+            }
+        }
 
         const stickers = await db.userStickers.toArray();
         const stickerListForPrompt = stickers.length > 0 
