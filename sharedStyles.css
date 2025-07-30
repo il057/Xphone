@@ -1,24 +1,158 @@
 /* shared-styles.css */
 
 /* Apply base styles and theme color variable */
+/* 1. 颜色变量定义 */
 :root {
-    --theme-color: #3b82f6; /* Default theme color, will be overridden by JS */
+    --theme-color: #3b82f6;
+    /* 浅色主题 */
+    --background-color-light: #f3f4f6;
+    --content-bg-color-light: #ffffff;
+    --hover-bg-color-light: #fafafa;
+    --text-color-primary-light: #1f2937;
+    --text-color-secondary-light: #6b7280;
+    --border-color-light: #e5e7eb;
+    /* 深色主题 */
+    --background-color-dark: #000000; 
+    --content-bg-color-dark: #1c1c1e; 
+    --hover-bg-color-dark: #2C2C2E;   
+    --text-color-primary-dark: #ffffff;
+    --text-color-secondary-dark: #8E8E93; 
+    --border-color-dark: #38383A;     
 }
 
-html, body {
-    height: 100%;
-    overflow: hidden;
-    /* 防止在横屏模式下字体自动放大 */
-    -webkit-text-size-adjust: 100%;
-}
-
+/* 2. 主题应用 */
 body {
-    position: relative; /* 为某些子元素的绝对定位提供基准 */
+    background-color: var(--background-color-light);
+    color: var(--text-color-primary-light);
+}
+html.dark body {
+    background-color: var(--background-color-dark);
+    color: var(--text-color-primary-dark);
 }
 
-body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f3f4f6; /* A light grey background for content pages */
+/* 3. 基础布局和组件样式 (浅色) */
+.app-header, .app-dock {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-color: var(--border-color-light);
+}
+main.main-content, .group-header {
+    background-color: var(--background-color-light);
+}
+.list-item, .modal-content, .dropdown-menu, .bg-white {
+    background-color: var(--content-bg-color-light);
+}
+.list-item:hover, .dropdown-menu-item:hover {
+    background-color: var(--hover-bg-color-light);
+}
+
+/* 4. 深色模式覆盖 (关键修复) */
+html.dark .app-header,
+html.dark .app-dock {
+    background-color:  rgb(28, 28, 30); /* var(--content-bg-color-dark) with opacity */
+    border-color: var(--border-color-dark);
+}
+html.dark main.main-content,
+html.dark .group-header {
+    background-color: var(--background-color-dark);
+    color: var(--text-color-secondary-dark);
+}
+/* 覆盖所有白色背景的元素 */
+html.dark .bg-white,
+html.dark .list-item,
+html.dark .modal-content,
+html.dark .dropdown-menu {
+    background-color: var(--content-bg-color-dark);
+    color: var(--text-color-primary-dark);
+}
+/* 覆盖所有浅灰色背景的元素 */
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-gray-200 {
+    background-color: var(--background-color-dark);
+}
+
+/* 修复文字颜色 */
+html.dark .text-gray-800, html.dark .text-gray-900, html.dark .dropdown-menu-item {
+    color: var(--text-color-primary-dark);
+}
+html.dark .text-gray-400, html.dark .text-gray-500, html.dark .text-gray-600, html.dark .text-gray-700 {
+    color: var(--text-color-secondary-dark);
+}
+
+/* 修复边框颜色 */
+html.dark .border-b, html.dark .border-t, html.dark .border,
+html.dark .border-gray-100, html.dark .border-gray-200, html.dark .border-gray-300 {
+    border-color: var(--border-color-dark) !important;
+}
+
+/* 修复表单元素 */
+html.dark input, html.dark textarea, html.dark select {
+    background-color: var(--background-color-dark) !important;
+    color: var(--text-color-primary-dark) !important;
+    border-color: var(--border-color-dark) !important;
+}
+html.dark input:focus, html.dark textarea:focus, html.dark select:focus {
+    border-color: var(--theme-color) !important;
+    box-shadow: 0 0 0 1px var(--theme-color) !important;
+}
+html.dark input::placeholder, html.dark textarea::placeholder {
+    color: var(--text-color-secondary-dark);
+}
+html.dark input[type="checkbox"], html.dark input[type="radio"] {
+    filter: invert(0.9) hue-rotate(180deg);
+}
+
+/* 修复特定按钮 */
+html.dark .secondary-btn, html.dark .bg-gray-200 {
+    background-color: #4b5563;
+    color: var(--text-color-primary-dark);
+}
+html.dark .secondary-btn:hover, html.dark .bg-gray-200:hover {
+    background-color: #6b7280;
+}
+html.dark .bg-red-50 {
+    background-color: #450a0a !important;
+    border-color: #7f1d1d !important;
+    color: #fda4af !important;
+}
+html.dark .bg-red-50:hover {
+    background-color: #7f1d1d !important;
+}
+
+/* 修复特定页面组件 */
+html.dark #theme-preview-container,
+html.dark .custom-btn:hover {
+    background-color: var(--background-color-dark) !important;
+}
+html.dark .sticker-grid-item.border-dashed {
+    background-color: var(--content-bg-color-dark);
+    border-color: var(--border-color-dark);
+}
+html.dark #world-book-list .list-item,
+html.dark .custom-select-container,
+html.dark .custom-select-button,
+html.dark .custom-select-dropdown {
+    background-color: var(--content-bg-color-dark);
+}
+html.dark #world-book-list .list-item:hover,
+html.dark .custom-select-option:hover {
+    background-color: var(--hover-bg-color-dark);
+}
+
+
+/* 为我们自定义的列表项定义样式 */
+.interactive-list-item {
+    transition: background-color 0.15s ease-in-out; /* 添加一个平滑的过渡效果 */
+}
+
+/* 浅色模式下的悬停效果 */
+.interactive-list-item:hover {
+    background-color: var(--hover-bg-color-light); /* 使用我们在:root中定义的浅色悬停颜色 */
+}
+
+/* 深色模式下的悬停效果 */
+html.dark .interactive-list-item:hover {
+    background-color: var(--hover-bg-color-dark); /* 使用我们在:root中定义的深色悬停颜色 */
 }
 
 html {
@@ -52,10 +186,10 @@ header.app-header, footer.app-dock {
 
 /* --- Header --- */
 .app-header {
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(var(--content-bg-color-rgb, 255, 255, 255), 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-color);
     position: sticky;
     top: 0;
     z-index: 20;
@@ -66,6 +200,11 @@ header.app-header, footer.app-dock {
     padding-right: 1rem; /* 1rem 相当于 p-4 的水平边距 */
     padding-bottom: 1rem;/* 1rem 相当于 p-4 的底部边距 */
 }
+
+.app-header h1, .app-header h2 {
+    color: var(--text-color-primary);
+}
+
 
 .header-btn {
     color: #555555; /* Darker grey for better visibility */
@@ -116,10 +255,10 @@ header.app-header, footer.app-dock {
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(var(--content-bg-color-rgb, 255, 255, 255), 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid var(--border-color);
     padding: 8px 0;
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
 }

@@ -3,6 +3,55 @@
 import { db } from './db.js';
 import { runActiveSimulationTick } from './simulationEngine.js';
 
+/**
+ * 将十六进制颜色转换为RGB值，用于设置带透明度的背景。
+ * @param {string} hex - The hex color string.
+ * @returns {string} - 'r, g, b' string.
+ */
+function hexToRgb(hex) {
+    let c;
+    if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+        c = hex.substring(1).split('');
+        if (c.length === 3) {
+            c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+        }
+        c = '0x' + c.join('');
+        return [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',');
+    }
+    return '255, 255, 255'; // Fallback for invalid hex
+}
+
+/**
+ * 应用主题模式（浅色/深色/自动）
+ */
+export async function applyThemeMode() {
+    const settings = await db.globalSettings.get('main');
+    const mode = settings?.themeMode || 'auto'; // 默认为 'auto'
+
+    const apply = (theme) => {
+        if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    };
+
+    if (mode === 'auto') {
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        apply(systemPrefersDark ? 'dark' : 'light');
+
+        // 监听系统颜色模式变化
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (state.globalSettings.themeMode === 'auto') { // 确保只有在自动模式下才切换
+                 apply(event.matches ? 'dark' : 'light');
+            }
+        });
+
+    } else {
+        apply(mode);
+    }
+}
+
 
 /**
  * 全局样式应用函数
@@ -10,6 +59,7 @@ import { runActiveSimulationTick } from './simulationEngine.js';
  */
 async function applyGlobalStyles() {
     try {
+        await applyThemeMode(); // 应用浅色/深色主题
 
         const settings = await db.globalSettings.get('main');
 
@@ -19,20 +69,22 @@ async function applyGlobalStyles() {
             return;
         }
 
+        const contentBgColor = getComputedStyle(document.documentElement).getPropertyValue('--content-bg-color').trim();
+        document.documentElement.style.setProperty('--content-bg-color-rgb', hexToRgb(contentBgColor));
+
         // --- 1. 应用壁纸 ---
         const wallpaperValue = settings.wallpaper;
-        // 在所有页面上寻找一个带有 .wallpaper-bg 的元素来应用壁纸
-        const wallpaperTarget = document.querySelector('.wallpaper-bg'); 
+        const wallpaperTarget = document.querySelector('.wallpaper-bg');
         if (wallpaperTarget && wallpaperValue) {
             if (wallpaperValue.startsWith('url(') || wallpaperValue.startsWith('linear-gradient')) {
                 wallpaperTarget.style.backgroundImage = wallpaperValue;
                 wallpaperTarget.style.backgroundColor = 'transparent';
-            } else { // 假定是纯色值
+            } else {
                 wallpaperTarget.style.backgroundImage = 'none';
                 wallpaperTarget.style.backgroundColor = wallpaperValue;
             }
         }
-        
+
         // --- 2. 应用主题色 ---
         const themeColor = settings.themeColor || '#3b82f6';
         const root = document.documentElement;
@@ -69,6 +121,7 @@ async function applyGlobalStyles() {
         console.error("应用全局样式失败:", error);
     }
 }
+
 
 function shadeColor(color, percent) {
     if (!color.startsWith('#')) return color;
@@ -173,6 +226,7 @@ document.addEventListener('visibilitychange', () => {
         checkAndRunBackgroundSimulation();
     }
 });
+
 // 3. 设置一个定时器，定期检查
 // 我们将间隔设置为15秒，这样可以比较及时地触发，
 // 同时具体的模拟频率还是由数据库中的 `backgroundActivityInterval` 控制。

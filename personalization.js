@@ -2,6 +2,7 @@
 // Import the shared database instance from db.js
 import { db } from './db.js';
 import { showAlbumPickerModal } from './ui-helpers.js';
+import { applyThemeMode  } from './applyGlobalStyles.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DB & State ---
@@ -77,8 +78,16 @@ document.addEventListener('DOMContentLoaded', () => {
             wallpaper: '',
             themeColor: '#3b82f6',
             fontUrl: '',
+            themeMode: 'auto', 
             wallpaperPresets: defaultPresets
         };
+
+        // 加载并选中主题模式
+        const themeMode = state.globalSettings.themeMode || 'auto';
+        const radioToCheck = document.querySelector(`input[name="theme-mode"][value="${themeMode}"]`);
+        if (radioToCheck) {
+            radioToCheck.checked = true;
+        }
         
         // Load wallpaper & theme
         currentWallpaperValue = state.globalSettings.wallpaper || `linear-gradient(to top, #a18cd1, #fbc2eb)`;
@@ -100,17 +109,24 @@ document.addEventListener('DOMContentLoaded', () => {
         saveAllBtn.disabled = true;
 
         try {
-            // 我们将创建一个包含ID的完整设置对象
+            const selectedThemeMode = document.querySelector('input[name="theme-mode"]:checked').value;
+
+            // 创建一个包含ID的完整设置对象
             const settingsToSave = {
                 id: 'main', // 明确指定记录的ID
                 wallpaper: currentWallpaperValue,
                 themeColor: currentThemeColor,
                 fontUrl: fontUrlInput.value.trim(),
+                themeMode: selectedThemeMode,
                 wallpaperPresets: state.wallpaperPresets
             };
 
             // 使用 .put() 来确保记录无论是否存在都会被正确写入
             await db.globalSettings.put(settingsToSave);
+
+            localStorage.setItem('xphone-theme-mode', selectedThemeMode);
+
+            await applyThemeMode(); 
 
             presetContainer.classList.remove('edit-mode'); 
             
