@@ -51,6 +51,11 @@ export async function runOfflineSimulation() {
     // 2. 遍历每个分组，独立进行模拟
     for (const groupId in charsByGroup) {
         const group = groupsMap.get(parseInt(groupId));
+        // 如果分组不存在或明确禁用了模拟，则跳过
+        if (!group || group.enableOfflineSim === false) {
+            console.log(`分组【${group?.name || `ID:${groupId}`}】已禁用离线模拟，跳过。`);
+            continue; // 跳到下一个分组
+        }
         const groupName = groupsMap.get(parseInt(groupId))?.name || `分组${groupId}`;
         const groupMembers = charsByGroup[groupId];
 

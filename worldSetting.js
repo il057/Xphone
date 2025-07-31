@@ -46,16 +46,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         allGroups.forEach(group => {
             const groupEl = document.createElement('div');
             groupEl.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+            // 检查 enableOfflineSim 属性，如果未定义，则默认为 true (勾选状态)
+            const isSimEnabled = group.enableOfflineSim !== false;
+
             groupEl.innerHTML = `
                 <span class="font-medium">${group.name}</span>
-                <button data-group-id="${group.id}" class="manage-books-btn text-sm hover:underline" style="color: var(--theme-color)">关联世界书</button>
+                <div class="flex items-center gap-4">
+                    <button data-group-id="${group.id}" class="manage-books-btn text-sm hover:underline" style="color: var(--theme-color)">关联世界书</button>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="sim-switch-${group.id}" data-group-id="${group.id}" class="sim-toggle-switch h-4 w-4 rounded border-gray-300" ${isSimEnabled ? 'checked' : ''}>
+                        <label for="sim-switch-${group.id}" class="ml-2 text-sm text-gray-600">模拟简报</label>
+                    </div>
+                </div>
             `;
             groupsContainer.appendChild(groupEl);
-        });
-        
-        // Add event listeners to new buttons
-        document.querySelectorAll('.manage-books-btn').forEach(btn => {
-            btn.addEventListener('click', handleOpenWorldbookModal);
         });
     }
 
@@ -95,6 +99,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await db.globalSettings.put(globalSettings);
 
+        const groupUpdates = [];
+        document.querySelectorAll('.sim-toggle-switch').forEach(toggle => {
+            const groupId = parseInt(toggle.dataset.groupId);
+            const enableOfflineSim = toggle.checked;
+            groupUpdates.push({ key: groupId, changes: { enableOfflineSim: enableOfflineSim } });
+        });
+
+        if (groupUpdates.length > 0) {
+            await db.xzoneGroups.bulkUpdate(groupUpdates);
+        }
+        
         alert('世界设定已保存！');
     }
 

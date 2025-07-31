@@ -109,25 +109,26 @@ document.addEventListener('DOMContentLoaded', () => {
         saveAllBtn.disabled = true;
 
         try {
+            // 1. 从 state 中获取已经加载的、包含所有旧设置的 globalSettings 对象。
+            const settingsToSave = state.globalSettings;
+
+            // 2. 从 UI 中获取当前页面的新设置。
             const selectedThemeMode = document.querySelector('input[name="theme-mode"]:checked').value;
 
-            // 创建一个包含ID的完整设置对象
-            const settingsToSave = {
-                id: 'main', // 明确指定记录的ID
-                wallpaper: currentWallpaperValue,
-                themeColor: currentThemeColor,
-                fontUrl: fontUrlInput.value.trim(),
-                themeMode: selectedThemeMode,
-                wallpaperPresets: state.wallpaperPresets
-            };
+            // 3. 将当前页面的所有设置更新到 settingsToSave 对象中。
+            settingsToSave.wallpaper = currentWallpaperValue;
+            settingsToSave.themeColor = currentThemeColor;
+            settingsToSave.fontUrl = fontUrlInput.value.trim();
+            settingsToSave.wallpaperPresets = state.wallpaperPresets;
+            settingsToSave.themeMode = selectedThemeMode; 
 
-            // 使用 .put() 来确保记录无论是否存在都会被正确写入
+            // 4. 将包含了所有新旧设置的完整对象存回数据库。
             await db.globalSettings.put(settingsToSave);
 
+            // 5. 应用更改。
             localStorage.setItem('xphone-theme-mode', selectedThemeMode);
-
             await applyThemeMode(); 
-
+            
             presetContainer.classList.remove('edit-mode'); 
             
             alert('个性化设置已保存！');
