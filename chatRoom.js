@@ -1655,6 +1655,7 @@ async function getAiResponse( charIdToTrigger = null ) {
     - **环境互动**: 如果是视频通话，你的动作描述应该与你所处的环境（根据你的设定和当前时间推断）互动。
     - **对话间隔**: 你必须仔细观察每条消息前缀中的 [时间: ...] 信息。对比用户最新消息的时间和你的当前时间，来判断你们的对话间隔（是几分钟内的即时回复，还是几小时或几天后的重新开启话题），并据此调整你的回应方式和语气。
 - **【即时性与互动性】**: 你的回应必须是针对用户刚刚所说的话。做一个好的倾听者，提出问题，表达你的情绪（开心、疑惑、惊讶等），让对话自然地流动下去。
+- **【【【主动挂断】】】**: 在符合你人设和情景的情况下（例如：需要去忙别的事情、对话陷入僵局、或者被用户冒犯），你可以主动挂断电话。使用 "hang_up_call" 指令来执行此操作。
 
 `;
 
@@ -1665,6 +1666,7 @@ async function getAiResponse( charIdToTrigger = null ) {
 
 - **"description"**: (string) 使用第三人称，生动详细地描写你【此刻】的表情、肢体动作、眼神以及与周围环境的互动。这部分内容是用户看到的“画面”，必须富有动态感和细节。
 - **"dialogue"**: (string) 你要说的话，必须是纯文本，且高度口语化。
+- **挂断指令**: \`{"type": "hang_up_call", "reason": "(可选)挂断前说的最后一句话"}\`
 
 # 优质示例 (Good Example)
 {
@@ -1684,6 +1686,7 @@ async function getAiResponse( charIdToTrigger = null ) {
 你的回复【必须】是一个只包含 "dialogue" 一个键的、格式正确的JSON对象。
 
 - **"dialogue"**: (string) 你要说的话。因为没有画面，你需要通过语言本身来传递情绪和状态。可以包含停顿、思考的语气词 (如 "嗯..."、"让我想想啊...")，甚至可以描述一下你这边的声音（如果符合情景）。
+- **挂断指令**: \`{"type": "hang_up_call", "reason": "(可选)挂断前说的最后一句话"}\`
 
 # 优质示例 (Good Example)
 {
@@ -3036,7 +3039,7 @@ ${musicPromptSection}
                     // 如果当前没有通话，则显示来电界面
                     if (!isCallActive && !incomingCallOffer) {
                         const callType = action.type === 'initiate_voice_call' ? 'voice' : 'video';
-                        showIncomingCallUI(callType, chatData);
+                        showIncomingCallUI(callType, currentChatForAPI);
                     }
                     break;
 
@@ -3044,7 +3047,31 @@ ${musicPromptSection}
                     // 这是AI对我们呼叫的回应
                     handleAiCallResponse(action.decision, action.reason);
                     break;
+                case 'hang_up_call': {
+                    // 1. 检查AI是否提供了挂断理由
+                    if (action.reason && typeof action.reason === 'string') {
+                        console.log(`AI决定挂断，理由: ${action.reason}`);
+                        
+                        // 2. 将理由作为最后一条消息显示在通话界面上
+                        if (callType === 'video') {
+                            videoDialogueBox.innerHTML += `<p class="text-left"><span class="bg-gray-600/50 px-2 py-1 rounded-lg">${action.reason}</span></p>`;
+                            videoDialogueBox.scrollTop = videoDialogueBox.scrollHeight;
+                        } else {
+                            voiceContentArea.innerHTML += `<p class="text-left"><span class="font-semibold">${currentChat.name}:</span> ${action.reason}</p>`;
+                            voiceContentArea.scrollTop = voiceContentArea.scrollHeight;
+                        }
+                        
+                        // 3. 短暂暂停（例如1.5秒），让用户有时间阅读最后的消息
+                        await sleep(1500);
+                    }
                     
+                    // 4. 调用通用的挂断函数，处理后续所有逻辑（保存日志、重置状态等）
+                    await hangUpCall();
+                    
+                    // 5. 使用 return 立即终止当前所有操作，不再处理后续的AI动作
+                    return;
+                }
+
 
                 // Fallback for any unknown action types
                 default: {
