@@ -54,7 +54,7 @@ let callTimerInterval = null;
 let isAiRespondingInCall = false;
 let currentCallTranscript = [];
 let callParticipants = [];
-
+let callInitiator = null;
 let incomingCallOffer = null; // 用于存储来电信息 {type, from}
 let outgoingCallState = null; // 用于存储去电状态 {type, pending}
 
@@ -1251,6 +1251,7 @@ async function setupEventListeners() {
         if (!incomingCallOffer) return;
         incomingCallModal.classList.add('hidden');
         // 用户接听，建立连接，并让用户先说话
+        callInitiator = 'ai';
         connectCall(incomingCallOffer.type);
         incomingCallOffer = null;
     });
@@ -4296,7 +4297,7 @@ async function initiateOutgoingCall(type) {
     if (isCallActive || outgoingCallState?.pending) return;
     applyCallScreenTheme();
     outgoingCallState = { type: type, pending: true };
-
+    callInitiator = 'user';
     // 1. 显示 "正在呼叫..." UI
     callAvatar.src = currentChat.settings.aiAvatar || '...';
     callName.textContent = currentChat.name;
@@ -4361,7 +4362,7 @@ async function hangUpCall() {
             type: callType,
             startTime: callStartTime,
             duration: duration,
-            initiator: 'user', // 默认为用户呼出
+            initiator: callInitiator || 'user',
             transcript: currentCallTranscript // 保存详细对话
         };
         await db.callLogs.add(callLogEntry);
@@ -4383,6 +4384,7 @@ async function hangUpCall() {
         isCallActive = false;
         callType = null;
         callStartTime = null;
+        callInitiator = null;
         currentCallTranscript = []; // 清空临时记录
         callInput.value = '';
         outgoingCallState = null;
