@@ -6,7 +6,7 @@
 export const db = new Dexie('ChatDB');
 
 // Define the database schema. This should be the single source of truth for the database structure.
-db.version(31).stores({
+db.version(32).stores({
     chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus',
     // 将 'apiConfig' 重命名为 'apiProfiles' 并修改其结构
     apiProfiles: '++id, &profileName', // 使用自增ID和方案名称索引
@@ -27,7 +27,8 @@ db.version(31).stores({
     xzoneGroups: '++id, name, worldBookIds',
     relationships: '++id, [sourceCharId+targetCharId], sourceCharId, targetCharId', 
     eventLog: '++id, timestamp, type, groupId, processedBy',
-    offlineSummary: '&id, timestamp'
+    offlineSummary: '&id, timestamp',
+    callLogs: '++id, charId, type, startTime, duration'
 }).upgrade(tx => {
     // 版本 31 的迁移任务：将 Cloudinary 设置从 apiProfiles 移至 globalSettings
     return tx.table('apiProfiles').toArray().then(profiles => {

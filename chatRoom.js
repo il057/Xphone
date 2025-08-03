@@ -2,7 +2,7 @@ import { db, apiLock, getActiveApiProfile, uploadImage } from './db.js';
 import * as spotifyManager from './spotifyManager.js';
 import { runOfflineSimulation } from './simulationEngine.js';
 import { updateRelationshipScore } from './simulationEngine.js';
-import { showUploadChoiceModal } from './ui-helpers.js';
+import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
 
 // --- State and Constants ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -45,6 +45,18 @@ let personaPresets;
 let activeUserPersona;
 
 let customBubbleStyleTag = null;
+
+// call 
+let isCallActive = false;
+let callType = null; // 'voice' or 'video'
+let callStartTime = null;
+let callTimerInterval = null;
+let isAiRespondingInCall = false;
+let currentCallTranscript = [];
+let callParticipants = [];
+
+let incomingCallOffer = null; // 用于存储来电信息 {type, from}
+let outgoingCallState = null; // 用于存储去电状态 {type, pending}
 
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-container');
@@ -93,6 +105,27 @@ const bubbleThemes = [
     { name: '紫黄', value: 'purple_yellow', colors: { userBg: '#fffde4', userText: '#5C4033', aiBg: '#faf7ff', aiText: '#827693' } },
     { name: '黑白', value: 'black_white', colors: { userBg: '#343a40', userText: '#f8f9fa', aiBg: '#f8f9fa', aiText: '#343a40' } },
 ];
+
+// --- 通话界面DOM元素 ---
+const callScreenModal = document.getElementById('call-screen-modal');
+const callInfo = document.getElementById('call-info');
+const callAvatar = document.getElementById('call-avatar');
+const callName = document.getElementById('call-name');
+const callStatus = document.getElementById('call-status');
+const videoContentArea = document.getElementById('video-content-area');
+const videoDescriptionBox = document.getElementById('video-description-box');
+const videoDialogueBox = document.getElementById('video-dialogue-box');
+const callInputContainer = document.getElementById('call-input-container');
+const callInputForm = document.getElementById('call-input-form');
+const callInput = document.getElementById('call-input');
+const hangUpBtn = document.getElementById('hang-up-btn');
+const voiceContentArea = document.getElementById('voice-content-area'); 
+const incomingCallModal = document.getElementById('incoming-call-modal');
+const incomingCallAvatar = document.getElementById('incoming-call-avatar');
+const incomingCallName = document.getElementById('incoming-call-name');
+const incomingCallStatus = document.getElementById('incoming-call-status');
+const rejectIncomingCallBtn = document.getElementById('reject-incoming-call-btn');
+const acceptIncomingCallBtn = document.getElementById('accept-incoming-call-btn');
 
 function toMillis(t) {
     return new Date(t).getTime();
@@ -168,6 +201,63 @@ async function init() {
     renderMessages();
     setupEventListeners();
     setupPlayerControls();
+
+    const savedCallStateJSON = sessionStorage.getItem('activeCallState');
+    if (savedCallStateJSON) {
+        const savedCallState = JSON.parse(savedCallStateJSON);
+        // 确认保存的状态是属于当前这个角色的
+        if (savedCallState.charId === charId) {
+            console.log("检测到未结束的通话，正在恢复...");
+            applyCallScreenTheme();
+            // 恢复所有JS变量
+            
+            isCallActive = true;
+            callType = savedCallState.callType;
+            callStartTime = savedCallState.callStartTime;
+            currentCallTranscript = savedCallState.transcript || [];
+
+            // 重新显示通话UI (这部分代码基本是从 connectCall 复制过来的)
+            callInputContainer.classList.remove('hidden');
+            callInput.disabled = false;
+            callScreenModal.classList.remove('hidden');
+            callAvatar.src = currentChat.settings.aiAvatar || '...';
+            callName.textContent = currentChat.name;
+
+            if (callType === 'video') {
+                videoContentArea.classList.remove('hidden');
+                videoDescriptionBox.innerHTML = ''; // 清空旧内容
+                videoDialogueBox.innerHTML = '';
+            } else {
+                voiceContentArea.classList.remove('hidden');
+                voiceContentArea.innerHTML = '';
+            }
+            
+            // 恢复并继续计时器
+            updateCallTimer(); // 立即更新一次时间显示
+            callTimerInterval = setInterval(updateCallTimer, 1000);
+            
+            // 恢复通话记录的显示
+            currentCallTranscript.forEach(msg => {
+                if (msg.role === 'user') {
+                     if (callType === 'video') {
+                        videoDialogueBox.innerHTML += `<p class="text-left"><span class="bg-blue-500/50 px-2 py-1 rounded-lg">${msg.content}</span></p>`;
+                    } else {
+                        voiceContentArea.innerHTML += `<p class="text-left"><span class="text-blue-300 font-semibold">你:</span> ${msg.content}</p>`;
+                    }
+                } else if (msg.role === 'assistant') {
+                    if (callType === 'video') {
+                        videoDialogueBox.innerHTML += `<p class="text-left"><span class="bg-gray-600/50 px-2 py-1 rounded-lg">${msg.content}</span></p>`;
+                    } else {
+                        voiceContentArea.innerHTML += `<p class="text-left"><span class="font-semibold">${currentChat.name}:</span> ${msg.content}</p>`;
+                    }
+                }
+            });
+
+            if (callType === 'video') videoDialogueBox.scrollTop = videoDialogueBox.scrollHeight;
+            if (callType === 'voice') voiceContentArea.scrollTop = voiceContentArea.scrollHeight;
+
+        }
+    }
 
     //在所有UI设置好之后，检查并处理离线事件
     await handleChatEntryLogic();
@@ -252,6 +342,7 @@ async function setupUI() {
         charProfileLink.href = `charEditProfile.html?id=${charId}`; // 指向新的群设置页面
         document.getElementById('transfer-btn').title = "发红包";
         document.getElementById('status-container').style.display = 'none';
+        document.getElementById('start-call-btn').classList.add('hidden');
     } else {
         charNameHeader.textContent = currentChat.name || currentChat.realName;
         charProfileLink.href = `charProfile.html?id=${charId}`;
@@ -756,11 +847,36 @@ async function setupEventListeners() {
     
     
     document.getElementById('wait-reply-btn').addEventListener('click', getAiResponse);
-
+    document.getElementById('generate-call-response-btn').addEventListener('click', () => {
+        // 如果AI正在响应，则不执行任何操作
+        if (isAiRespondingInCall) return;
+        
+        getAiResponse();
+    });
     // Action Buttons
-    document.getElementById('send-photo-btn').addEventListener('click', () => handlePromptAndSend('发送图片描述', '请描述图片内容...', 'text_photo'));
-     // 将“发送真实图片”按钮的点击事件，直接触发我们创建的多选输入框
-    document.getElementById('send-real-photo-btn').addEventListener('click', () => multiImageInput.click());
+    document.getElementById('send-media-btn').addEventListener('click', async () => {
+        const choice = await showImageActionModal();
+        if (!choice) return;
+
+        switch (choice.type) {
+            case 'local':
+                // 触发隐藏的文件输入框，此后的逻辑与之前相同
+                multiImageInput.click();
+                break;
+            case 'description':
+                // 调用已有的函数来处理图片描述
+                handlePromptAndSend('发送图片描述', '请描述图片内容...', 'text_photo');
+                break;
+            case 'url':
+                // 弹出输入框让用户粘贴URL
+                const imageUrl = await promptForInput('发送图片URL', '请输入图片网址...', false, false);
+                if (imageUrl) {
+                    const message = { role: 'user', type: 'image_url', content: imageUrl, timestamp: Date.now() };
+                    await addUserMessageToDb(message, false);
+                }
+                break;
+        }
+    });
     // 为我们的多选输入框绑定上传处理函数
     multiImageInput.addEventListener('change', handleMultiImageUpload);
     
@@ -1109,7 +1225,35 @@ async function setupEventListeners() {
         }
     });
     
+   document.getElementById('start-call-btn').addEventListener('click', async () => {
+        const choice = await showCallActionModal();
+        if (!choice) return;
+        initiateOutgoingCall(choice); // 调用新的请求函数
+    });
+    // 为通话界面的按钮绑定事件
+    hangUpBtn.addEventListener('click', hangUpCall);
+    callInputForm.addEventListener('submit', handleSendCallMessage);
+    
+    rejectIncomingCallBtn.addEventListener('click', async () => {
+        incomingCallModal.classList.add('hidden');
+        // 告诉AI用户拒绝了
+        const rejectMessage = {
+            role: 'system',
+            content: `[系统提示：用户拒绝了你的通话请求。]`,
+            isHidden: true,
+            timestamp: Date.now()
+        };
+        await addUserMessageToDb(rejectMessage, true); // 让AI对此作出反应
+        incomingCallOffer = null;
+    });
 
+    acceptIncomingCallBtn.addEventListener('click', () => {
+        if (!incomingCallOffer) return;
+        incomingCallModal.classList.add('hidden');
+        // 用户接听，建立连接，并让用户先说话
+        connectCall(incomingCallOffer.type);
+        incomingCallOffer = null;
+    });
 }
 
 
@@ -1150,7 +1294,9 @@ async function addUserMessageToDb(message, triggerAI = false, charIdOverride = n
     // If the update is for the currently viewed chat, update the UI
     if (targetChatId === charId) {
         currentChat = chatToUpdate; 
-        appendMessage(message);
+        if (!isCallActive) {
+            appendMessage(message);
+        }
     }
 
     // Always save the change to the database
@@ -1323,6 +1469,7 @@ function getDisplayName(id) {
 }
 
 async function getAiResponse( charIdToTrigger = null ) {
+    let apiCallSuccess = false;
     // If the API is locked by any process, wait a moment and retry.
     // This gives priority to user actions over background tasks.
     if (apiLock.getCurrentLock() !== 'idle') {
@@ -1387,16 +1534,10 @@ async function getAiResponse( charIdToTrigger = null ) {
         const headerEl = document.getElementById('char-name-header');
 
     try {
-        headerEl.textContent = isGroupChat ? '成员正在输入...' : '对方正在输入...';
-        headerEl.classList.add('typing-status');
-
-   
-        // --- 1. Show "Typing" status BEFORE the API call ---
-        const { proxyUrl, apiKey, model } = apiConfig;
+        let systemPrompt;
         const maxMemory = currentChat.settings.maxMemory || 10;
-        const currentTime = new Date().toLocaleString();
-        
-        const recentHistory = currentChat.history.slice(-maxMemory);
+        const currentTime = new Date().toLocaleString('zh-CN', { dateStyle: 'full', timeStyle: 'short' });
+        let recentHistory = currentChatForAPI.history.slice(-maxMemory);
 
         let musicPromptSection = "";
         const lastMessage = recentHistory.length > 0 ? recentHistory[recentHistory.length - 1] : null;
@@ -1459,7 +1600,109 @@ async function getAiResponse( charIdToTrigger = null ) {
                 });
             }
         }
+        
+        const allChats = await db.chats.toArray();
+        let relationsContext = "你的人际关系：\n";
+        if (currentChatForAPI.groupId) {
+            const allChats = await db.chats.toArray();
+            const groupMembers = allChats.filter(c => c.groupId === currentChatForAPI.groupId && c.id !== activeCharId && !c.isGroup);
+            const memberIds = groupMembers.map(m => m.id);
+            
+            const userDisplayName = activeUserPersona?.name || '我';
+            relationsContext += `- 你与 ${userDisplayName} (ID: user) 的关系是 [由AI根据对话判断]。\n`;
 
+            if (memberIds.length > 0) {
+                const otherRelations = await db.relationships
+                    .where('sourceCharId').equals(activeCharId)
+                    .and(r => memberIds.includes(r.targetCharId))
+                    .toArray();
+                
+                otherRelations.forEach(rel => {
+                    const targetChar = groupMembers.find(m => m.id === rel.targetCharId);
+                    if(targetChar) {
+                        relationsContext += `- 你与 ${targetChar.realName} (昵称: ${targetChar.name}) (ID: ${targetChar.id}) 的关系是 ${rel.type}，好感度 ${rel.score}。\n`;
+                    }
+                });
+            }
+        } else {
+            relationsContext += "（你尚未加入任何分组。）\n";
+        }
+
+        if (isCallActive) {
+            // ---- 分支1：当前处于通话模式 ----
+            isAiRespondingInCall = true;
+            callInput.disabled = true;
+            document.querySelector('#call-input-form button').disabled = true;
+            const speakingIndicator = document.getElementById('call-speaking-indicator');
+            speakingIndicator.textContent = '对方正在讲话...';
+            speakingIndicator.classList.remove('opacity-0');
+            // --- 优化后的基础通话 Prompt ---
+            const baseCallPrompt = `
+# 核心使命 (Core Mission)
+你正在以角色 “${currentChat.realName}” (昵称 “${currentChat.name}”) 的身份，与用户进行一场【实时】的${callType === 'voice' ? '语音' : '视频'}通话。你的唯一目标是提供一个沉浸式、真实、且完全符合角色设定的通话体验。
+
+# 角色与世界背景 (Character & World Context) - 你必须时刻遵守
+- **你的核心人设**: ${currentChat.settings.aiPersona}
+- **你和其他人的关系**: ${relationsContext}
+- **你需要参考的世界观与历史背景**: ${worldBookContext}
+- **你需要参考的共同回忆**: ${memoriesPromptSection}
+
+# 通话行为准则 (Call Conduct Rules)
+- **【【【绝对禁止】】】**: 这是一场通话，不是聊天。严禁使用任何聊天模式的JSON指令 (例如: {"type": "send_sticker"}, {"type": "transfer"} 等)。你的所有产出都必须严格遵循下方指定的通话输出格式。
+- **【口语化与自然化】**: 你的语言风格必须是高度口语化的。使用短句、停顿 (比如 "嗯...")、口头禅和符合人设的语气词。想象你正在真实地和人打电话，而不是在写文章。
+- **【情景与时间感知】**:
+    - **当前时间是 ${currentTime}**。你的对话内容和精神状态需要符合这个时间。例如，在深夜，你可能会听起来有些疲惫或者准备睡觉；在清晨，你可能正在吃早餐或准备出门。
+    - **环境互动**: 如果是视频通话，你的动作描述应该与你所处的环境（根据你的设定和当前时间推断）互动。
+    - **对话间隔**: 你必须仔细观察每条消息前缀中的 [时间: ...] 信息。对比用户最新消息的时间和你的当前时间，来判断你们的对话间隔（是几分钟内的即时回复，还是几小时或几天后的重新开启话题），并据此调整你的回应方式和语气。
+- **【即时性与互动性】**: 你的回应必须是针对用户刚刚所说的话。做一个好的倾听者，提出问题，表达你的情绪（开心、疑惑、惊讶等），让对话自然地流动下去。
+
+`;
+
+            if (callType === 'video') {
+                systemPrompt = baseCallPrompt + `
+# 视频通话输出格式 (Video Call Output Format)
+你的回复【必须】是一个只包含 "description" 和 "dialogue" 两个键的、格式正确的JSON对象。
+
+- **"description"**: (string) 使用第三人称，生动详细地描写你【此刻】的表情、肢体动作、眼神以及与周围环境的互动。这部分内容是用户看到的“画面”，必须富有动态感和细节。
+- **"dialogue"**: (string) 你要说的话，必须是纯文本，且高度口语化。
+
+# 优质示例 (Good Example)
+{
+  "description": "他听到这话，忍不住笑出声，身体向后靠在椅子上，随手拿起桌边的杯子喝了一口水，眼神里还带着笑意。",
+  "dialogue": "真的假的？那也太夸张了吧！后来呢，后来怎么样了？"
+}
+
+# 劣质示例 (Bad Example)
+{
+  "description": "他很高兴。",
+  "dialogue": "我明白了你说的事情，这很有趣。"
+}
+`;
+            } else { // voice call
+                systemPrompt = baseCallPrompt + `
+# 语音通话输出格式 (Voice Call Output Format)
+你的回复【必须】是一个只包含 "dialogue" 一个键的、格式正确的JSON对象。
+
+- **"dialogue"**: (string) 你要说的话。因为没有画面，你需要通过语言本身来传递情绪和状态。可以包含停顿、思考的语气词 (如 "嗯..."、"让我想想啊...")，甚至可以描述一下你这边的声音（如果符合情景）。
+
+# 优质示例 (Good Example)
+{
+  "dialogue": "嗯...等一下，我这边好像有点吵...好了。你刚说到哪儿了？哦对，关于那个计划，我觉得可能有点问题。"
+}
+
+# 劣质示例 (Bad Example)
+{
+  "dialogue": "我已经理解了你的计划。"
+}
+`;
+            }
+        } else {
+            headerEl.textContent = isGroupChat ? '成员正在输入...' : '对方正在输入...';
+            headerEl.classList.add('typing-status');
+   
+        // --- 1. Show "Typing" status BEFORE the API call ---
+        const { proxyUrl, apiKey, model } = apiConfig;
+        
         const stickers = await db.userStickers.toArray();
         const stickerListForPrompt = stickers.length > 0 
             ? stickers.map(s => `- "${s.name}"`).join('\n')
@@ -1538,35 +1781,8 @@ ${commentsText}
                 postsPromptSection = `\n\n# 你们最近的动态 (可作为聊天话题):\n${postsText}`;
             }
         }
-         const allChats = await db.chats.toArray();
-            let relationsContext = "你的人际关系：\n";
-            if (currentChatForAPI.groupId) {
-                const allChats = await db.chats.toArray();
-                const groupMembers = allChats.filter(c => c.groupId === currentChatForAPI.groupId && c.id !== activeCharId && !c.isGroup);
-                const memberIds = groupMembers.map(m => m.id);
-                
-                const userDisplayName = activeUserPersona?.name || '我';
-                relationsContext += `- 你与 ${userDisplayName} (ID: user) 的关系是 [由AI根据对话判断]。\n`;
 
-                if (memberIds.length > 0) {
-                    const otherRelations = await db.relationships
-                        .where('sourceCharId').equals(activeCharId)
-                        .and(r => memberIds.includes(r.targetCharId))
-                        .toArray();
-                    
-                    otherRelations.forEach(rel => {
-                        const targetChar = groupMembers.find(m => m.id === rel.targetCharId);
-                        if(targetChar) {
-                            relationsContext += `- 你与 ${targetChar.realName} (昵称: ${targetChar.name}) (ID: ${targetChar.id}) 的关系是 ${rel.type}，好感度 ${rel.score}。\n`;
-                        }
-                    });
-                }
-            } else {
-                relationsContext += "（你尚未加入任何分组。）\n";
-            }
-                    
         
-        let systemPrompt;
         if (isGroupChat) {
             const userNickname = activeUserPersona?.name || '我';
             const userPersona = activeUserPersona?.persona || '用户的角色设定未知。';
@@ -1922,6 +2138,9 @@ ${relationsContext}
 - **创建约定**: {"type": "create_countdown", "description": "约定的事件", "targetDate": "YYYY-MM-DD HH:MM:SS"}
 
 ## 5.5 功能性与关系互动
+- **发起语音通话**: {"type": "initiate_voice_call"}
+- **发起视频通话**: {"type": "initiate_video_call"}
+- **回应通话请求**: {"type": "respond_to_call", "decision": "accept" | "reject", "reason": "(可选) 拒绝的理由"}
 - **发起转账**: {"type": "transfer", "amount": 5.20, "note": "一点心意"}
 - **回应转账**: {"type": "respond_to_transfer", "target_timestamp": [用户的转账消息时间戳], "decision": "accept" | "decline"}
 - **发起外卖代付**: {"type": "waimai_request", "productInfo": "一杯咖啡", "amount": 25}
@@ -1997,8 +2216,17 @@ ${musicPromptSection}
 - **什么是昵称?**: 昵称 (Name) 是你在这个聊天软件中公开展示的【网名】，它区别于你的【真实姓名 (realName)】。它是其他人在联系人列表、群聊和\`@\`你时看到的名字，是你线上社交身份的直接体现。
 
 - **如何运用?**: 你可以根据自己的心情、人设或故事发展，随时使用 \`update_name\` 指令来更改你的昵称。这是一种展现个性的方式。例如，一个角色在经历重大事件后，可能会改一个更能代表其心境的昵称；一个调皮的角色可能会频繁更换有趣的昵称来吸引注意。
-                `;
+
+# 如何处理用户的通话请求:
+1.  **感知事件**: 当对话历史中出现 '[系统提示：用户正在向你发起...通话请求...]' 的消息时，你收到了一个来电。
+2.  **做出决策**: 根据你的人设、当前状态和与用户的好感度，决定是“接受” ('accept') 还是“拒绝” ('reject')。
+3.  **【【【绝对规则】】】**: 如果你决定 **接受 ('accept')** 通话，你的 'response' 数组中【只能】包含 '{"type": "respond_to_call", "decision": "accept"}' 这一个动作，**绝对不能**再附加任何 'text' 消息。通话接通后你将有第一句话的机会。
+4.  **使用指令回应**:
+    - **接受**: '{"type": "respond_to_call", "decision": "accept"}'
+    - **拒绝**: 你【必须】提供一个符合人设的简洁理由。例如: '{"type": "respond_to_call", "decision": "reject", "reason": "抱歉，我现在有点忙，晚点打给你。"}'
+`;
         }
+    }
         // Merge consecutive user messages
        
         const messagesPayload = [];
@@ -2053,7 +2281,7 @@ ${musicPromptSection}
             role: 'user', // 使用'user'角色可以给AI更强的指令性
             content: '【最终指令】请严格遵从你的核心输出格式要求，你的整个回复必须是一个完整的、可被解析的JSON对象。绝对禁止在JSON代码块之外包含任何解释、注释或Markdown标记。'
         });
-
+    
         let response;
         if (apiConfig.apiProvider === 'gemini') {
             // --- Gemini API 请求逻辑 ---
@@ -2156,6 +2384,39 @@ ${musicPromptSection}
             headerEl.classList.remove('typing-status');
             return; // 提前退出函数
         }
+        apiCallSuccess = true;
+        if (isCallActive) {
+            // ---- 通话模式下的回复处理 ----
+            const responseData = aiResponseContent.response || aiResponseContent;
+            const callAiMessage = { role: 'assistant', timestamp: Date.now() };
+
+            if (callType === 'video') {
+                const description = responseData.description || '';
+                const dialogue = responseData.dialogue || '';
+                videoDescriptionBox.innerHTML = `<p>${description}</p>`;
+                videoDialogueBox.innerHTML += `<p class="text-left"><span class="bg-gray-600/50 px-2 py-1 rounded-lg">${dialogue}</span></p>`;
+                videoDialogueBox.scrollTop = videoDialogueBox.scrollHeight;
+                // 将两部分都存入记录
+                callAiMessage.content = dialogue;
+                callAiMessage.description = description; 
+            } else { // voice
+                const dialogue = responseData.dialogue || '';
+                voiceContentArea.innerHTML += `<p class="text-left"><span class="font-semibold">${currentChat.name}:</span> ${dialogue}</p>`;
+                voiceContentArea.scrollTop = voiceContentArea.scrollHeight;
+                callAiMessage.content = dialogue;
+            }
+            
+            // 将AI的回复也存入临时通话记录
+            currentCallTranscript.push(callAiMessage);
+            const hiddenAiMessageForDB = { 
+                ...callAiMessage, 
+                content: `[${callType === 'video' ? '视频' : '语音'}通话]: ${callAiMessage.content}`, // 在这里添加前缀
+                isHidden: true 
+            };
+            currentChat.history.push(hiddenAiMessageForDB);
+            await db.chats.put(currentChat);
+            await syncCallStateToSessionStorage();
+        } else {
         
         const messagesArray = aiResponseContent.response || []; // 获取要发送的消息/动作
         // 1. 应用关系更新 
@@ -2728,7 +2989,6 @@ ${musicPromptSection}
                     spotifyManager.previousTrack();
                     break;
                 
-                    
                 case 'send_sticker': {
                     // Get the desired sticker name from the AI's action.
                     const stickerName = action.name;
@@ -2771,6 +3031,20 @@ ${musicPromptSection}
                     }
                     break;
                 }
+                case 'initiate_voice_call':
+                case 'initiate_video_call':
+                    // 如果当前没有通话，则显示来电界面
+                    if (!isCallActive && !incomingCallOffer) {
+                        const callType = action.type === 'initiate_voice_call' ? 'voice' : 'video';
+                        showIncomingCallUI(callType, chatData);
+                    }
+                    break;
+
+                case 'respond_to_call':
+                    // 这是AI对我们呼叫的回应
+                    handleAiCallResponse(action.decision, action.reason);
+                    break;
+                    
 
                 // Fallback for any unknown action types
                 default: {
@@ -2795,15 +3069,32 @@ ${musicPromptSection}
         // After the loop has processed all actions, save and render ONCE.
         
         if(!isGroupChat) updateHeaderStatus();
-
+    }
     } catch (error) {
         console.error("API call failed:", error);
         //alert(`获取AI回复失败: ${error.message}`);
     } finally {
         apiLock.release('user_chat');
-        
-        headerEl.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
-        headerEl.classList.remove('typing-status');
+        if (isCallActive) {
+            // 通话模式结束AI响应时的处理
+            isAiRespondingInCall = false;
+            callInput.disabled = false;
+            document.querySelector('#call-input-form button').disabled = false;
+            callInput.focus();
+            const speakingIndicator = document.getElementById('call-speaking-indicator');
+            if (apiCallSuccess) {
+                // 如果API调用成功，任务完成，直接隐藏状态标志
+                speakingIndicator.classList.add('opacity-0');
+            } else {
+                // 如果API调用失败，在状态标志处显示错误提示
+                speakingIndicator.textContent = '对方无应答，可重试';
+                speakingIndicator.classList.remove('opacity-0'); 
+            }
+        } else {
+            // 普通聊天模式的UI恢复 
+            headerEl.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
+            headerEl.classList.remove('typing-status');
+        }
     }
 }
 // --- Status ---
@@ -3691,7 +3982,7 @@ async function gatherIntelligenceFor(characterId) {
  * @param {string} initialValue - The initial value of the input.
  * @returns {Promise<string|null>} - A promise that resolves with the input value or null if canceled.
  */
-function promptForInput(title, placeholder = '', initialValue = '') {
+function promptForInputPat(title, placeholder = '', initialValue = '') {
     return new Promise((resolve) => {
         const modal = document.getElementById('prompt-modal');
         document.getElementById('prompt-title').textContent = title;
@@ -3735,7 +4026,7 @@ async function handleUserPat(targetChatId, targetName) {
     if (!chat) return;
 
     // 1. Use the new helper to prompt for an optional suffix.
-    const suffix = await promptForInput(
+    const suffix = await promptForInputPat(
         `你拍了拍 “${targetName}”`,
         "（可选）输入后缀，如“的脑袋”",
         ""
@@ -3967,3 +4258,404 @@ function formatRelativeTime(timestamp) {
         if (now.toDateString() === date.toDateString()) return `今天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
         return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
     }
+
+// --- 通话核心功能函数 ---
+
+/**
+ * 用户发起呼叫请求
+ * @param {'voice' | 'video'} type - 通话类型
+ */
+async function initiateOutgoingCall(type) {
+    if (isCallActive || outgoingCallState?.pending) return;
+    applyCallScreenTheme();
+    outgoingCallState = { type: type, pending: true };
+
+    // 1. 显示 "正在呼叫..." UI
+    callAvatar.src = currentChat.settings.aiAvatar || '...';
+    callName.textContent = currentChat.name;
+     document.getElementById('call-status').classList.add('hidden');
+    const speakingIndicator = document.getElementById('call-speaking-indicator');
+    speakingIndicator.textContent = '正在呼叫...';
+    speakingIndicator.classList.remove('opacity-0');
+
+    callScreenModal.classList.remove('hidden');
+    // 隐藏输入框，只显示挂断按钮
+    videoContentArea.classList.add('hidden');
+    voiceContentArea.classList.add('hidden');
+    callInputContainer.classList.add('hidden');
+
+    // 2. 创建对AI可见的系统消息
+    const callRequestMessage = {
+        role: 'system',
+        content: `[系统提示：用户正在向你发起${type === 'voice' ? '语音' : '视频'}通话请求。请你基于人设和当前情景，决定是接受还是拒绝。]`,
+        isHidden: true,
+        timestamp: Date.now()
+    };
+
+    // 3. 将请求消息添加到数据库并触发AI响应
+    await addUserMessageToDb(callRequestMessage, true);
+}
+
+/**
+ * 挂断通话
+ */
+async function hangUpCall() {
+     // 检查是否是正在呼叫但未接通的状态
+    if (outgoingCallState?.pending) {
+        // 1. 重置呼出状态，这会阻止后续的接通逻辑
+        outgoingCallState = null;
+
+        // 2. 隐藏通话界面
+        callScreenModal.classList.add('hidden');
+        
+        // 3. 向AI发送一条隐藏消息，告知它你已取消
+        //    这样可以防止AI在你挂断后，仍然尝试“接通”一个不存在的电话
+        const cancelMessage = {
+            role: 'system',
+            content: `[系统提示：用户取消了通话请求。]`,
+            isHidden: true,
+            timestamp: Date.now()
+        };
+        // 注意：这里我们只更新数据库，不需要AI立即回应，所以第二个参数是 false
+        await addUserMessageToDb(cancelMessage, false);
+
+        console.log("用户在响铃时挂断了电话。");
+        sessionStorage.removeItem('activeCallState');
+
+    // 检查是否是已经接通的通话状态
+    } else if (isCallActive) {
+
+        const duration = Math.round((Date.now() - callStartTime) / 1000);
+        clearInterval(callTimerInterval);
+
+        // 1. 将完整的通话记录保存到 callLogs 表
+        const callLogEntry = {
+            charId: charId,
+            type: callType,
+            startTime: callStartTime,
+            duration: duration,
+            initiator: 'user', // 默认为用户呼出
+            transcript: currentCallTranscript // 保存详细对话
+        };
+        await db.callLogs.add(callLogEntry);
+
+        // 2. 创建对用户可见的 "通话结束" 消息
+        const visibleEndMessage = {
+            role: 'system',
+            type: 'system_message',
+            content: `通话结束，时长 ${formatDuration(duration)}`,
+            timestamp: Date.now()
+        };
+        currentChat.history.push(visibleEndMessage);
+
+        // 4. 保存对 chat 历史的所有修改
+        await db.chats.put(currentChat);
+
+        // 5. 重置UI和状态
+        callScreenModal.classList.add('hidden');
+        isCallActive = false;
+        callType = null;
+        callStartTime = null;
+        currentCallTranscript = []; // 清空临时记录
+        callInput.value = '';
+        outgoingCallState = null;
+        incomingCallOffer = null;
+
+        // 6. 重新渲染聊天列表以显示 "通话结束" 消息
+        renderMessages();
+        sessionStorage.removeItem('activeCallState');
+    }
+}
+
+/**
+ * 在通话中发送消息
+ */
+async function handleSendCallMessage(e) {
+    e.preventDefault();
+    if (isAiRespondingInCall) return;
+
+    const text = callInput.value.trim();
+    if (!text) return;
+
+    // 1. 创建对AI可见的、带有上下文标记的消息
+    const userMessageForAI = {
+        role: 'user',
+        content: `[${callType === 'video' ? '视频' : '语音'}通话]: ${text}`,
+        timestamp: Date.now(),
+        isHidden: true // 标记为对聊天室UI隐藏，但对AI可见
+    };
+
+    // 2. 创建用于通话记录的、简洁的消息
+    const userMessageForTranscript = {
+        role: 'user',
+        content: text,
+        timestamp: Date.now()
+    };
+    currentCallTranscript.push(userMessageForTranscript);
+    
+    const savedCallStateJSON = sessionStorage.getItem('activeCallState');
+    if (savedCallStateJSON) {
+        const savedCallState = JSON.parse(savedCallStateJSON);
+        savedCallState.transcript = currentCallTranscript;
+        await syncCallStateToSessionStorage();
+    }
+
+    // 3. 更新通话界面的UI
+    if (callType === 'video') {
+        videoDialogueBox.innerHTML += `<p class="text-left"><span class="bg-blue-500/50 px-2 py-1 rounded-lg">${text}</span></p>`;
+        videoDialogueBox.scrollTop = videoDialogueBox.scrollHeight;
+    } else {
+        voiceContentArea.innerHTML += `<p class="text-left"><span class="text-blue-300 font-semibold">你:</span> ${text}</p>`;
+        voiceContentArea.scrollTop = voiceContentArea.scrollHeight;
+    }
+
+    callInput.value = '';
+
+    await addUserMessageToDb(userMessageForAI, false);
+}
+
+/**
+ * 更新通话计时器
+ */
+function updateCallTimer() {
+    if (!callStartTime) return;
+    const duration = Math.round((Date.now() - callStartTime) / 1000);
+    callStatus.textContent = formatDuration(duration);
+}
+
+/**
+ * 格式化秒数为 HH:MM:SS 或 MM:SS
+ */
+function formatDuration(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const pad = (num) => String(num).padStart(2, '0');
+
+    if (h > 0) {
+        return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+    return `${pad(m)}:${pad(s)}`;
+}
+
+
+function updateParticipantUI() {
+    const listEl = document.getElementById('call-participant-list');
+    listEl.innerHTML = ''; // 清空
+
+    // 总是先显示用户自己
+    const userAvatar = activeUserPersona?.avatar || 'https://files.catbox.moe/kkll8p.svg';
+    listEl.innerHTML += `<img src="${userAvatar}" class="w-12 h-12 rounded-full border-2 border-green-400" title="${activeUserPersona?.name || '我'}">`;
+
+    // 再显示其他参与者
+    callParticipants.forEach(p => {
+        listEl.innerHTML += `<img src="${p.avatar || '...'}" class="w-12 h-12 rounded-full border-2 border-gray-500" title="${p.name}">`;
+    });
+}
+
+/**
+ * 处理AI对我们通话请求的回应
+ * @param {'accept' | 'reject'} decision - AI的决定
+ * @param {string} [reason] - 拒绝时的理由
+ */
+async function handleAiCallResponse(decision, reason) {
+    if (!outgoingCallState?.pending) return; 
+
+    const callType = outgoingCallState.type;
+    outgoingCallState = null; // 在做出任何决定后，都清除pending状态
+
+    if (decision === 'accept') {
+        // AI接受了通话
+        // 1. 首先，只管连接UI，让通话界面先生效
+        await connectCall(callType);
+
+        // 2. （关键）等待一小段时间（例如500毫秒），确保UI渲染完成
+        //    并且给上一个API任务的锁一个完全释放的时间，避免冲突
+        await sleep(500);
+
+        // 3. 现在，作为一个全新的、独立的任务，去请求AI说第一句话
+        const initialPrompt = `[系统提示：你接通了用户的${callType === 'voice' ? '语音' : '视频'}通话。请你先开口说第一句话。]`;
+        const callStartMessage = {
+            role: 'system',
+            content: initialPrompt,
+            isHidden: true,
+            timestamp: Date.now()
+        };
+        await addUserMessageToDb(callStartMessage, true); // 触发AI
+
+    } else {
+        // AI拒绝了通话
+        callScreenModal.classList.add('hidden'); // 关闭"正在呼叫"界面
+        
+        // 在聊天界面显示系统提示
+        const systemMessage = {
+            role: 'system',
+            type: 'system_message',
+            content: `对方已拒绝通话`,
+            timestamp: Date.now()
+        };
+        await addUserMessageToDb(systemMessage, false);
+
+        // 显示AI的拒绝理由
+        if (reason) {
+            const reasonMessage = {
+                role: 'assistant',
+                senderName: currentChat.name,
+                content: reason,
+                timestamp: new Date(Date.now() + 1)
+            };
+            await addUserMessageToDb(reasonMessage, false);
+        }
+    }
+    // 重置呼叫状态
+    outgoingCallState = null;
+}
+
+/**
+ * 真正建立通话连接并显示UI
+ * @param {'voice' | 'video'} type - 通话类型
+ * @param {object} options - 选项
+ * @param {'ai' | 'user'} options.whoSpeaksFirst - 决定谁先说话
+ */
+async function connectCall(type) { 
+    applyCallScreenTheme();
+    isCallActive = true;
+    callType = type;
+
+    // 更新UI到“通话中”状态
+    callStartTime = Date.now();
+    
+    const callState = {
+        charId: charId,
+        isCallActive: true,
+        callType: type,
+        callStartTime: callStartTime,
+        transcript: [] // 初始转录为空
+    };
+    await syncCallStateToSessionStorage();
+
+    document.getElementById('call-speaking-indicator').classList.add('opacity-0');
+    const timerElement = document.getElementById('call-status');
+    timerElement.textContent = '00:00';
+    timerElement.classList.remove('hidden');
+    callTimerInterval = setInterval(updateCallTimer, 1000);
+
+    // UI更新
+    callInputContainer.classList.remove('hidden');
+    callInput.disabled = false;
+    callInput.focus();
+    callScreenModal.classList.remove('hidden');
+    callAvatar.src = currentChat.settings.aiAvatar || '...';
+    callName.textContent = currentChat.name;
+
+    if (type === 'video') {
+        videoContentArea.classList.remove('hidden');
+        videoDescriptionBox.innerHTML = '';
+        videoDialogueBox.innerHTML = '';
+    } else {
+        voiceContentArea.classList.remove('hidden');
+        voiceContentArea.innerHTML = '';
+    }
+
+    // 立即开始计时，不再等待AI先开口
+    callStatus.textContent = '00:00';
+    callTimerInterval = setInterval(updateCallTimer, 1000);
+}
+
+/**
+ * 显示来电UI
+ * @param {'voice' | 'video'} type
+ * @param {object} character
+ */
+function showIncomingCallUI(type, character) {
+    incomingCallOffer = { type: type, from: character.id };
+
+    incomingCallAvatar.src = character.settings.aiAvatar || defaultAvatar;
+    incomingCallName.textContent = character.name;
+    incomingCallStatus.textContent = `${type === 'voice' ? '语音' : '视频'}通话`;
+    
+    incomingCallModal.classList.remove('hidden');
+}
+
+/**
+ * 为通话界面应用动态的主题样式
+ */
+function applyCallScreenTheme() {
+    const callScreenModal = document.getElementById('call-screen-modal');
+    
+    // --- 1. 应用渐变背景 ---
+    const userBg = getComputedStyle(document.documentElement).getPropertyValue('--user-bubble-bg').trim();
+    const aiBg = getComputedStyle(document.documentElement).getPropertyValue('--ai-bubble-bg').trim();
+    callScreenModal.style.backgroundColor = 'transparent';
+    callScreenModal.style.backgroundImage = `linear-gradient(to bottom, ${userBg}, ${aiBg})`;
+
+    // --- 2. 获取主题色和衍生色 ---
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim();
+    // 使用 shadeColor 函数计算出用于图标的、稍深一点的颜色
+    const themedIconColor = shadeColor(accentColor, -40);
+
+    // --- 3. 定位通话界面的两个按钮 ---
+    const generateResponseBtn = document.getElementById('generate-call-response-btn');
+    const callSendBtn = document.querySelector('#call-input-form button[type="submit"]');
+
+    // 我们通过检查body的背景色来做出最可靠的判断，不再依赖<html>的class
+    const bodyBgColor = getComputedStyle(document.body).backgroundColor;
+    // 一个简单的亮度判断：如果body背景色的R,G,B分量都很低（< 128），就认为是深色模式
+    const isDarkMode = bodyBgColor.match(/\d+/g).map(Number).slice(0, 3).every(c => c < 128);
+
+    // --- 4. 根据判断结果，强制应用正确的按钮颜色 ---
+    if (isDarkMode) {
+        // --- 深色模式下的样式 ---
+        if (generateResponseBtn) {
+            generateResponseBtn.style.backgroundColor = '#374151'; // Tailwind gray-700
+            generateResponseBtn.style.color = '#9ca3af'; // Tailwind gray-400 (高对比度)
+        }
+    } else {
+        // --- 浅色模式下的样式 ---
+        if (generateResponseBtn) {
+            generateResponseBtn.style.backgroundColor = '#f3f4f6'; // Tailwind gray-100
+            // 使用 shadeColor 计算图标颜色
+            generateResponseBtn.style.color = shadeColor(accentColor, -40);
+        }
+    }
+
+    if (callSendBtn) {
+        // b. 设置“发送”按钮的背景色为主题色
+        callSendBtn.style.backgroundColor = accentColor;
+    }
+
+    // --- 5. 动态创建 hover 样式 ---
+    // 这是实现“生成回复”按钮悬停变色的关键
+    let callHoverStyle = document.getElementById('call-hover-style');
+    if (!callHoverStyle) {
+        callHoverStyle = document.createElement('style');
+        callHoverStyle.id = 'call-hover-style';
+        document.head.appendChild(callHoverStyle);
+    }
+    // 设置悬停时，“生成回复”按钮的背景变为主题色，图标变为白色以保证对比度
+    callHoverStyle.innerHTML = `
+        #generate-call-response-btn:hover {
+            background-color: ${accentColor} !important;
+        }
+    `;
+}
+
+/**
+ * 将当前的通话状态完整同步到 sessionStorage
+ */
+async function syncCallStateToSessionStorage() {
+    if (!isCallActive) {
+        // 如果通话已非激活状态，确保清除存储
+        sessionStorage.removeItem('activeCallState');
+        return;
+    }
+
+    const callState = {
+        charId: charId,
+        isCallActive: true,
+        callType: callType,
+        callStartTime: callStartTime,
+        transcript: currentCallTranscript // 使用内存中最新的完整通话记录
+    };
+    sessionStorage.setItem('activeCallState', JSON.stringify(callState));
+}

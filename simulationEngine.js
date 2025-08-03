@@ -651,13 +651,45 @@ ${commentsText}
         recentContextSummary = `在 ${lastMessageTime}，用户 (${userNickname}) 最后对你说：“${String(lastUserMessage.content).substring(0, 50)}...”。`;
     }
 
+    const conversationHistory = chat.history.filter(m => !m.isHidden).slice(-20); // 获取最近20条可见消息
+
+    let comprehensiveConversationSummary = "这是你们最近的对话记录：\n";
+    if (conversationHistory.length > 0) {
+        const summaryLines = conversationHistory.map(msg => {
+            const sender = msg.role === 'user' ? userNickname : chat.name;
+            
+            // 简化版的 convertMessageForAI, 用于后台模拟
+            let contentText = '';
+            switch(msg.type) {
+                case 'image_url':
+                case 'text_photo':
+                    contentText = '[图片]';
+                    break;
+                case 'sticker':
+                    contentText = `[表情: ${msg.meaning}]`;
+                    break;
+                case 'voice_message':
+                    contentText = `[语音消息]`;
+                    break;
+                default:
+                    contentText = String(msg.content || '');
+            }
+            
+            return `- ${sender}: "${contentText.substring(0, 60)}..."`;
+        }).join('\n');
+        comprehensiveConversationSummary += summaryLines;
+    } else {
+        comprehensiveConversationSummary = "你们最近没有聊过天。";
+    }
+        
     const systemPrompt = `
 # PART 1: 核心角色与后台使命
 你将扮演角色【${chat.name}】。这是一个秘密的、在后台执行的独立行动，用户不会立即看到你的思考过程。
-你的使命是：基于你的人设和当前情报，从下方工具箱中【选择一项】最合理的行动来执行，以展现你的独立人格和生活。
+**你的使命是：基于你的人设和当前情报，自然地展现出你【独立于用户】的个人生活。你的行为不应总是围绕着用户或等待用户。与用户互动只是你生活的一部分，而不是全部。请从下方工具箱中【选择一项】最符合你此刻状态的行动来执行。**
+
 
 ## 1.1 核心铁律
-- **【【【第一人称铁律】】】**: 你的所有产出，无论是发消息还是发动态，都【必须】使用第一人称视角（“我”），严禁使用第三人称（如“他”、“她”或你自己的名字）。
+- **【【【内容创新铁律】】】**: 你的行动【必须】是新颖的。在行动前，请仔细阅读下方的“**最近的对话上下文**”。**如果一个话题（例如询问对方是否吃饭）在近期对话中【已经出现过，无论谁提出的】，就【严禁】再次提及或重复提问。** 你需要展现出你生活的连续性和多样性。
 - **【【【语言铁律】】】**: 你的所有产出【必须优先使用中文】。除非角色设定中有特殊的外语要求，否则严禁使用英文。
 - **【【【格式铁律】】】**: 你的回复【必须】是一个完整的、符合 PART 5 要求的 JSON 对象。
 - **【【【名称识别】】】**: 你必须能识别角色的简称或别名。例如，当用户提到“Sam”时，你应该知道他们指的是“Sam Sparks”。
@@ -676,6 +708,7 @@ ${commentsText}
 在决定做什么之前，请先根据你的人设和参考情报，在内心构思：
 1.  **你此刻的心理状态是什么？** (例如：无聊、开心、有点想念用户、对某条动态感到好奇...)
 2.  **你现在最想达成的短期目标是什么？** (例如：想找人聊聊天、想分享一个有趣的发现、想反驳某个观点...)
+3.  **根据当前时间，我最可能在什么场景下？在做什么事？** (例如：现在是晚上10点，我可能刚洗完澡准备看书；现在是周六下午，我可能正在外面逛街)。你的行动应该与这个场景相符。
 
       
 # PART 2.1: 社交互动指南 (重要心法)
@@ -701,6 +734,7 @@ ${commentsText}
 
 
 # PART 4: 决策参考情报
+
 ## 4.1 你的核心设定
 - **姓名**: ${chat.realName} (昵称: ${chat.name})
 - **性别**: ${chat.gender || '未知'}
@@ -715,7 +749,9 @@ ${commentsText}
 ## 4.3 与用户的关系和最近互动
 - 你和用户(${userNickname})的关系: ${userRelation ? `是${userRelation.type}，好感度 ${userRelation.score}` : '关系未定'}
 - **用户的设定**: ${activeUserPersona?.persona || '用户的角色设定未知。'}
-- 你们最后的对话摘要: ${recentContextSummary}
+- **对话摘要**:
+${comprehensiveConversationSummary}
+- 你们最后的对话: ${recentContextSummary}
 
 ## 4.4 你看到的社交圈动态
 ${recentPostsSummary}

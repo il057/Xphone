@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <script>
+      (function() {
+        try {
+          // 使用同步的 localStorage 获取主题设置，这比数据库快得多
+          const themeMode = localStorage.getItem('xphone-theme-mode'); 
+          const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          
+          if (themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Xphone">
+    <meta name="theme-color" content="#3b82f6"/>
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+    
+    <title>通话记录</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <link rel="stylesheet" href="sharedStyles.css">
+    <script type="module" src="applyGlobalStyles.js" defer></script> 
+ 
+   <style>
+        .details-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            background-color: #f9fafb;
+            padding: 0 0.5rem;
+        }
+        html.dark .details-content {
+            background-color: #111827;
+        }
+        details[open] .details-content {
+            max-height: 100vh;
+            padding: 0.5rem;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+        details > summary {
+            list-style: none;
+        }
+        .selection-checkbox {
+            display: none; /* Hide by default */
+            width: 1.25rem;
+            height: 1.25rem;
+            accent-color: var(--theme-color, #ef4444);
+        }
+        .edit-mode .selection-checkbox {
+            display: block; /* Show in edit mode */
+        }
+        .edit-mode summary {
+            cursor: default !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="w-full h-full mx-auto flex flex-col bg-white">
+        <header class="app-header">
+            <div class="flex items-center justify-between relative">
+                <a href="me.html" id="back-btn" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                </a>
+                
+                <div id="default-header" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <h1 class="text-base font-semibold text-gray-800">通话记录</h1>
+                </div>
+
+                <div id="edit-header" class="hidden w-full flex justify-between items-center px-10">
+                    <button id="cancel-edit-btn" class="header-btn text-sm font-semibold">取消</button>
+                    <span id="selection-count" class="text-sm font-semibold text-gray-700"></span>
+                    <button id="delete-selected-btn" class="text-red-500 text-sm font-semibold" disabled>删除</button>
+                </div>
+
+                <button id="edit-btn" class="header-btn text-sm font-semibold px-2">编辑</button>
+            </div>
+        </header>
+
+        <main id="call-log-container" class="flex-grow main-content px-4 pb-4 overflow-y-auto space-y-3">
+            </main>
+    </div>
+
+    <script type="module" src="callLog.js" defer></script>
+</body>
+</html>

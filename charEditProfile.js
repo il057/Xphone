@@ -811,7 +811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
         if (confirmation === chatData.name) {
             try {
-                // --- 新增：使用事务进行级联删除 ---
+                // --- 使用事务进行级联删除 ---
                 await db.transaction('rw', db.chats, db.xzonePosts, db.relationships, db.memories, db.favorites, async () => {
                     const idToDelete = chatData.id;
 
@@ -836,6 +836,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // 删除该角色发布的动态的收藏
                         const postsToDelete = await db.xzonePosts.where('authorId').equals(idToDelete).primaryKeys();
                         await db.favorites.where('type').equals('xzone_post').and(fav => postsToDelete.includes(fav.content.id)).delete();
+
+                        // 删除与该角色的所有通话记录
+                        await db.callLogs.where('charId').equals(idToDelete).delete();
                     }
                     // 对于群聊，目前我们只删除群聊本身，成员角色保留。
                 });

@@ -59,7 +59,12 @@ export function promptForInput(title, placeholder = '', isTextarea = false, isOp
         `;
 
         const modal = createModal('dynamic-prompt-modal', modalHtml);
-        const inputField = document.getElementById('prompt-input-field');
+        
+        // 这样可以确保我们只在刚刚创建的这个模态框内部查找元素，避免了ID冲突。
+        const inputField = modal.querySelector('#prompt-input-field');
+        const confirmBtn = modal.querySelector('#prompt-confirm-btn');
+        const cancelBtn = modal.querySelector('#prompt-cancel-btn');
+
         inputField.focus();
 
         const handleConfirm = () => {
@@ -82,9 +87,6 @@ export function promptForInput(title, placeholder = '', isTextarea = false, isOp
             confirmBtn.removeEventListener('click', handleConfirm);
             cancelBtn.removeEventListener('click', handleCancel);
         };
-
-        const confirmBtn = document.getElementById('prompt-confirm-btn');
-        const cancelBtn = document.getElementById('prompt-cancel-btn');
 
         confirmBtn.addEventListener('click', handleConfirm, { once: true });
         cancelBtn.addEventListener('click', handleCancel, { once: true });
@@ -290,6 +292,86 @@ export function showAlbumPickerModal() {
         });
 
         modal.querySelector('#picker-cancel-btn').addEventListener('click', () => {
+            cleanup();
+            resolve(null);
+        }, { once: true });
+    });
+}
+
+/**
+ * 显示发送图片的三种方式选择菜单。
+ * @returns {Promise<{type: 'local'|'description'|'url'}|null>}
+ */
+export function showImageActionModal() {
+    return new Promise((resolve) => {
+        const modalHtml = `
+            <h3 class="text-lg font-semibold text-center p-4 border-b">发送图片</h3>
+            <div class="p-4 space-y-3">
+                <button id="img-choice-local-btn" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">从本地/相册上传</button>
+                <button id="img-choice-desc-btn" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">发送图片描述</button>
+                <button id="img-choice-url-btn" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">使用图片URL</button>
+            </div>
+            <div class="p-2 border-t">
+                <button id="img-choice-cancel-btn" class="modal-btn modal-btn-cancel w-full">取消</button>
+            </div>
+        `;
+        const modal = createModal('dynamic-image-action-modal', modalHtml);
+
+        const cleanup = () => modal.remove();
+
+        document.getElementById('img-choice-local-btn').addEventListener('click', () => {
+            cleanup();
+            resolve({ type: 'local' });
+        }, { once: true });
+
+        document.getElementById('img-choice-desc-btn').addEventListener('click', () => {
+            cleanup();
+            resolve({ type: 'description' });
+        }, { once: true });
+        
+        document.getElementById('img-choice-url-btn').addEventListener('click', () => {
+            cleanup();
+            resolve({ type: 'url' });
+        }, { once: true });
+
+        document.getElementById('img-choice-cancel-btn').addEventListener('click', () => {
+            cleanup();
+            resolve(null);
+        }, { once: true });
+    });
+}
+
+/**
+ * 显示通话方式选择菜单 (语音 vs 视频)。
+ * @returns {Promise<'voice'|'video'|null>}
+ */
+export function showCallActionModal() {
+    return new Promise((resolve) => {
+        const modalHtml = `
+            <h3 class="text-lg font-semibold text-center p-4 border-b">发起通话</h3>
+            <div class="p-4 space-y-3">
+                <button id="call-choice-voice-btn" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">语音通话</button>
+                <button id="call-choice-video-btn" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">视频通话</button>
+            </div>
+            <div class="p-2 border-t">
+                <button id="call-choice-cancel-btn" class="modal-btn modal-btn-cancel w-full">取消</button>
+            </div>
+        `;
+        const modal = createModal('dynamic-call-action-modal', modalHtml);
+
+        const cleanup = () => modal.remove();
+
+        modal.querySelector('#call-choice-voice-btn').addEventListener('click', () => {
+            cleanup();
+            resolve('voice');
+        }, { once: true });
+
+        modal.querySelector('#call-choice-video-btn').addEventListener('click', () => {
+            cleanup();
+            resolve('video');
+        }, { once: true });
+
+        modal.querySelector('#call-choice-cancel-btn').addEventListener('click', () => {
             cleanup();
             resolve(null);
         }, { once: true });
