@@ -374,7 +374,7 @@ export async function updateRelationshipScore(char1Id, char2Id, scoreChange) {
     }
 }
 
-// --- [新增] 后台活动模拟引擎 ---
+// --- 后台活动模拟引擎 ---
 
 let simulationIntervalId = null;
 

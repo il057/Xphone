@@ -133,7 +133,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveSettingsBtn.addEventListener('click', handleSaveSettings);
     cancelWorldbookBtn.addEventListener('click', () => worldbookModal.classList.add('hidden'));
     saveWorldbookBtn.addEventListener('click', handleSaveWorldbookAssociation);
-
+    groupsContainer.addEventListener('click', (event) => {
+        // 检查被点击的元素是否是“关联世界书”按钮
+        if (event.target.classList.contains('manage-books-btn')) {
+            handleOpenWorldbookModal(event);
+        }
+    });
     // --- Initial Load ---
     await loadData();
     populateUI();
