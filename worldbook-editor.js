@@ -1,7 +1,7 @@
 // settings.js
 // Import the shared database instance from db.js
 import { db } from './db.js';
-import { showToast } from './ui-helpers.js';
+import { showToast, showToastOnNextPage } from './ui-helpers.js';
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 nameInput.value = book.name;
                 contentInput.value = book.content || '';
             } else {
-                showToast('找不到要编辑的世界书！', 'error');
+                showToastOnNextPage('找不到要编辑的世界书！', 'error');
                 window.location.href = 'worldbook.html';
             }
         } else {
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 await db.worldBooks.add(newBook);
             }
-            showToast('保存成功！');
+            showToastOnNextPage('保存成功！');
             window.location.href = 'worldbook.html';
 
         } catch (error) {

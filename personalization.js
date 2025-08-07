@@ -3,7 +3,7 @@
 import { db } from './db.js';
 import { showAlbumPickerModal } from './ui-helpers.js';
 import { applyThemeMode  } from './applyGlobalStyles.js';
-import { showToast } from './ui-helpers.js';
+import { showToast, promptForInput } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DB & State ---
@@ -348,8 +348,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    saveCustomPresetBtn.addEventListener('click', () => {
-        const newPresetName = prompt("为你的新预设命名：", "我的方案");
+    saveCustomPresetBtn.addEventListener('click', async () => {
+        const newPresetName = await promptForInput("为你的新预设命名：", "我的方案", false, false);
         if (newPresetName && newPresetName.trim()) {
             state.wallpaperPresets.push({
                 name: newPresetName.trim(),

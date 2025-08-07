@@ -3,7 +3,7 @@ import * as spotifyManager from './spotifyManager.js';
 import { runOfflineSimulation } from './simulationEngine.js';
 import { updateRelationshipScore } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
-import { showToast } from './ui-helpers.js';
+import { showToast, showToastOnNextPage, showRawContentModal } from './ui-helpers.js';
 
 // --- State and Constants ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -89,7 +89,7 @@ const playerProgressBar = document.getElementById('player-progress-bar');
 const playerPrevBtn = document.getElementById('player-prev-btn');
 const playerToggleBtn = document.getElementById('player-toggle-btn');
 const playerNextBtn = document.getElementById('player-next-btn');
-let shuffleBtn = document.getElementById('player-shuffle-btn'); // ✅ 添加这行
+let shuffleBtn = document.getElementById('player-shuffle-btn'); 
 
 let playerUpdateInterval = null;
 let currentlyPlayingUri = null;
@@ -150,7 +150,7 @@ async function init() {
         }
             
     if (!charId || charId.trim() === '') {
-        showToast('无效或缺失的角色ID，将返回主页。', 'error');
+        showToastOnNextPage('无效或缺失的角色ID，将返回主页。', 'error');
         window.location.href = 'index.html'; // 跳转到一个安全的页面
         return; // 立即停止执行，防止后续代码出错
     }
@@ -165,7 +165,7 @@ async function init() {
     ]);
 
     if (!currentChat) {
-        showToast('找不到角色数据', 'error');
+        showToastOnNextPage('找不到角色数据', 'error');
         window.location.href = 'index.html';
         return;
     }
@@ -1214,7 +1214,7 @@ async function setupEventListeners() {
                 break;
             
             case 'apply-friend-btn':
-                const reason = prompt(`请输入你想对“${currentChat.name}”说的申请理由：`, "我们和好吧！");
+                const reason = await promptForInput(`请输入你想对“${currentChat.name}”说的申请理由：`, "我们和好吧！", false, false  );
                 if (reason !== null) { // 只有在用户点击“确定”后才继续
                     currentChat.blockStatus = { status: 'pending_ai_approval', applicationReason: reason };
                     await db.chats.put(currentChat);
@@ -1292,7 +1292,10 @@ async function addUserMessageToDb(message, triggerAI = false, charIdOverride = n
     }
 
     chatToUpdate.history.push(message);
-
+    if (message.role !== 'system') {
+        chatToUpdate.lastMessageTimestamp = message.timestamp;
+        chatToUpdate.lastMessageContent = message;
+    }
     // If the update is for the currently viewed chat, update the UI
     if (targetChatId === charId) {
         currentChat = chatToUpdate; 
@@ -2383,10 +2386,12 @@ ${musicPromptSection}
 
         // 如果解析失败，aiResponseContent 会是 null，此时弹出警告并停止执行
         if (!aiResponseContent) {
-            alert(`AI响应格式错误，无法解析JSON。\n\n收到的原始回复:\n${rawContent}`);
+            showRawContentModal('AI响应格式错误', rawContent);
+            
             // 恢复UI状态
             headerEl.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
             headerEl.classList.remove('typing-status');
+            apiLock.release('user_chat'); // 确保在出错时也释放锁
             return; // 提前退出函数
         }
         apiCallSuccess = true;
@@ -2520,6 +2525,8 @@ ${musicPromptSection}
                 case 'text': {
                     const textMessage = { role: 'assistant', senderName: actorName, content: action.content, timestamp: messageTimestamp++ };
                     currentChat.history.push(textMessage);
+                    currentChat.lastMessageTimestamp = textMessage.timestamp;
+                    currentChat.lastMessageContent = textMessage;
                     appendMessage(textMessage);
                     break;
                 }
@@ -2534,6 +2541,8 @@ ${musicPromptSection}
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(photoMessage);
+                    currentChat.lastMessageTimestamp = photoMessage.timestamp;
+                    currentChat.lastMessageContent = photoMessage;
                     appendMessage(photoMessage);
                     break;
                 }
@@ -2551,6 +2560,8 @@ ${musicPromptSection}
                             timestamp: messageTimestamp++
                         };
                         currentChat.history.push(replyMessage);
+                        currentChat.lastMessageTimestamp = replyMessage.timestamp;
+                        currentChat.lastMessageContent = replyMessage;
                         appendMessage(replyMessage);
                     }
                     break;
@@ -2565,6 +2576,8 @@ ${musicPromptSection}
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(transferMessage);
+                    currentChat.lastMessageTimestamp = transferMessage.timestamp;
+                    currentChat.lastMessageContent = transferMessage;
                     appendMessage(transferMessage);
                     break;
                 }
@@ -2618,6 +2631,8 @@ ${musicPromptSection}
                         isFullyClaimed: false,
                     };
                     currentChat.history.push(packetMessage);
+                    currentChat.lastMessageTimestamp = packetMessage.timestamp;
+                    currentChat.lastMessageContent = packetMessage;
                     appendMessage(packetMessage);
                     break;
                 }
@@ -2675,6 +2690,8 @@ ${musicPromptSection}
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(waimaiMessage);
+                    currentChat.lastMessageTimestamp = waimaiMessage.timestamp;
+                    currentChat.lastMessageContent = waimaiMessage;
                     appendMessage(waimaiMessage);
                     break;
                 }
@@ -2708,6 +2725,8 @@ ${musicPromptSection}
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(linkMessage);
+                    currentChat.lastMessageTimestamp = linkMessage.timestamp;
+                    currentChat.lastMessageContent = linkMessage;
                     appendMessage(linkMessage);
                     break;
                 }
@@ -2722,6 +2741,8 @@ ${musicPromptSection}
                                 timestamp: new Date(messageTimestamp++)
                             };
                             currentChat.history.push(acceptMsg);
+                            currentChat.lastMessageTimestamp = acceptMsg.timestamp;
+                            currentChat.lastMessageContent = acceptMsg;
                             appendMessage(acceptMsg);
                         } else {
                             currentChat.relationship.status = 'blocked_by_ai';
@@ -2906,6 +2927,8 @@ ${musicPromptSection}
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(voiceMessage);
+                    currentChat.lastMessageTimestamp = voiceMessage.timestamp;
+                    currentChat.lastMessageContent = voiceMessage;
                     appendMessage(voiceMessage);
                     break;
                 }
@@ -3014,6 +3037,8 @@ ${musicPromptSection}
                                 timestamp: new Date(messageTimestamp++)
                             };
                             currentChat.history.push(stickerMessage);
+                            currentChat.lastMessageTimestamp = stickerMessage.timestamp;
+                            currentChat.lastMessageContent = stickerMessage;
                             appendMessage(stickerMessage);
                         } else {
                             // FALLBACK: The sticker was not found. Convert the AI's intent into a plain text message.
@@ -3027,6 +3052,8 @@ ${musicPromptSection}
                                 timestamp: new Date(messageTimestamp++)
                             };
                             currentChat.history.push(fallbackMessage);
+                            currentChat.lastMessageTimestamp = fallbackMessage.timestamp;
+                            currentChat.lastMessageContent = fallbackMessage;
                             appendMessage(fallbackMessage);
                         }
                     } else {
@@ -3085,6 +3112,8 @@ ${musicPromptSection}
                         timestamp: new Date(messageTimestamp++)
                     };
                     currentChat.history.push(fallbackMessage);
+                    currentChat.lastMessageTimestamp = fallbackMessage.timestamp;
+                    currentChat.lastMessageContent = fallbackMessage;
                     appendMessage(fallbackMessage);
                     break;
                 }
@@ -3101,7 +3130,11 @@ ${musicPromptSection}
     }
     } catch (error) {
         console.error("API call failed:", error);
-        //alert(`获取AI回复失败: ${error.message}`);
+        // 提取错误状态码（如果有的话）
+        const errorCodeMatch = error.message.match(/API Error (\d+)/);
+        const errorCode = errorCodeMatch ? ` (Code: ${errorCodeMatch[1]})` : '';
+        // 显示一个更简洁的 Toast 提示
+        showToast(`获取AI回复失败${errorCode}`, 'error');
     } finally {
         apiLock.release('user_chat');
         if (isCallActive) {
@@ -3949,6 +3982,7 @@ async function handleChatEntryLogic() {
     // --- 3. 执行情报搜集 ---
     // 这个动作现在会生成一段可注入的Prompt文本
     const intelligencePrompt = await gatherIntelligenceFor(charId);
+    console.log(`搜集到的情报：\n${intelligencePrompt}`);
     
     // 4. 如果搜集到了新情报，则触发一次AI的“自我思考”
     if (intelligencePrompt) {
@@ -3981,21 +4015,36 @@ async function gatherIntelligenceFor(characterId) {
     const myRelations = await db.relationships.where('sourceCharId').equals(characterId).toArray();
     const relationsMap = new Map(myRelations.map(r => [r.targetCharId, r]));
 
+    const namesToCheck = [currentChat.name, currentChat.realName].filter(Boolean); // .filter(Boolean) 会移除所有空值
+
     // 3. 遍历同组成员，寻找关系好的“朋友”
     for (const member of groupMembers) {
         const relation = relationsMap.get(member.id);
-        // 只关心好感度大于40的朋友
-        if (relation && relation.score > 40) {
+        // 只关心好感度大于100的朋友
+        if (relation && relation.score > 100) {
             const friendChat = allChats.find(c => c.id === member.id);
             // 从朋友与User的聊天记录中寻找情报
             if (friendChat && friendChat.history.length > 0) {
                 // 扫描最近的N条记录
                 const recentHistory = friendChat.history.slice(-scanRange);
-                for (const msg of recentHistory) {
-                    // 如果消息中提到了当前角色的名字
-                    if (msg.content && msg.content.includes(currentChat.name)) {
-                        const speaker = msg.role === 'user' ? 'User' : friendChat.name;
-                        intelligenceContent += `- 你听说 ${speaker} 和 ${friendChat.name} 聊天时提到了你：“...${msg.content.substring(0, 30)}...”。\n`;
+
+                // 3. 过滤掉所有系统消息和非文本消息
+                const filteredHistory = recentHistory.filter(msg => 
+                    msg.role !== 'system' && 
+                    !msg.isHidden && 
+                    msg.content && 
+                    typeof msg.content === 'string'
+                );
+
+                for (const msg of filteredHistory) {
+                    // 4. 使用更完善的逻辑检查是否提到了当前角色
+                    const mentionsMe = namesToCheck.some(name => msg.content.includes(name));
+
+                    if (mentionsMe) {
+                        // 2. 正确识别对话双方
+                        const speaker = msg.role === 'user' ? activeUserPersona?.name : friendChat.name;
+                        const listener = msg.role === 'user' ? friendChat.name : activeUserPersona?.name; // 对话中的另一个人
+                        intelligenceContent += `- 你听说 ${speaker} 和 ${listener} 聊天时提到了你：“${msg.content}”。\n`;
                     }
                 }
             }

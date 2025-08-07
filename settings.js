@@ -2,7 +2,7 @@
 // Import the shared database instance from db.js
 import { db } from './db.js';
 import { startActiveSimulation, stopActiveSimulation } from './simulationEngine.js';
-import { showToast } from './ui-helpers.js';
+import { promptForInput, showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -257,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm("确定要导出所有数据吗？这将生成一个包含您所有聊天记录和设置的JSON文件。")) return;
         try {
             const backupData = {
-                version: 33, // 确保导出版本与当前数据库版本一致
+                version: 34, // 确保导出版本与当前数据库版本一致
                 timestamp: Date.now()
             };
 
@@ -317,81 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const text = await file.text();
             const backupData = JSON.parse(text);
-            const backupVersion = backupData.version || 0;
-
-            await db.transaction('rw', db.tables, async () => {
-                // 1. 清空所有当前表
-                for (const table of db.tables) {
-                    await table.clear();
-                }
-
-                // 2. 如果是v29或更早的备份，执行手动迁移
-                if (backupVersion <= 29) {
-                    console.log("正在导入并迁移旧版本(v29)的备份文件...");
-
-                    let newProfileId = null;
-                    const oldApiConfig = backupData.apiConfig; // 从备份文件中读取旧的 apiConfig
-
-                    // A. 迁移 apiConfig -> apiProfiles
-                    if (oldApiConfig) {
-                        const newProfile = {
-                            profileName: '默认方案 (从备份导入)',
-                            apiProvider: oldApiConfig.apiProvider || 'default',
-                            proxyUrl: oldApiConfig.proxyUrl || '',
-                            apiKey: oldApiConfig.apiKey || '',
-                            model: oldApiConfig.model || ''
-                            // 注意：Cloudinary 设置不再这里
-                        };
-                        newProfileId = await db.apiProfiles.add(newProfile);
-                    }
-
-                    // B. 准备并保存 globalSettings
-                    const globalSettingsData = backupData.globalSettings || { id: 'main' };
-                    if (newProfileId) {
-                        globalSettingsData.activeApiProfileId = newProfileId;
-                    }
-                    // 将 Cloudinary 设置从旧的 apiConfig 迁移到新的 globalSettings
-                    if (oldApiConfig) {
-                        globalSettingsData.cloudinaryCloudName = oldApiConfig.cloudinaryCloudName || '';
-                        globalSettingsData.cloudinaryUploadPreset = oldApiConfig.cloudinaryUploadPreset || '';
-                    }
-                    await db.globalSettings.put(globalSettingsData);
-
-                    // C. 导入所有其他常规表
-                    for (const tableName in backupData) {
-                        if (['version', 'timestamp', 'apiConfig', 'globalSettings'].includes(tableName)) {
-                            continue; // 跳过已手动处理的表
-                        }
-                        const table = db.table(tableName);
-                        const dataToImport = backupData[tableName];
-                        if (table && Array.isArray(dataToImport) && dataToImport.length > 0) {
-                            await table.bulkPut(dataToImport);
-                        }
-                    }
-                } else {
-                    // 为 v30+ 的新版本备份文件提供通用导入逻辑
-                    console.log(`正在导入新版本(v${backupVersion})的备份文件...`);
-                    for (const tableName in backupData) {
-                        if (['version', 'timestamp'].includes(tableName)) continue;
-                        
-                        const table = db.table(tableName);
-                        const data = backupData[tableName];
-                        if (table && data) {
-                            if (Array.isArray(data)) {
-                                if (data.length > 0) await table.bulkPut(data);
-                            } else { // 处理单对象表
-                                await table.put(data);
-                            }
-                        }
-                    }
-                }
-            });
-
-            showToast('导入成功！所有数据已成功恢复！页面即将刷新以应用所有更改。');
-
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            awaitrestoreDataFromBackup(backupData);
 
         } catch (error) {
             console.error("导入数据时出错:", error);
@@ -426,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * 处理添加新方案
      */
     async function handleAddNewProfile() {
-        const profileName = prompt("请输入新方案的名称:", `方案 ${state.allProfiles.length + 1}`);
+        const profileName = await promptForInput("请输入新方案的名称:", `方案 ${state.allProfiles.length + 1}`, false, false);
         if (!profileName || !profileName.trim()) return;
 
         const newProfile = {
@@ -474,7 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function packAllData() {
         const backupData = {
-            version: 31, 
+            version: 34, 
             timestamp: Date.now()
         };
         const tableNames = db.tables.map(t => t.name);
@@ -583,26 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const backupData = JSON.parse(fileContent);
             
-            // 复用 importBackup 的核心逻辑来恢复数据
-            await db.transaction('rw', db.tables, async () => {
-                await Promise.all(db.tables.map(table => table.clear()));
-
-                for (const tableName in backupData) {
-                    if (['version', 'timestamp'].includes(tableName)) continue;
-                    const table = db.table(tableName);
-                    const data = backupData[tableName];
-                    if (table && data) {
-                        if (Array.isArray(data)) {
-                            if (data.length > 0) await table.bulkPut(data);
-                        } else {
-                            await table.put(data);
-                        }
-                    }
-                }
-            });
-
-            showToast('数据同步成功！页面即将刷新以应用所有更改。');
-            setTimeout(() => window.location.reload(), 1500);
+            await restoreDataFromBackup(backupData);
 
         } catch (error) {
             console.error('下载并恢复失败:', error);
@@ -648,3 +555,94 @@ document.addEventListener('DOMContentLoaded', () => {
 
     main();
 });
+
+async function restoreDataFromBackup(backupData) {
+   const backupVersion = backupData.version || 0;
+
+    if (backupVersion < 34 && backupData.chats) {
+        console.log(`检测到旧版本备份 (v${backupVersion})，正在执行手动迁移...`);
+        // 遍历备份文件中的 chats 数据
+        backupData.chats.forEach(chat => {
+            // 只有在 history 存在且不为空时才操作
+            if (chat.history && chat.history.length > 0) {
+                const lastMessage = chat.history[chat.history.length - 1];
+                // 在内存中直接为这条 chat 数据添加新字段
+                chat.lastMessageTimestamp = lastMessage.timestamp;
+                chat.lastMessageContent = lastMessage;
+            }
+        });
+        console.log("手动迁移完成，现在写入数据库...");
+    }
+    await db.transaction('rw', db.tables, async () => {
+        // 1. 清空所有当前表
+        for (const table of db.tables) {
+            await table.clear();
+        }
+
+        // 2. 如果是v29或更早的备份，执行手动迁移
+        if (backupVersion <= 29) {
+            console.log("正在导入并迁移旧版本(v29)的备份文件...");
+
+            let newProfileId = null;
+            const oldApiConfig = backupData.apiConfig; // 从备份文件中读取旧的 apiConfig
+
+            // A. 迁移 apiConfig -> apiProfiles
+            if (oldApiConfig) {
+                const newProfile = {
+                    profileName: '默认方案 (从备份导入)',
+                    apiProvider: oldApiConfig.apiProvider || 'default',
+                    proxyUrl: oldApiConfig.proxyUrl || '',
+                    apiKey: oldApiConfig.apiKey || '',
+                    model: oldApiConfig.model || ''
+                };
+                newProfileId = await db.apiProfiles.add(newProfile);
+            }
+
+            // B. 准备并保存 globalSettings
+            const globalSettingsData = backupData.globalSettings || { id: 'main' };
+            if (newProfileId) {
+                globalSettingsData.activeApiProfileId = newProfileId;
+            }
+            // 将 Cloudinary 设置从旧的 apiConfig 迁移到新的 globalSettings
+            if (oldApiConfig) {
+                globalSettingsData.cloudinaryCloudName = oldApiConfig.cloudinaryCloudName || '';
+                globalSettingsData.cloudinaryUploadPreset = oldApiConfig.cloudinaryUploadPreset || '';
+            }
+            await db.globalSettings.put(globalSettingsData);
+
+            // C. 导入所有其他常规表
+            for (const tableName in backupData) {
+                if (['version', 'timestamp', 'apiConfig', 'globalSettings'].includes(tableName)) {
+                    continue; // 跳过已手动处理的表
+                }
+                const table = db.table(tableName);
+                const dataToImport = backupData[tableName];
+                if (table && Array.isArray(dataToImport) && dataToImport.length > 0) {
+                    await table.bulkPut(dataToImport);
+                }
+            }
+        } else {
+            // 为 v30+ 的新版本备份文件提供通用导入逻辑
+            console.log(`正在导入新版本(v${backupVersion})的备份文件...`);
+            for (const tableName in backupData) {
+                if (['version', 'timestamp'].includes(tableName)) continue;
+                
+                const table = db.table(tableName);
+                const data = backupData[tableName];
+                if (table && data) {
+                    if (Array.isArray(data)) {
+                        if (data.length > 0) await table.bulkPut(data);
+                    } else { // 处理单对象表
+                        await table.put(data);
+                    }
+                }
+            }
+        }
+    });
+
+    showToast('导入成功！所有数据已成功恢复！页面即将刷新以应用所有更改。');
+
+    setTimeout(() => {
+        window.location.reload();
+    }, 1500);
+}

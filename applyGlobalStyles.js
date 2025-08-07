@@ -2,6 +2,7 @@
 // Import the shared database instance from db.js
 import { db } from './db.js';
 import { runActiveSimulationTick } from './simulationEngine.js';
+import { displayToastFromSession } from './ui-helpers.js';
 
 /**
  * 将十六进制颜色转换为RGB值，用于设置带透明度的背景。
@@ -213,10 +214,12 @@ async function checkFooterNotifications() {
 }
 
 
+
 // 在页面加载时，同时执行样式应用和后台模拟启动
 document.addEventListener('DOMContentLoaded', async() => {
     applyGlobalStyles();
     checkFooterNotifications();
+    displayToastFromSession();
     await checkAndRunBackgroundSimulation();
 });
 

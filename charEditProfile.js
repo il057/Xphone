@@ -2,7 +2,7 @@
 // Import the shared database instance from db.js
 import { db, uploadImage, getActiveApiProfile } from './db.js'; 
 import { showUploadChoiceModal, showImagePickerModal, showAlbumPickerModal, promptForInput } from './ui-helpers.js'; // 导入三个助手
-import { showToast } from './ui-helpers.js';
+import { showToast, showToastOnNextPage } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DB & State ---
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadData() {
         if (!charId) {
-            showToast('无效的编辑链接', 'error');
+            showToastOnNextPage('无效的编辑链接', 'error');
             window.location.href = 'chat.html';
             return;
         }
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chatData = await db.chats.get(charId);
         
         if (!chatData) {
-            showToast('数据不存在', 'error');
+            showToastOnNextPage('数据不存在', 'error');
             window.location.href = 'chat.html';
             return;
         }
@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function saveCustomTheme() {
-        const presetName = prompt("为你的自定义方案起个名字吧：");
+        const presetName = await promptForInput("为你的自定义方案起个名字吧：", "例如：清新蓝、温暖橙", false, false);
         if (!presetName || !presetName.trim()) {
             if (presetName !== null) showToast("名字不能为空！");
             return;
@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
             try {
                 await db.chats.add(newCharacter); 
-                showToast('角色创建成功！', 'success');
+                showToastOnNextPage('角色创建成功！', 'success');
                 window.location.href = `charProfile.html?id=${finalCharId}`;
             } catch (error) {
                 console.error("Failed to create new character:", error);
@@ -658,7 +658,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     settings: { ...chatData.settings, ...sharedSettings }
                 };
                 await db.chats.put(updatedData);
-                showToast('群聊资料保存成功！', 'success');
+                showToastOnNextPage('群聊资料保存成功！', 'success');
                 window.location.href = `chatRoom.html?id=${chatData.id}`;
 
             } else {
@@ -677,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 };
                 await db.chats.put(updatedData);
-                showToast('保存成功！', 'success');
+                showToastOnNextPage('保存成功！', 'success');
                 window.location.href = `charProfile.html?id=${chatData.id}`;
             }
         }
@@ -735,9 +735,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (select.value === 'new_group') {
             // 1. 暂存当前选择，以便用户取消时恢复
             const previousGroupId = chatData.groupId;
-    
-            const newGroupName = prompt("请输入新的分组名：");
-    
+
+            const newGroupName = await promptForInput("请输入新的分组名：", "例如：我的新分组", false, false);
+
             if (newGroupName && newGroupName.trim()) {
                 // 2. 检查分组名是否已存在
                 const existing = await db.xzoneGroups.where('name').equals(newGroupName.trim()).first();
@@ -789,7 +789,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
                 
             await db.chats.put(chatData);
-            showToast(`“${chatData.name}” 已被拉黑。`);
+            showToastOnNextPage(`“${chatData.name}” 已被拉黑。`);
             window.location.href = `charProfile.html?id=${charId}`;
         }
     });
@@ -821,13 +821,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             confirmationPrompt = `此操作不可恢复！\n\n您确定要永久删除 “${chatData.name}” 吗？\n所有聊天记录、动态、回忆、人际关系等数据都将被清除。\n\n请输入角色备注名 “${chatData.name}” 来确认删除：`;
             successMessage = `角色 “${chatData.name}” 已被成功删除。`;
         }
-    
-        const confirmation = prompt(confirmationPrompt);
-    
+
+        const confirmation = await promptForInput(confirmationPrompt, `${chatData.name}`, false, false);
+
         if (confirmation === chatData.name) {
             try {
                 // --- 使用事务进行级联删除 ---
-                await db.transaction('rw', db.chats, db.xzonePosts, db.relationships, db.memories, db.favorites, async () => {
+                await db.transaction('rw', db.chats, db.xzonePosts, db.relationships, db.memories, db.favorites, db.callLogs, async () => {
                     const idToDelete = chatData.id;
 
                     // 1. 删除角色/群聊本身
@@ -858,7 +858,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // 对于群聊，目前我们只删除群聊本身，成员角色保留。
                 });
 
-                showToast(successMessage);
+                showToastOnNextPage(successMessage);
                 window.location.href = 'contacts.html';
 
             } catch (error) {
@@ -1155,7 +1155,7 @@ ${currentCss}
             return;
         }
 
-        const presetName = prompt("为这个样式预设起个名字：");
+        const presetName = await promptForInput("为这个样式预设起个名字：", "例如：可爱，简约", false, false);
         if (!presetName || !presetName.trim()) {
             if (presetName !== null) showToast("名字不能为空！", 'error');
             return;
@@ -1185,7 +1185,7 @@ ${currentCss}
     } else if (charId) {
         loadData(); // This function is now for existing characters only
     } else {
-        showToast('无效的链接，缺少必要参数。', 'error');
+        showToastOnNextPage('无效的链接，缺少必要参数。', 'error');
         window.location.href = 'contacts.html';
     }
 });

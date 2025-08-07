@@ -53,6 +53,52 @@ db.version(33).stores({
     });
 });
 
+db.version(34).stores({
+    chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp', 
+    apiProfiles: '++id, &profileName',
+    globalSettings: '&id, activeApiProfileId',
+    userStickers: '++id, &url, name, order',
+    worldBooks: '&id, name',
+    musicLibrary: '&id',
+    personaPresets: '++id, name, avatar, gender, birthday, persona', 
+    xzoneSettings: '&id',
+    xzonePosts: '++id, timestamp, authorId',
+    xzoneAlbums: '++id, name, createdAt',
+    xzonePhotos: '++id, albumId',
+    favorites: '++id, [type+content.id], type, timestamp, chatId',
+    memories: '++id, chatId, [chatId+isImportant], authorName, isImportant, timestamp, type, targetDate',
+    bubbleThemePresets: '&name',
+    bubbleCssPresets: '&name, cssCode', 
+    globalAlbum: '++id, url',
+    userAvatarLibrary: '++id, &url, name',
+    xzoneGroups: '++id, name, worldBookIds',
+    relationships: '++id, [sourceCharId+targetCharId], sourceCharId, targetCharId', 
+    eventLog: '++id, timestamp, type, groupId, processedBy',
+    offlineSummary: '&id, timestamp',
+    callLogs: '++id, charId, type, startTime, duration'
+}).upgrade(tx => {
+    // 这段代码会在数据库从 v33 (或更低) 升级到 v34 时执行一次
+    console.log("正在执行数据库版本 34 的迁移任务...");
+    return tx.table('chats').toCollection().modify(chat => {
+        // 如果字段已存在，则跳过此条记录，防止重复执行
+        if (chat.lastMessageTimestamp) {
+            return;
+        }
+
+        if (chat.history && chat.history.length > 0) {
+            const lastMessage = chat.history[chat.history.length - 1];
+            
+            // 填充新字段
+            chat.lastMessageTimestamp = lastMessage.timestamp;
+            chat.lastMessageContent = lastMessage; // 存储整个消息对象
+        }
+    }).then(() => {
+        console.log("版本 34 的数据迁移完成！");
+    }).catch(err => {
+        console.error("数据迁移失败:", err);
+    });
+});
+
 /**
  * 获取当前激活的API连接方案
  * @returns {Promise<object|null>}

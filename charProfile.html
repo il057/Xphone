@@ -114,7 +114,7 @@
         // settings.js
         // Import the shared database instance from db.js
         import { db } from './db.js';
-        import { showToast } from './ui-helpers.js';
+        import { showToast, showToastOnNextPage } from './ui-helpers.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -134,14 +134,14 @@
             }
             
             if (!charId) {
-                showToast('未找到角色信息', 'error');
+                showToastOnNextPage('未找到角色信息', 'error');
                 window.location.href = 'chat.html';
                 return;
             }
 
             const chat = await db.chats.get(charId);
             if (!chat) {
-                showToast('角色不存在', 'error');
+                showToastOnNextPage('角色不存在', 'error');
                 window.location.href = 'chat.html';
                 return;
             }

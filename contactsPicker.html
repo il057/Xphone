@@ -53,7 +53,8 @@
 
         
         import { db } from './db.js';
-        import { showToast } from './ui-helpers.js';
+        import { showToast, promptForInput, showToastOnNextPage } from './ui-helpers.js';
+
 
 
         const contactListEl = document.getElementById('contact-list');
@@ -169,7 +170,7 @@
 
 
             await db.chats.put(group);
-            showToast("群成员更新成功！");
+            showToastOnNextPage("群成员更新成功！");
             window.location.href = `charEditProfile.html?id=${groupId}`;
         }
 
@@ -178,7 +179,7 @@
                 showToast("请至少选择一个好友来创建群聊。", 'error');
                 return;
             }
-            const groupName = prompt("请输入群聊名称：", "群聊");
+            const groupName = await promptForInput("请输入群聊名称：", "群聊", false, false);
             if (!groupName || !groupName.trim()) return;
 
             const memberIds = Array.from(selectedContacts);
@@ -212,7 +213,7 @@
             };
 
             await db.chats.add(newGroup);
-            showToast("群聊创建成功！");
+            showToastOnNextPage("群聊创建成功！");
             window.location.href = `chatRoom.html?id=${newGroup.id}`;
         }
 

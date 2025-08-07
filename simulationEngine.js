@@ -857,6 +857,8 @@ ${mentionableFriendsPrompt}
                         timestamp: Date.now()
                     };
                     chat.history.push(textMessage);
+                    chat.lastMessageTimestamp = textMessage.timestamp;
+                    chat.lastMessageContent = textMessage;
                     chat.unreadCount = (chat.unreadCount || 0) + 1;
                     await db.chats.put(chat);
                     notificationChannel.postMessage({ type: 'new_message' });
@@ -1208,6 +1210,8 @@ async function triggerInactiveGroupAiAction(actor, group) {
                     
                     const groupToUpdate = await db.chats.get(group.id);
                     groupToUpdate.history.push(message);
+                    groupToUpdate.lastMessageTimestamp = message.timestamp;
+                    groupToUpdate.lastMessageContent = message;
                     groupToUpdate.unreadCount = (groupToUpdate.unreadCount || 0) + 1;
                     await db.chats.put(groupToUpdate);
                     notificationChannel.postMessage({ type: 'new_message' });

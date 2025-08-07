@@ -21,7 +21,6 @@ function createModal(modalId, contentHtml) {
         </div>
     `;
     document.body.appendChild(modal);
-    
     // 点击模态框背景关闭
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -123,7 +122,7 @@ export function showUploadChoiceModal(fileInputElement) {
             modal.remove();
         };
         
-        // --- 新增：处理取消文件选择的逻辑 ---
+        // --- 处理取消文件选择的逻辑 ---
         let filePickerOpened = false;
         const focusHandler = () => {
             // 当窗口重新获得焦点时，稍作延迟后检查
@@ -136,7 +135,7 @@ export function showUploadChoiceModal(fileInputElement) {
             }, 300); // 300ms延迟足以让change事件先触发
         };
         
-        // --- 新增：文件选择后的处理逻辑 ---
+        // --- 文件选择后的处理逻辑 ---
         const fileChangeHandler = (event) => {
             const file = event.target.files[0];
             if (file) {
@@ -414,4 +413,61 @@ export function showToast(message, type = 'info') {
             }
         }, 300); 
     }, 2500);
+}
+
+/**
+ * 将提示信息暂存到 sessionStorage，以便在下一个页面显示。
+ * @param {string} message - 要显示的消息。
+ * @param {'info' | 'success' | 'error'} [type='info'] - 提示的类型。
+ */
+export function showToastOnNextPage(message, type = 'info') {
+    sessionStorage.setItem('pending_toast', JSON.stringify({ message, type }));
+}
+
+/**
+ * 检查 sessionStorage 中是否有待显示的提示，并调用 showToast 显示它。
+ * 这个函数应该在每个页面加载时运行一次。
+ */
+export function displayToastFromSession() {
+    const pendingToastJSON = sessionStorage.getItem('pending_toast');
+    if (pendingToastJSON) {
+        try {
+            const { message, type } = JSON.parse(pendingToastJSON);
+            showToast(message, type);
+        } finally {
+            // 无论成功与否，都清除信息，防止重复显示
+            sessionStorage.removeItem('pending_toast');
+        }
+    }
+}
+
+/**
+ * 显示一个带有可滚动内容和复制按钮的模态框，用于展示长文本或代码。
+ * @param {string} title - 模态框的标题。
+ * @param {string} rawContent - 要显示的原始文本内容。
+ */
+export function showRawContentModal(title, rawContent) {
+    const modalHtml = `
+            <h3 class="text-lg font-semibold text-center p-4 border-b">${title}</h3>
+            <main class="flex-grow p-4 overflow-y-auto">
+                <pre class="whitespace-pre-wrap text-xs text-gray-600 font-mono" style="word-break: break-all;">${rawContent}</pre>
+            </main>
+            <footer class="p-4 border-t grid grid-cols-2 gap-3">
+                <button id="copy-raw-content-btn" class="modal-btn modal-btn-cancel">复制</button>
+                <button id="close-raw-content-modal" class="modal-btn modal-btn-confirm">关闭</button>
+            </footer>
+    `;
+    const modal = createModal('raw-content-modal', modalHtml);
+
+    const cleanup = () => modal.remove();
+
+    modal.querySelector('#close-raw-content-modal').addEventListener('click', cleanup);
+    modal.querySelector('#copy-raw-content-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(rawContent).then(() => {
+            showToast('已复制到剪贴板');
+        }).catch(err => {
+            showToast('复制失败', 'error');
+            console.error('Copy failed', err);
+        });
+    });
 }

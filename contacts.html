@@ -97,6 +97,7 @@
 
     <script type="module">
         import { db } from './db.js';
+        import { showToast, promptForInput } from './ui-helpers.js';
 
         const friendsList = document.getElementById('friends-list');
         const groupsList = document.getElementById('groups-list');
@@ -239,8 +240,8 @@
                 addMenu.classList.toggle('hidden');
                 addBtn.classList.toggle('active', !addMenu.classList.contains('hidden'));
             });
-            document.getElementById('add-friend-btn').addEventListener('click', () => {
-                const charName = prompt("请输入您想添加的好友名字：");
+            document.getElementById('add-friend-btn').addEventListener('click', async () => {
+                const charName = await promptForInput("请输入您想添加的好友名字：", "例如：小明、小红", false, false);
                 if(charName && charName.trim() !== '') {
                     window.location.href = `charEditProfile.html?isNew=true&name=${encodeURIComponent(charName)}`;
                 }
