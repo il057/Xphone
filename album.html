@@ -104,8 +104,14 @@
             photos.forEach(photo => {
                 const photoContainer = document.createElement('div');
                 photoContainer.className = 'relative aspect-square group';
+                let thumbnailUrl = photo.url;
+                // 检查URL是否是Cloudinary的URL
+                if (thumbnailUrl.includes('res.cloudinary.com')) {
+                    // 在 /upload/ 后插入变换参数 'w_200/'
+                    thumbnailUrl = thumbnailUrl.replace('/upload/', '/upload/w_200/');
+                }
                 photoContainer.innerHTML = `
-                    <img src="${photo.url}" title="${photo.description}" class="w-full h-full object-cover rounded-lg">
+                    <img src="${thumbnailUrl}" title="${photo.description}" class="w-full h-full object-cover rounded-lg">
                     <div class="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <button data-id="${photo.id}" class="delete-btn text-white bg-red-600 rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold">×</button>
                     </div>

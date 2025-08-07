@@ -11,8 +11,6 @@ const urlsToCache = [
   './chatRoom.html',
   './chatRoom.js',
   './contacts.html',
-  './charPosts.html',
-  './createSharedUI.js',
   './charProfile.html',
   './charEditProfile.html',
   './charEditProfile.js',
@@ -40,7 +38,10 @@ const urlsToCache = [
   './stickers.js',
   './worldSetting.html',
   './worldSetting.js',
-  './contactsPicker.html'
+  './contactsPicker.html',
+  './help.html',
+  './callLog.html',
+  './callLog.js'
 ];
 
 // 安装 Service Worker 并缓存文件

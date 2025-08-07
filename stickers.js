@@ -45,8 +45,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const stickerEl = document.createElement('div');
         stickerEl.className = 'sticker-grid-item relative group';
         stickerEl.dataset.id = sticker.id;
+        let thumbnailUrl = sticker.url;
+        // 检查URL是否是Cloudinary的URL
+        if (thumbnailUrl.includes('res.cloudinary.com')) {
+            // 在 /upload/ 后插入变换参数 'w_200/'
+            thumbnailUrl = thumbnailUrl.replace('/upload/', '/upload/w_200/');
+        }
         stickerEl.innerHTML = `
-            <img src="${sticker.url}" alt="${sticker.name}" class="pointer-events-none w-full h-full object-contain">
+            <img src="${thumbnailUrl}" alt="${sticker.name}" class="pointer-events-none w-full h-full object-contain">
             <div class="absolute inset-0 bg-black/20 hidden items-center justify-center edit-mode-item">
                 <input type="checkbox" class="absolute top-2 right-2 w-5 h-5 accent-pink-500 pointer-events-none">
             </div>

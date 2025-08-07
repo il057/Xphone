@@ -264,6 +264,11 @@
     // --- Global State ---
     const defaultAvatar = 'https://files.catbox.moe/kkll8p.svg';
     let allChats = {};
+    const POSTS_PER_PAGE = 10;
+    let allPostsToRender = [];
+    let postsLoaded = 0;
+    let isLoadingPosts = false;
+    let favoritedPostIds = new Set();
     let displayPersona = null; // 用于存储当前用户的活动人格
     let themeColor = '#3b82f6';
     let currentPostPayload = {}; // 用于创建动态时的临时数据
@@ -356,7 +361,6 @@
 
         const headerTitle = document.querySelector('h1');
         const addBtnContainer = document.getElementById('add-btn').parentElement;
-        const feedContainer = document.getElementById('posts-feed');
         const appDock = document.querySelector('.app-dock');
         const backBtn = document.querySelector('.app-header a');
                     
@@ -371,8 +375,6 @@
         }
 
         const allSortedPosts = await db.xzonePosts.orderBy('timestamp').reverse().toArray();
-        const postsToRender = authorId ? allSortedPosts.filter(p => p.authorId === authorId) : allSortedPosts;
-
         const [chats, personas, globalSettings, favorites, customPresets] = await Promise.all([
             db.chats.toArray(),
             db.personaPresets.toArray(),
@@ -381,19 +383,23 @@
             db.bubbleThemePresets.toArray()
         ]);
 
+        // --- 初始化全局变量 ---
+        allChats = chats.reduce((map, chat) => { map[chat.id] = chat; return map; }, {});
+        favoritedPostIds = new Set(favorites.map(fav => fav.content.id)); // <-- 为全局变量赋值
+        if (globalSettings && globalSettings.defaultPersonaId) {
+            displayPersona = personas.find(p => p.id === globalSettings.defaultPersonaId);
+        }
         if (globalSettings && globalSettings.themeColor) {
             themeColor = globalSettings.themeColor;
             document.documentElement.style.setProperty('--theme-color', themeColor);
         }
 
-        allChats = chats.reduce((map, chat) => { map[chat.id] = chat; return map; }, {});
-        const favoritedPostIds = new Set(favorites.map(fav => fav.content.id));
-        
-        const defaultPersonaId = globalSettings?.defaultPersonaId;
-        if (defaultPersonaId) {
-            displayPersona = personas.find(p => p.id === defaultPersonaId);
-        }
+        // --- 筛选需要渲染的帖子 ---
+        allPostsToRender = authorId ? allSortedPosts.filter(p => p.authorId === authorId) : allSortedPosts;
+        postsLoaded = 0;
+        feedContainer.innerHTML = '';
 
+        // --- 更新页面头部信息 ---
         const coverPhotoDiv = document.getElementById('cover-photo');
         const userSignatureEl = document.getElementById('user-signature');
         userSignatureEl.classList.add('hidden');
@@ -459,13 +465,46 @@
                 : `linear-gradient(to top right, #a18cd1, #fbc2eb)`;
         }
 
-        renderPostList(feedContainer, postsToRender, favoritedPostIds);        
+
+        // --- 最终渲染 ---
+        if (allPostsToRender.length === 0) {
+            feedContainer.innerHTML = '<p class="text-center text-gray-500 py-8">还没有任何动态</p>';
+            return;
+        }
+        loadMorePosts(); // <--- 调用加载函数来显示第一页
+    }
+
+    function loadMorePosts() {
+        if (isLoadingPosts || postsLoaded >= allPostsToRender.length) return;
+        isLoadingPosts = true;
+
+        const startIndex = postsLoaded;
+        const endIndex = startIndex + POSTS_PER_PAGE;
+        const postsToLoad = allPostsToRender.slice(startIndex, endIndex);
+        
+        // 调用修改后的 renderPostList 进行追加渲染
+        renderPostList(feedContainer, postsToLoad, favoritedPostIds, true);
+
+        postsLoaded += postsToLoad.length;
+        isLoadingPosts = false;
+
+        if (postsLoaded >= allPostsToRender.length) {
+            if (!document.getElementById('no-more-posts-indicator')) {
+                const noMoreEl = document.createElement('p');
+                noMoreEl.id = 'no-more-posts-indicator';
+                noMoreEl.className = 'text-center text-gray-500 py-8';
+                noMoreEl.textContent = '没有更多动态了';
+                feedContainer.appendChild(noMoreEl);
+            }
+        }
     }
     
-    function renderPostList(container, posts, favoritedPostIds) {            
-        container.innerHTML = '';
+    function renderPostList(container, posts, favoritedPostIds, append = false) {
+        if (!append) {
+            container.innerHTML = '';
+        }
+
         if (posts.length === 0) {
-            container.innerHTML = '<p class="text-center text-gray-500 py-8">还没有任何动态</p>';
             return;
         }
 
@@ -820,10 +859,18 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-    // 记录用户查看动态的时间
-    localStorage.setItem('lastMomentsViewTimestamp', Date.now().toString());
-    renderPosts();
-});
+        // 记录用户查看动态的时间
+        localStorage.setItem('lastMomentsViewTimestamp', Date.now().toString());
+        renderPosts();
+        const mainContent = document.querySelector('main.main-content');
+        mainContent.addEventListener('scroll', () => {
+            if (mainContent.scrollHeight - mainContent.scrollTop - mainContent.clientHeight < 200) {
+                if (!isLoadingPosts && postsLoaded < allPostsToRender.length) {
+                    loadMorePosts();
+                }
+            }
+        });
+    });
 
     </script>
 </body>
