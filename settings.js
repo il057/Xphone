@@ -317,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const text = await file.text();
             const backupData = JSON.parse(text);
-            awaitrestoreDataFromBackup(backupData);
+            await restoreDataFromBackup(backupData);
 
         } catch (error) {
             console.error("导入数据时出错:", error);
