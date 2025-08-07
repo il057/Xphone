@@ -320,18 +320,26 @@
                         <button id="save-custom-theme-btn" class="w-full text-sm primary-btn text-white py-1.5 rounded-md mt-2">保存为预设</button>
                     </div>
 
-                     <div id="theme-preview-container" class="mt-4 p-3 rounded-lg flex flex-col space-y-2" style="background-color: #f0f2f5;">
-                        </div>
+                    <div id="theme-preview-container" class="mt-4 p-3 rounded-lg flex flex-col space-y-2" style="background-color: #f0f2f5;">
+                    </div>
+                    <div class="mt-4 pt-4 border-t">
+                        <label for="ai-bubble-prompt-input" class="block text-sm font-medium text-gray-700">AI 生成气泡样式</label>
+                        <textarea id="ai-bubble-prompt-input" rows="3" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2" placeholder="例如：发光的粉色气泡，赛博朋克风格，带一点霓虹效果..."></textarea>
+                        <button id="generate-css-btn" class="w-full text-sm primary-btn text-white py-1.5 rounded-md mt-2">✨ AI 生成</button>
+                    </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">自定义气泡 (CSS)</label>
-                        <textarea id="custom-bubble-css-input" rows="6" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2 font-mono text-xs" placeholder="在此输入自定义CSS代码..."></textarea>
-                        <p class="text-xs text-gray-500 mt-1">
-                            要使用主题色，请在CSS中使用
-                            <code class="bg-gray-200 px-1 rounded">var(--user-bubble-bg)</code>,
-                            <code class="bg-gray-200 px-1 rounded">var(--ai-bubble-bg)</code>,
-                            <code class="bg-gray-200 px-1 rounded">var(--accent-color)</code>
-                            等变量。如果输入了自定义代码但未使用这些变量，该角色的所有相关页面将退回使用全局主题色。
-                        </p>
+                    <label class="block text-sm font-medium text-gray-700 mt-4">自定义气泡 (CSS)</label>
+                    <textarea id="custom-bubble-css-input" rows="6" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2 font-mono text-xs" placeholder="AI生成或手写的CSS代码将显示在这里..."></textarea>
+                    <button id="save-css-preset-btn" class="w-full text-sm secondary-btn py-1.5 rounded-md mt-2">保存当前样式为预设</button>
+                    <p class="text-xs text-gray-500 mt-1">
+                        要使用主题色，请在CSS中使用
+                        <code class="bg-gray-200 px-1 rounded">var(--user-bubble-bg)</code>,
+                        <code class="bg-gray-200 px-1 rounded">var(--ai-bubble-bg)</code>,
+                        <code class="bg-gray-200 px-1 rounded">var(--accent-color)</code>
+                        等变量。如果输入了自定义代码但未使用这些变量，该角色的所有相关页面将退回使用全局主题色。
+                    </p>
+                </div>
+                    <div id="css-presets-container" class="mt-2 space-y-2">
                     </div>
                 </div>
             </div>

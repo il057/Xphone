@@ -1,6 +1,6 @@
 // settings.js
 // Import the shared database instance from db.js
-import { db, uploadImage } from './db.js'; 
+import { db, uploadImage, getActiveApiProfile } from './db.js'; 
 import { showUploadChoiceModal, showImagePickerModal, showAlbumPickerModal, promptForInput } from './ui-helpers.js'; // 导入三个助手
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const prefilledName = urlParams.get('name') || '';
     let chatData;
     let customPresets = []; // 用于存储从数据库加载的自定义预设
+    let customCssPresets = [];
     const defaultAvatar = 'https://files.catbox.moe/kkll8p.svg';
 
     // --- DOM Elements ---
@@ -36,7 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         userBg: document.getElementById('user-bubble-bg-color'),
         userText: document.getElementById('user-bubble-text-color')
     };
-    
+
     const saveBtn = document.getElementById('save-btn');
     // Avatar Library Modal
     const avatarModal = document.getElementById('avatar-library-modal');
@@ -50,6 +51,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const livePreviewStyleTag = document.createElement('style');
     livePreviewStyleTag.id = 'live-preview-bubble-style';
     document.head.appendChild(livePreviewStyleTag);
+
+    const aiBubblePromptInput = document.getElementById('ai-bubble-prompt-input');
+    const generateCssBtn = document.getElementById('generate-css-btn');
+    const saveCssPresetBtn = document.getElementById('save-css-preset-btn');
+    const cssPresetsContainer = document.getElementById('css-presets-container');
 
 
     const bubbleThemes = [
@@ -99,6 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderRelationshipEditor(null);
         await applyPageTheme(chatData);
         await loadWorldBooks();
+        await loadAndRenderCssPresets();
     }
 
     async function loadData() {
@@ -186,6 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         await applyPageTheme(chatData); 
         await loadWorldBooks(chatData.settings.worldBookId);
+        await loadAndRenderCssPresets();
         customBubbleCssInput.value = chatData.settings.customBubbleCss || '';
        
     }
@@ -705,6 +713,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     customBubbleCssInput.addEventListener('input', () => applyLiveCssPreview(customBubbleCssInput.value));
     document.getElementById('save-custom-theme-btn').addEventListener('click', saveCustomTheme);
 
+    generateCssBtn.addEventListener('click', handleGenerateCss);
+    saveCssPresetBtn.addEventListener('click', handleSaveCssPreset);
+
     Object.values(colorInputs).forEach(input => {
         if(input) input.addEventListener('input', () => {
             const customColors = {
@@ -952,7 +963,215 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 你也可以在这里添加一个预览效果，但这步是可选的
         }
     });
-        
+    
+    async function loadAndRenderCssPresets() {
+        customCssPresets = await db.bubbleCssPresets.toArray();
+        renderCssPresets(chatData?.settings?.customBubbleCss);
+    }
+
+    // 新建一个函数来渲染已保存的CSS预设按钮
+   function renderCssPresets(activeCss) {
+        cssPresetsContainer.innerHTML = '';
+        if (customCssPresets.length > 0) {
+            const title = document.createElement('label');
+            title.className = 'block text-sm font-medium text-gray-700';
+            title.textContent = '应用样式预设';
+            cssPresetsContainer.appendChild(title);
+
+            const buttonGroup = document.createElement('div');
+            buttonGroup.className = 'flex flex-wrap gap-2';
+
+            customCssPresets.forEach(preset => {
+                const btnWrapper = document.createElement('div');
+                btnWrapper.className = 'relative group';
+
+                const btn = document.createElement('button');
+                btn.textContent = preset.name;
+                btn.className = 'text-xs secondary-btn px-2 py-1 rounded-md transition-colors';
+                
+                // 检查当前应用的CSS是否与预设的CSS完全相同
+                if (activeCss && activeCss.trim() === preset.cssCode.trim()) {
+                    btn.style.backgroundColor = 'var(--theme-color)';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = 'var(--theme-color)';
+                }
+
+                btn.addEventListener('click', () => {
+                    customBubbleCssInput.value = preset.cssCode;
+                    customBubbleCssInput.dispatchEvent(new Event('input'));
+                    renderCssPresets(preset.cssCode);
+                });
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.className = 'absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center';
+                deleteBtn.title = '删除此预设';
+                deleteBtn.addEventListener('click', async () => {
+                    if (confirm(`确定要删除样式预设 "${preset.name}" 吗？`)) {
+                        await db.bubbleCssPresets.delete(preset.name);
+                        await loadAndRenderCssPresets();
+                    }
+                });
+
+                btnWrapper.appendChild(btn);
+                btnWrapper.appendChild(deleteBtn);
+                buttonGroup.appendChild(btnWrapper);
+            });
+            cssPresetsContainer.appendChild(buttonGroup);
+        }
+    }
+
+
+    // 新建一个函数来处理AI生成CSS的逻辑
+    async function handleGenerateCss() {
+        const promptText = aiBubblePromptInput.value.trim();
+        if (!promptText) {
+            alert('请输入您想要的样式描述！');
+            return;
+        }
+
+        generateCssBtn.textContent = '生成中...';
+        generateCssBtn.disabled = true;
+
+        const currentCss = customBubbleCssInput.value.trim();
+
+
+        // 从数据库获取当前激活的API配置
+        const apiConfig = await getActiveApiProfile();
+        if (!apiConfig) {
+            alert('请先在设置中配置API！');
+            generateCssBtn.textContent = '✨ AI 生成';
+            generateCssBtn.disabled = false;
+            return;
+        }
+
+        const systemPrompt = `
+You are an expert CSS code generator for a chat application. Your task is to generate or modify CSS code to style message elements based on a user's request.
+
+Here is the HTML structure of a message. You can target any of these classes:
+
+<div class="message-wrapper user"> <img class="avatar" src="...">
+    <div class="message-content-column">
+        <div class="chat-bubble user-bubble"> <div class="quoted-message">...</div>
+            </div>
+    </div>
+    <span class="timestamp">12:34</span>
+</div>
+
+**Available Selectors:**
+- \`.message-wrapper\`: The container for the entire message line.
+- \`.avatar\`: The avatar's container (the frame), NOT the image content itself. You can style its border, padding, box-shadow, border-radius, etc.
+- \`.chat-bubble\`: Styles both user and AI bubbles.
+- \`.user-bubble\`: Targets ONLY the user's bubble.
+- \`.ai-bubble\`: Targets ONLY the AI's bubble.
+- \`.timestamp\`: The small text showing the time.
+- \`.quoted-message\`: The container for a replied-to message.
+- \`.message-content-column .text-xs.text-gray-500\`: The sender's name in group chats.
+
+**Available Theme CSS Variables (Highly Recommended):**
+- \`var(--user-bubble-bg)\`, \`var(--user-bubble-text)\`
+- \`var(--ai-bubble-bg)\`, \`var(--ai-bubble-text)\`
+- \`var(--accent-color)\`
+
+${currentCss ? `
+**Current CSS Code (for modification):**
+\`\`\`css
+${currentCss}
+\`\`\`
+` : ''}
+
+**User's Request:** "${promptText}"
+
+**IMPORTANT RULES:**
+1.  Your response MUST be **raw CSS code ONLY**.
+2.  If modifying, provide the **complete, updated stylesheet**.
+3.  Do NOT include any explanations, comments, or markdown like \`\`\`css.
+    `;
+
+        try {
+            let response, rawContent;
+            if (apiConfig.apiProvider === 'gemini') {
+                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
+                response = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+                        generationConfig: { temperature: 0.5 }
+                    })
+                });
+                const data = await response.json();
+                if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+                    throw new Error("Invalid response structure from Gemini API. Check console for details.");
+                }
+                rawContent = data.candidates[0].content.parts[0].text;
+            } else {
+                response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                    body: JSON.stringify({
+                        model: apiConfig.model,
+                        messages: [{ role: 'system', content: systemPrompt }],
+                        temperature: 0.5
+                    })
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(` API Error ${response.status}:\n\n${errorText}`);
+                }
+                const data = await response.json();
+                if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                    console.error("Invalid API Response:", data);
+                    throw new Error("API返回了无效的数据结构，请检查API配置或服务状态。");
+                }
+                rawContent = data.choices[0].message.content;
+            }
+
+            if (!response.ok) throw new Error(rawContent);
+
+            const cleanedCss = rawContent.replace(/```css/g, '').replace(/```/g, '').trim();
+            customBubbleCssInput.value = cleanedCss;
+            customBubbleCssInput.dispatchEvent(new Event('input'));
+            renderCssPresets(cleanedCss); // 更新预设按钮高亮
+
+        } catch (error) {
+            console.error("AI生成CSS失败:", error);
+            alert(`生成失败: ${error.message}`);
+        } finally {
+            generateCssBtn.textContent = '✨ AI 生成';
+            generateCssBtn.disabled = false;
+        }
+    }
+
+    // 新建一个函数来处理保存CSS预设的逻辑
+    async function handleSaveCssPreset() {
+        const cssCode = customBubbleCssInput.value.trim();
+        if (!cssCode) {
+            alert('没有可保存的CSS样式。');
+            return;
+        }
+
+        const presetName = prompt("为这个样式预设起个名字：");
+        if (!presetName || !presetName.trim()) {
+            if (presetName !== null) alert("名字不能为空！");
+            return;
+        }
+
+        try {
+            await db.bubbleCssPresets.add({ name: presetName.trim(), cssCode });
+            alert('样式预设已保存！');
+            // 重新加载并渲染预设列表
+            await loadAndRenderCssPresets();
+        } catch (error) {
+            if (error.name === 'ConstraintError') {
+                alert(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`);
+            } else {
+                console.error("保存CSS预设失败:", error);
+                alert("保存失败，详情请看控制台。");
+            }
+        }
+    }
+
 
     // --- Init ---
  

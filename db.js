@@ -6,7 +6,7 @@
 export const db = new Dexie('ChatDB');
 
 // Define the database schema. This should be the single source of truth for the database structure.
-db.version(32).stores({
+db.version(33).stores({
     chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus',
     // 将 'apiConfig' 重命名为 'apiProfiles' 并修改其结构
     apiProfiles: '++id, &profileName', // 使用自增ID和方案名称索引
@@ -22,6 +22,7 @@ db.version(32).stores({
     favorites: '++id, [type+content.id], type, timestamp, chatId',
     memories: '++id, chatId, [chatId+isImportant], authorName, isImportant, timestamp, type, targetDate',
     bubbleThemePresets: '&name',
+    bubbleCssPresets: '&name, cssCode', 
     globalAlbum: '++id, url',
     userAvatarLibrary: '++id, &url, name',
     xzoneGroups: '++id, name, worldBookIds',
