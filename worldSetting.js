@@ -1,5 +1,6 @@
 // phone/worldSetting.js
 import { db } from './db.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DOM Elements ---
@@ -110,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await db.xzoneGroups.bulkUpdate(groupUpdates);
         }
         
-        alert('世界设定已保存！');
+        showToast('世界设定已保存！');
     }
 
     async function handleSaveWorldbookAssociation() {

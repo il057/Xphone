@@ -1,4 +1,6 @@
 import { db } from './db.js';
+import { showToast } from './ui-helpers.js';
+
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DOM Elements ---
     const container = document.getElementById('call-log-container');
@@ -83,13 +85,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await db.callLogs.bulkDelete(Array.from(selectedLogs));
             });
 
-            alert('删除成功！');
+            showToast('删除成功！');
             toggleEditMode();
             main(); // Re-render the entire list
 
         } catch (error) {
             console.error("批量删除通话记录失败:", error);
-            alert("删除失败，请查看控制台。");
+            showToast("删除失败，请查看控制台。", 'error');
         }
     }
 

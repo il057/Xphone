@@ -3,6 +3,7 @@ import * as spotifyManager from './spotifyManager.js';
 import { runOfflineSimulation } from './simulationEngine.js';
 import { updateRelationshipScore } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
+import { showToast } from './ui-helpers.js';
 
 // --- State and Constants ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -149,7 +150,7 @@ async function init() {
         }
             
     if (!charId || charId.trim() === '') {
-        alert('无效或缺失的角色ID，将返回主页。');
+        showToast('无效或缺失的角色ID，将返回主页。', 'error');
         window.location.href = 'index.html'; // 跳转到一个安全的页面
         return; // 立即停止执行，防止后续代码出错
     }
@@ -164,7 +165,7 @@ async function init() {
     ]);
 
     if (!currentChat) {
-        alert('找不到角色数据');
+        showToast('找不到角色数据', 'error');
         window.location.href = 'index.html';
         return;
     }
@@ -1381,7 +1382,7 @@ async function sendUserTransfer() {
     const amount = parseFloat(document.getElementById('transfer-amount').value);
     const note = document.getElementById('transfer-note').value.trim();
     if(isNaN(amount) || amount <= 0) {
-        alert("请输入有效金额");
+        showToast("请输入有效金额", 'error');
         return;
     }
     const message = { role: 'user', type: 'transfer', amount: amount, note: note, timestamp: Date.now() };
@@ -1395,7 +1396,7 @@ async function sendUserTransfer() {
 async function sendUserLinkShare() {
     const title = document.getElementById('link-title-input').value.trim();
     if (!title) {
-        alert("标题是必填项！");
+        showToast("标题是必填项！", 'error');
         return;
     }
     const message = {
@@ -1413,7 +1414,7 @@ async function sendUserLinkShare() {
 
 async function openPlaylistPicker() {
     if (!spotifyManager.isLoggedIn()) {
-        alert('请先前往“音乐”App登录Spotify。');
+        showToast('请先前往“音乐”App登录Spotify。', 'error');
         return;
     }
     playlistSelectionContainer.innerHTML = '<p>正在加载您的歌单...</p>';
@@ -1480,7 +1481,7 @@ async function getAiResponse( charIdToTrigger = null ) {
 
     // Attempt to acquire the high-priority lock.
     if (!(await apiLock.acquire('user_chat'))) {
-        alert("系统正忙，请稍后再试。"); // This should rarely happen
+        showToast("系统正忙，请稍后再试。"); // This should rarely happen
         return;
     }
 
@@ -1501,7 +1502,7 @@ async function getAiResponse( charIdToTrigger = null ) {
             return;
         }
         if (!apiConfig) {
-            alert('请先在“设置”页面中添加并选择一个API方案。');
+            showToast('请先在“设置”页面中添加并选择一个API方案。', 'error');
             // 恢复UI状态
             const headerElOnError = document.getElementById('char-name-header');
             headerElOnError.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
@@ -1524,7 +1525,7 @@ async function getAiResponse( charIdToTrigger = null ) {
         }
 
         if (isApiConfigMissing) {
-            alert('请先在主程序中完成API设置');
+            showToast('请先在主程序中完成API设置', 'error');
             // 确保在出错时恢复UI状态
             const headerElOnError = document.getElementById('char-name-header');
             headerElOnError.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
@@ -3188,16 +3189,16 @@ async function sendGroupRedPacket() {
     const greeting = document.getElementById('rp-group-greeting').value.trim();
 
     if (isNaN(amount) || amount <= 0) {
-        alert("请输入有效的总金额！"); return;
+        showToast("请输入有效的总金额！", 'error'); return;
     }
     if (isNaN(count) || count <= 0) {
-        alert("请输入有效的红包个数！"); return;
+        showToast("请输入有效的红包个数！", 'error'); return;
     }
     if (amount / count < 0.01) {
-        alert("单个红包金额不能少于0.01元！"); return;
+        showToast("单个红包金额不能少于0.01元！", 'error'); return;
     }
     if (count > currentChat.members.length + 1) { // +1 for the user
-        alert("红包个数不能超过群成员总数！"); return;
+        showToast("红包个数不能超过群成员总数！", 'error'); return;
     }
 
     const myNickname = currentChat.settings.myNickname || '我';
@@ -3228,10 +3229,10 @@ async function sendDirectRedPacket() {
     const greeting = document.getElementById('rp-direct-greeting').value.trim();
 
     if (isNaN(amount) || amount <= 0) {
-        alert("请输入有效的金额！"); return;
+        showToast("请输入有效的金额！", 'error'); return;
     }
     if (!receiverName) {
-        alert("请选择一个接收人！"); return;
+        showToast("请选择一个接收人！", 'error'); return;
     }
     
     const myNickname = currentChat.settings.myNickname || '我';
@@ -3351,7 +3352,7 @@ async function handleOpenRedPacket(packet) {
     // 1. 检查红包是否还能领
     const remainingCount = packet.count - Object.keys(packet.claimedBy || {}).length;
     if (remainingCount <= 0) {
-        alert("手慢了，红包派完了。");
+        showToast("手慢了，红包派完了。");
         packet.isFullyClaimed = true;
         await db.chats.put(currentChat);
         return null;
@@ -3423,7 +3424,7 @@ async function handlePacketClick(timestamp) {
 
     // 如果红包不是给你的，直接提示并显示详情
     if (packet.packetType === 'direct' && !isForMe) {
-        //alert(`这是给“${packet.receiverName}”的专属红包哦。`);
+        showToast(`这是给“${packet.receiverName}”的专属红包哦。`);
         //showRedPacketDetails(packet);
         return;
     }
@@ -3514,7 +3515,7 @@ function copyMessageText() {
 
     if (message && message.content) {
         navigator.clipboard.writeText(message.content)
-            .then(() => alert('已复制到剪贴板'))
+            .then(() => showToast('已复制到剪贴板'))
             .catch(err => console.error('无法复制文本: ', err));
     }
 }
@@ -3535,7 +3536,7 @@ async function favoriteMessage () {
 
     if (exist) {
         await db.favorites.delete(exist.id);             // 取消收藏
-        alert('已取消收藏');
+        showToast('已取消收藏');
     } else {
         await db.favorites.add({
             type: 'chat_message',
@@ -3544,7 +3545,7 @@ async function favoriteMessage () {
             content: msg,
             timestamp: Date.now()
         });
-        alert('已收藏！');
+        showToast('已收藏！');
     }
 }
 
@@ -3577,7 +3578,7 @@ function startReply() {
 
     // 规则 1: 禁止引用转账或红包
     if (messageType === 'transfer' || messageType === 'red_packet') {
-        alert('转账和红包消息不支持引用。');
+        showToast('转账和红包消息不支持引用。', 'error');
         return;
     }
 
@@ -4129,7 +4130,7 @@ async function sendWaimaiRequest() {
     const amount = parseFloat(document.getElementById('waimai-amount').value);
 
     if (!productInfo || isNaN(amount) || amount <= 0) {
-        alert("请输入有效的商品信息和金额！");
+        showToast("请输入有效的商品信息和金额！", 'error');
         return;
     }
 
@@ -4243,7 +4244,7 @@ async function handleMultiImageUpload(event) {
         // 在上传前，一次性检查Cloudinary配置
         const cloudinaryConfig = await db.globalSettings.get('main');
         if (!cloudinaryConfig?.cloudinaryCloudName || !cloudinaryConfig?.cloudinaryUploadPreset) {
-            alert("请先在“设置”页面配置 Cloudinary 图片上传服务。");
+            showToast("请先在“设置”页面配置 Cloudinary 图片上传服务。", 'error');
             return;
         }
 
@@ -4269,7 +4270,7 @@ async function handleMultiImageUpload(event) {
         }
     } catch (error) {
         console.error("多图片上传失败:", error);
-        alert("图片上传过程中发生错误，详情请查看控制台。");
+        showToast("图片上传过程中发生错误，详情请查看控制台。", 'error');
     } finally {
         multiImageInput.value = '';
     }

@@ -2,6 +2,7 @@
 // Import the shared database instance from db.js
 import { db, uploadImage, getActiveApiProfile } from './db.js'; 
 import { showUploadChoiceModal, showImagePickerModal, showAlbumPickerModal, promptForInput } from './ui-helpers.js'; // 导入三个助手
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DB & State ---
@@ -110,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadData() {
         if (!charId) {
-            alert('无效的编辑链接');
+            showToast('无效的编辑链接', 'error');
             window.location.href = 'chat.html';
             return;
         }
@@ -118,7 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chatData = await db.chats.get(charId);
         
         if (!chatData) {
-            alert('数据不存在');
+            showToast('数据不存在', 'error');
             window.location.href = 'chat.html';
             return;
         }
@@ -367,14 +368,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function saveCustomTheme() {
         const presetName = prompt("为你的自定义方案起个名字吧：");
         if (!presetName || !presetName.trim()) {
-            if (presetName !== null) alert("名字不能为空哦！");
+            if (presetName !== null) showToast("名字不能为空！");
             return;
         }
 
         // 检查名称是否与默认主题或已保存的自定义主题冲突
         const isNameTaken = bubbleThemes.some(t => t.name === presetName.trim()) || customPresets.some(p => p.name === presetName.trim());
         if (isNameTaken) {
-            alert(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`);
+            showToast(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`, 'error');
             return;
         }
 
@@ -390,7 +391,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         customPresets.push(newPreset); // 更新内存中的自定义预设列表
         
         renderThemeSwatches(chatData.settings.theme); // 重新渲染所有色板
-        alert('保存成功！现在可以在所有角色编辑页使用这个方案了。');
+        showToast('保存成功！现在可以在所有角色编辑页使用这个方案了。', 'success');
     }
 
     function createSwatch(value, background) {
@@ -498,10 +499,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (indexToDelete > -1) {
                 chatData.settings.aiAvatarLibrary.splice(indexToDelete, 1);
-                alert('头像已删除。记得点击页面顶部的“保存”按钮来保存所有更改。');
+                showToast('头像已删除。记得点击页面顶部的“保存”按钮来保存所有更改。', 'success');
                 await openCharAvatarPicker(); // 重新打开选择器以刷新列表
             } else {
-                alert('未找到要删除的头像，可能已被移除。');
+                showToast('未找到要删除的头像，可能已被移除。', 'error');
             }
         }
     }
@@ -515,12 +516,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (choice.type === 'local') {
             const apiConfig = await db.globalSettings.get('main');
             if (!apiConfig?.cloudinaryCloudName || !apiConfig?.cloudinaryUploadPreset) {
-                alert("请先在“设置”页面配置 Cloudinary！");
+                showToast("请先在“设置”页面配置 Cloudinary！", 'error');
                 return;
             }
             try {
                 imageUrl = await uploadImage(choice.value);
-            } catch (error) { return; }
+            } catch (error) {
+                showToast(error.message, 'error');
+                return;
+            }
         } else {
             imageUrl = choice.value;
         }
@@ -539,7 +543,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (chatData.settings.aiAvatarLibrary.some(avatar => avatar.name === name)) {
-            alert('这个名字已经存在了，请换一个。');
+            showToast('这个名字已经存在了，请换一个。', 'error');
             return;
         }
 
@@ -551,7 +555,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         chatData.settings.aiAvatarLibrary.push(newAvatar);
 
-        alert('新头像已添加！记得点击页面顶部的“保存”按钮来保存所有更改。');
+        showToast('新头像已添加！记得点击页面顶部的“保存”按钮来保存所有更改。', 'success');
         await openCharAvatarPicker();
     }
     
@@ -636,11 +640,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
             try {
                 await db.chats.add(newCharacter); 
-                alert('角色创建成功！');
+                showToast('角色创建成功！', 'success');
                 window.location.href = `charProfile.html?id=${finalCharId}`;
             } catch (error) {
                 console.error("Failed to create new character:", error);
-                alert("创建失败，请稍后再试。");
+                showToast("创建失败，请稍后再试。", 'error');
                 saveBtn.textContent = '保存';
                 saveBtn.disabled = false;
             }
@@ -654,7 +658,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     settings: { ...chatData.settings, ...sharedSettings }
                 };
                 await db.chats.put(updatedData);
-                alert('群聊资料保存成功！');
+                showToast('群聊资料保存成功！', 'success');
                 window.location.href = `chatRoom.html?id=${chatData.id}`;
 
             } else {
@@ -673,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 };
                 await db.chats.put(updatedData);
-                alert('保存成功！');
+                showToast('保存成功！', 'success');
                 window.location.href = `charProfile.html?id=${chatData.id}`;
             }
         }
@@ -738,7 +742,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // 2. 检查分组名是否已存在
                 const existing = await db.xzoneGroups.where('name').equals(newGroupName.trim()).first();
                 if (existing) {
-                    alert(`分组 "${newGroupName.trim()}" 已经存在了！`);
+                    showToast(`分组 "${newGroupName.trim()}" 已经存在了！`, 'error');
                     select.value = previousGroupId || ""; // 恢复之前的选择
                     return;
                 }
@@ -785,7 +789,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
                 
             await db.chats.put(chatData);
-            alert(`“${chatData.name}” 已被拉黑。`);
+            showToast(`“${chatData.name}” 已被拉黑。`);
             window.location.href = `charProfile.html?id=${charId}`;
         }
     });
@@ -796,7 +800,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (confirmed) {
             chatData.history = [];
             await db.chats.put(chatData);
-            alert('聊天记录已清空！');
+            showToast('聊天记录已清空！');
         }
     });
 
@@ -854,15 +858,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // 对于群聊，目前我们只删除群聊本身，成员角色保留。
                 });
 
-                alert(successMessage);
+                showToast(successMessage);
                 window.location.href = 'contacts.html';
 
             } catch (error) {
                 console.error("删除失败:", error);
-                alert("删除过程中发生错误，请查看控制台。");
+                showToast("删除过程中发生错误，请查看控制台。", 'error');
             }
         } else if (confirmation !== null) {
-            alert("输入的名称不匹配，删除操作已取消。");
+            showToast("输入的名称不匹配，删除操作已取消。", 'error');
         }
     });
 
@@ -1026,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function handleGenerateCss() {
         const promptText = aiBubblePromptInput.value.trim();
         if (!promptText) {
-            alert('请输入您想要的样式描述！');
+            showToast('请输入您想要的样式描述！', 'error');
             return;
         }
 
@@ -1039,8 +1043,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 从数据库获取当前激活的API配置
         const apiConfig = await getActiveApiProfile();
         if (!apiConfig) {
-            alert('请先在设置中配置API！');
-            generateCssBtn.textContent = '✨ AI 生成';
+            showToast('请先在设置中配置API！', 'error');
+            generateCssBtn.textContent = '生成';
             generateCssBtn.disabled = false;
             return;
         }
@@ -1136,9 +1140,9 @@ ${currentCss}
 
         } catch (error) {
             console.error("AI生成CSS失败:", error);
-            alert(`生成失败: ${error.message}`);
+            showToast(`生成失败: ${error.message}`, 'error');
         } finally {
-            generateCssBtn.textContent = '✨ AI 生成';
+            generateCssBtn.textContent = '生成';
             generateCssBtn.disabled = false;
         }
     }
@@ -1147,27 +1151,27 @@ ${currentCss}
     async function handleSaveCssPreset() {
         const cssCode = customBubbleCssInput.value.trim();
         if (!cssCode) {
-            alert('没有可保存的CSS样式。');
+            showToast('没有可保存的CSS样式。', 'error');
             return;
         }
 
         const presetName = prompt("为这个样式预设起个名字：");
         if (!presetName || !presetName.trim()) {
-            if (presetName !== null) alert("名字不能为空！");
+            if (presetName !== null) showToast("名字不能为空！", 'error');
             return;
         }
 
         try {
             await db.bubbleCssPresets.add({ name: presetName.trim(), cssCode });
-            alert('样式预设已保存！');
+            showToast('样式预设已保存！', 'success');
             // 重新加载并渲染预设列表
             await loadAndRenderCssPresets();
         } catch (error) {
             if (error.name === 'ConstraintError') {
-                alert(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`);
+                showToast(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`, 'error');
             } else {
                 console.error("保存CSS预设失败:", error);
-                alert("保存失败，详情请看控制台。");
+                showToast("保存失败，详情请看控制台。", 'error');
             }
         }
     }
@@ -1181,7 +1185,7 @@ ${currentCss}
     } else if (charId) {
         loadData(); // This function is now for existing characters only
     } else {
-        alert('无效的链接，缺少必要参数。');
+        showToast('无效的链接，缺少必要参数。', 'error');
         window.location.href = 'contacts.html';
     }
 });

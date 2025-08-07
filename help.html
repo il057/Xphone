@@ -872,6 +872,8 @@ html.dark #quick-start-guide .section-card-content p {
         </main>
     </div>
     <script>
+        import { showToast } from './ui-helpers.js';
+
         document.addEventListener('DOMContentLoaded', () => {
             const copyButton = document.getElementById('copy-prompt-btn');
             const codeBlock = document.getElementById('json-prompt-code');
@@ -885,7 +887,7 @@ html.dark #quick-start-guide .section-card-content p {
                         }, 2000);
                     }).catch(err => {
                         console.error('无法复制文本: ', err);
-                        alert('复制失败');
+                        showToast('复制失败', 'error');
                     });
                 });
             }

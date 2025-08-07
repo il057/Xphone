@@ -1,6 +1,6 @@
 // phone/stickers.js (使用共享UI组件的新版本)
 import { db, uploadImage, getActiveApiProfile } from './db.js';
-import { showUploadChoiceModal, promptForInput } from './ui-helpers.js';
+import { showUploadChoiceModal, promptForInput, showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
@@ -86,12 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (choice.type === 'local') {
             const apiConfig = await db.globalSettings.get('main');
             if (!apiConfig?.cloudinaryCloudName || !apiConfig?.cloudinaryUploadPreset) {
-                alert("请先在“设置”页面配置 Cloudinary！");
+                showToast("请先在“设置”页面配置 Cloudinary！", 'error');
                 return;
             }
             try {
                 imageUrl = await uploadImage(choice.value); // choice.value 是 File 对象
             } catch (error) {
+                showToast(error.message, 'error');
                 console.error("上传或保存表情失败:", error);
                 return;
             }
@@ -114,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await db.userStickers.add({ url, name, order: newOrder });
             await renderStickers();
         } catch (e) {
-            alert(e.name === 'ConstraintError' ? '这个表情已经添加过了！' : '添加失败，请检查URL。');
+            showToast(e.name === 'ConstraintError' ? '这个表情已经添加过了！' : '添加失败，请检查URL。', 'error');
         }
     }
 
@@ -144,13 +145,13 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const convertedJson = await convertTextToJsonWithAI(jsonInput);
                 if (!convertedJson) {
-                    alert("AI无法将文本转换为有效的JSON格式，请检查您的文本或API设置。");
+                    showToast("AI无法将文本转换为有效的JSON格式，请检查您的文本或API设置。", 'error');
                     return; // 提前返回
                 }
                 stickersToAdd = convertedJson;
             } catch (aiError) {
                 console.error("AI转换过程中出错:", aiError);
-                alert(`AI转换失败: ${aiError.message}`);
+                showToast(`AI转换失败: ${aiError.message}`, 'error');
                 return; // 提前返回
             } finally {
                 // 无论成功或失败，最后都恢复按钮状态
@@ -184,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (validStickers.length === 0) {
-                alert("没有找到有效的表情数据来添加。");
+                showToast("没有找到有效的表情数据来添加。", 'error');
                 return;
             }
 
@@ -198,12 +199,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             await db.userStickers.bulkAdd(stickersWithOrder);
 
-            alert(`成功添加了 ${validStickers.length} 个表情！${invalidStickers.length > 0 ? `\n有 ${invalidStickers.length} 个格式错误的条目被忽略。` : ''}`);
+            showToast(`成功添加了 ${validStickers.length} 个表情！${invalidStickers.length > 0 ? `\n有 ${invalidStickers.length} 个格式错误的条目被忽略。` : ''}`);
             await renderStickers();
 
         } catch (processingError) {
             console.error("批量添加表情失败:", processingError);
-            alert(`添加失败：\n${processingError.message}\n请检查JSON格式是否正确。`);
+            showToast(`添加失败：\n${processingError.message}\n请检查JSON格式是否正确。`, 'error');
         }
     }
 
@@ -212,12 +213,12 @@ async function convertTextToJsonWithAI(text) {
     const apiConfig = await getActiveApiProfile(); 
 
     if (!apiConfig || !apiConfig.apiKey || !apiConfig.model) {
-        alert("AI转换功能需要有效的API配置。请前往“设置”页面检查您的API方案。");
+        showToast("AI转换功能需要有效的API配置。请前往“设置”页面检查您的API方案。", 'error');
         throw new Error("API configuration is missing.");
     }
     // 对非Gemini服务商检查proxyUrl
     if (apiConfig.apiProvider !== 'gemini' && !apiConfig.proxyUrl) {
-         alert("使用默认/反代服务商时，AI API地址不能为空。请前往“设置”检查。");
+         showToast("使用默认/反代服务商时，AI API地址不能为空。请前往“设置”检查。", 'error');
         throw new Error("Proxy URL is missing for default provider.");
     }
             
@@ -306,7 +307,7 @@ ${text}
     bulkAddBtn.addEventListener('click', handleBulkAdd);
 
     moveTopBtn.addEventListener('click', async () => {
-        if (selectedStickers.size === 0) return alert('请先选择要操作的表情。');
+        if (selectedStickers.size === 0) return showToast('请先选择要操作的表情。', 'error');
         const highestOrder = await db.userStickers.orderBy('order').last();
         const newOrder = (highestOrder?.order || 0) + 1;
         const updates = Array.from(selectedStickers).map(id => ({
@@ -318,7 +319,7 @@ ${text}
     });
 
     deleteSelectedBtn.addEventListener('click', async () => {
-        if (selectedStickers.size === 0) return alert('请先选择要操作的表情。');
+        if (selectedStickers.size === 0) return showToast('请先选择要操作的表情。', 'error');
         if (confirm(`确定要删除选中的 ${selectedStickers.size} 个表情吗？`)) {
             await db.userStickers.bulkDelete(Array.from(selectedStickers));
             toggleEditMode();

@@ -87,7 +87,7 @@
 
     <script type="module">
         import { db, uploadImage } from './db.js';
-        import { showUploadChoiceModal, promptForInput } from './ui-helpers.js';
+        import { showUploadChoiceModal, promptForInput, showToast } from './ui-helpers.js';
 
         // --- DOM Elements ---
         const gridEl = document.getElementById('photo-grid');
@@ -131,6 +131,7 @@
                 try {
                     imageUrl = await uploadImage(choice.value); // choice.value 现在是 File 对象
                 } catch (error) {
+                    showToast(error.message, 'error');
                     console.error("上传或保存照片失败:", error);
                     return; // 上传失败则中止
                 }

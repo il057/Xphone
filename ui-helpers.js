@@ -70,7 +70,7 @@ export function promptForInput(title, placeholder = '', isTextarea = false, isOp
         const handleConfirm = () => {
             const value = inputField.value.trim();
             if (!value && !isOptional) { // 只有在非可选时才检查
-                alert("内容不能为空！");
+                showToast("内容不能为空！", 'error');
                 return;
             }
             cleanup();
@@ -158,7 +158,7 @@ export function showUploadChoiceModal(fileInputElement) {
         const handleUrl = () => {
             const url = urlInput.value.trim();
             if (!url || !url.startsWith('http')) {
-                alert("请输入有效的图片URL。");
+                showToast("请输入有效的图片URL。", 'error');
                 return;
             }
             cleanup();
@@ -376,4 +376,42 @@ export function showCallActionModal() {
             resolve(null);
         }, { once: true });
     });
+}
+
+/**
+ * 在屏幕顶部显示一个短暂的、非阻塞的提示消息。
+ * @param {string} message - 要显示的消息内容。
+ * @param {'info' | 'success' | 'error'} [type='info'] - 提示的类型，决定其样式。
+ */
+export function showToast(message, type = 'info') {
+    // 防止在同一个短暂时间内创建多个toast
+    if (document.querySelector('.toast-notification')) {
+        return;
+    }
+
+    // 1. 创建 Toast 元素
+    const toast = document.createElement('div');
+    // 根据类型赋予不同的样式类
+    toast.className = `toast-notification toast-${type}`;
+    toast.textContent = message;
+
+    // 2. 添加到页面
+    document.body.appendChild(toast);
+
+    // 3. 触发进入动画
+    // 使用短暂延迟确保浏览器能够渲染初始状态并应用过渡效果
+    setTimeout(() => {
+        toast.classList.add('toast-visible');
+    }, 10);
+
+    // 4. 设置定时器，在2.5秒后触发退出动画
+    setTimeout(() => {
+        toast.classList.remove('toast-visible');
+        // 在退出动画（0.3秒）结束后，从DOM中彻底移除元素
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.parentElement.removeChild(toast);
+            }
+        }, 300); 
+    }, 2500);
 }

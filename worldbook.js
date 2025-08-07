@@ -1,6 +1,7 @@
 // settings.js
 // Import the shared database instance from db.js
 import { db } from './db.js';
+import { showToast } from './ui-helpers.js';
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -48,11 +49,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         try {
                             await db.worldBooks.delete(book.id);
                             // TODO: 还需要更新所有关联了此世界书的聊天设置
-                            alert('删除成功！');
+                            showToast('删除成功！');
                             renderWorldBookList();
                         } catch (error) {
                             console.error('删除世界书失败:', error);
-                            alert('删除失败，详情请看控制台。');
+                            showToast('删除失败，详情请看控制台。', 'error');
                         }
                     }
                 }, 500); // 500毫秒触发长按

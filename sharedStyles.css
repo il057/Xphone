@@ -439,6 +439,45 @@ main.no-scroll {
 .message-content-column {
     /* 1 1 auto: 允许增长，允许收缩，基础宽度自动 */
     flex: 1 1 auto;
-    /* 关键修复：允许flex项收缩至小于其内容尺寸，从而触发内容换行 */
+    /* 允许flex项收缩至小于其内容尺寸，从而触发内容换行 */
     min-width: 0;
+}
+
+/* --- Toast Notification Styles --- */
+.toast-notification {
+    position: fixed;
+    /* 优先使用安全区域顶部边距，并额外增加10px间距，以适配iPhone刘海屏等设备 */
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    left: 50%;
+    /* 初始位置在屏幕上方偏外，配合动画滑入 */
+    transform: translate(-50%, -20px);
+    padding: 10px 20px;
+    border-radius: 9999px; /* 胶囊形状 */
+    color: white;
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 90%;
+}
+
+.toast-notification.toast-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* 常规/成功提示的样式 (灰色) */
+.toast-notification.toast-info,
+.toast-notification.toast-success {
+    background-color: rgba(55, 65, 81, 0.8); /* bg-gray-700 with opacity */
+}
+
+/* 错误/紧急提示的样式 (红色) */
+.toast-notification.toast-error {
+    background-color: rgba(220, 38, 38, 0.85); /* bg-red-600 with opacity */
 }

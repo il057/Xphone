@@ -1,6 +1,7 @@
 // phone/music.js
 
 import * as spotifyManager from './spotifyManager.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const musicContainer = document.getElementById('music-container');
@@ -124,7 +125,7 @@ async function renderStatus() {
                 if (pastedCode) {
                     spotifyManager.getAccessToken(pastedCode);
                 } else {
-                    alert("请输入授权码");
+                    showToast("请输入授权码", "error");
                 }
             });
         }

@@ -251,6 +251,7 @@
     
 <script type="module">
     import { db } from './db.js';
+    import { showToast } from './ui-helpers.js';
 
     // 固定ID，用于区分“当前用户”，而不是依赖易变的昵称
     const CURRENT_USER_ID = 'user';
@@ -664,8 +665,8 @@
         const publicText = postModal.querySelector('#post-public-text').value.trim();
         const imageDesc = postModal.querySelector('#post-image-description').value.trim();
 
-        if (currentPostPayload.type === 'image' && !imageDesc) return alert('图片描述不能为空！');
-        if (currentPostPayload.type === 'text' && !publicText) return alert('动态内容不能为空！');
+        if (currentPostPayload.type === 'image' && !imageDesc) return showToast('图片描述不能为空！', 'error');
+        if (currentPostPayload.type === 'text' && !publicText) return showToast('动态内容不能为空！', 'error');
 
         const newPostData = {
             authorId: CURRENT_USER_ID,

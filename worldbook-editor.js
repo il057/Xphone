@@ -1,6 +1,7 @@
 // settings.js
 // Import the shared database instance from db.js
 import { db } from './db.js';
+import { showToast } from './ui-helpers.js';
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 nameInput.value = book.name;
                 contentInput.value = book.content || '';
             } else {
-                alert('找不到要编辑的世界书！');
+                showToast('找不到要编辑的世界书！', 'error');
                 window.location.href = 'worldbook.html';
             }
         } else {
@@ -45,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = contentInput.value.trim();
 
         if (!name) {
-            alert('世界书的名字不能为空！');
+            showToast('世界书的名字不能为空！', 'error');
             return;
         }
         
@@ -65,12 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 await db.worldBooks.add(newBook);
             }
-            alert('保存成功！');
+            showToast('保存成功！');
             window.location.href = 'worldbook.html';
 
         } catch (error) {
             console.error('保存世界书失败:', error);
-            alert('保存失败，详情请看控制台。');
+            showToast('保存失败，详情请看控制台。', 'error');
         } finally {
             saveBtn.textContent = '保存';
             saveBtn.disabled = false;

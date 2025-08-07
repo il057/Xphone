@@ -151,8 +151,7 @@ export async function uploadImage(file) {
 
     // 2. 检查配置是否存在
     if (!cloudName || !uploadPreset) {
-        alert("本地上传失败：请先在“设置”页面中填写你的 Cloudinary Cloud Name 和 Upload Preset。");
-        throw new Error("Cloudinary configuration is missing.");
+        throw new Error("请先在“设置”页面中填写你的 Cloudinary Cloud Name 和 Upload Preset。");
     }
 
     // 3. 构建上传请求
@@ -189,7 +188,6 @@ export async function uploadImage(file) {
         return result.secure_url;
     } catch (error) {
         console.error('Cloudinary 图片上传失败:', error);
-        alert(`图片上传失败: ${error.message}`);
         throw error;
     } finally {
         // 7. 移除加载提示

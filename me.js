@@ -1,5 +1,6 @@
 import { db, uploadImage } from './db.js'; 
-import { showUploadChoiceModal, showImagePickerModal } from './ui-helpers.js';
+import { showUploadChoiceModal, showImagePickerModal, showToast } from './ui-helpers.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- STATE ---
@@ -172,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. 使用 .put() 保存，该方法会自动处理新建或更新
         await db.globalSettings.put(settings);
         
-        alert('默认人格设置成功！');
+        showToast('默认人格设置成功！');
         
         // 刷新主界面和模态框列表
         await initializePage();
@@ -190,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     
         if (!updatedData.name) {
-            alert('名字不能为空！');
+            showToast('名字不能为空！', 'error');
             return;
         }
         
@@ -202,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await initializePage();
         }
 
-        alert('保存成功！');
+        showToast('保存成功！');
         await renderPersonaList();
     }
 
@@ -277,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleDeleteUserAvatar(avatarToDelete) {
         if (confirm('确定要从头像库中删除这个头像吗？')) {
             await db.userAvatarLibrary.delete(avatarToDelete.id);
-            alert('头像已删除。');
+            showToast('头像已删除。');
             await openUserAvatarPicker(activePersonaIdForAvatar); // 重新加载头像库
         }
     }
@@ -292,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (choice.type === 'local') {
             const apiConfig = await db.globalSettings.get('main');
             if (!apiConfig?.cloudinaryCloudName || !apiConfig?.cloudinaryUploadPreset) {
-                alert("请先在“设置”页面配置 Cloudinary！");
+                showToast("请先在“设置”页面配置 Cloudinary！", 'error');
                 return;
             }
             try {
@@ -311,11 +312,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveNewUserAvatar(url) {
         try {
             await db.userAvatarLibrary.add({ url });
-            alert('新头像已添加到你的头像库！');
+            showToast('新头像已添加到你的头像库！');
             // 重新打开选择器，让用户可以选择刚刚上传的头像
             await openUserAvatarPicker(activePersonaIdForAvatar);
         } catch (e) {
-            alert('添加失败，可能该头像已存在。');
+            showToast('添加失败，可能该头像已存在。', 'error');
         }
     }
 

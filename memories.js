@@ -1,5 +1,6 @@
 // phone/memories.js
 import { db } from './db.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -14,23 +15,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const editTextArea = document.getElementById('edit-textarea');
     const saveEditBtn = document.getElementById('save-edit');
     const cancelEditBtn = document.getElementById('cancel-edit');
-    const headerTitle = document.querySelector('h1.text-base'); // 获取标题元素
-    const backBtn = document.querySelector('a.header-btn');     // 获取返回按钮
-    const filterBtnContainer = document.getElementById('filter-btn').parentElement; // 获取筛选按钮的容器
-    
-    
+    const headerTitle = document.querySelector('h1.text-base');
+    const backBtn = document.querySelector('a.header-btn');
+    const filterBtnContainer = document.getElementById('filter-btn').parentElement;
+
     // --- State ---
     let allMemories = [];
-    let allChats = {};
+    let chatsMap = {};
     let activeTimers = [];
     let currentFilter = 'all';
     let editingMemoryId = null;
     let themeColor = '#3b82f6';
     const defaultAvatar = 'https://files.catbox.moe/kkll8p.svg';
+    
+    // --- Lazy Loading State ---
+    const ITEMS_PER_PAGE = 10;
+    let currentPage = 1;
+    let isLoading = false;
+    let filteredMemories = [];
 
     // --- Data Loading ---
-    async function loadData() {
-        [allMemories, allChats] = await Promise.all([
+    async function loadAllData() {
+        [allMemories, chatsMap] = await Promise.all([
             db.memories.orderBy('timestamp').reverse().toArray(),
             db.chats.toArray().then(chats => chats.reduce((acc, chat) => {
                 acc[chat.id] = chat;
@@ -39,33 +45,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]);
         populateFilterDropdown();
     }
-
-    // --- Rendering ---
-    function renderMemories() {
-        // Stop previous timers
-        activeTimers.forEach(clearInterval);
-        activeTimers = [];
-        listEl.innerHTML = '';
-
-        const memoriesToRender = allMemories.filter(mem => {
+    
+    function applyFilterAndSort() {
+        filteredMemories = allMemories.filter(mem => {
             if (currentFilter === 'all') return true;
-            return mem.authorName === currentFilter;
+            const chat = chatsMap[mem.chatId];
+            const authorName = chat ? chat.name : mem.authorName;
+            return authorName === currentFilter;
         });
 
-        memoriesToRender.sort((a, b) => {
+        filteredMemories.sort((a, b) => {
             const scoreA = (a.type === 'countdown' && a.targetDate > Date.now() ? 20 : 0) + (a.isImportant ? 10 : 0);
             const scoreB = (b.type === 'countdown' && b.targetDate > Date.now() ? 20 : 0) + (b.isImportant ? 10 : 0);
             if (scoreA !== scoreB) {
                 return scoreB - scoreA;
             }
-            return b.timestamp - a.timestamp; // 如果重要性相同，则按时间排序
+            return b.timestamp - a.timestamp;
         });
+    }
 
-
-        if (memoriesToRender.length === 0) {
-            listEl.innerHTML = '<p class="text-center text-gray-500 py-8">没有找到相关回忆或约定</p>';
-            return;
+    // --- Rendering ---
+    function renderMoreMemories() {
+        if (isLoading) return;
+        
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        if (startIndex >= filteredMemories.length) {
+             if(currentPage === 1 && filteredMemories.length === 0) {
+                listEl.innerHTML = '<p class="text-center text-gray-500 py-8">没有找到相关回忆或约定</p>';
+            }
+            return; // No more items
         }
+
+        isLoading = true;
+        
+        const memoriesToRender = filteredMemories.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
         memoriesToRender.forEach(item => {
             let card;
@@ -76,11 +89,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             listEl.appendChild(card);
         });
+        
+        currentPage++;
+        isLoading = false;
+    }
+    
+    function initialRender() {
+        // Stop previous timers
+        activeTimers.forEach(clearInterval);
+        activeTimers = [];
+        listEl.innerHTML = '';
+        currentPage = 1;
+        
+        applyFilterAndSort();
+        renderMoreMemories(); // Render the first page
     }
 
     function createDiaryCard(memory) {
         const card = document.createElement('div');
-        // 核心记忆不再有特殊背景色，只通过边框和图钉颜色区分
         card.className = "bg-white p-4 rounded-lg shadow-sm flex flex-col gap-3";
         if (memory.isImportant) {
             card.classList.add('border-l-4');
@@ -90,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const memoryDate = new Date(memory.timestamp);
         const dateString = `${memoryDate.getFullYear()}-${String(memoryDate.getMonth() + 1).padStart(2, '0')}-${String(memoryDate.getDate()).padStart(2, '0')} ${String(memoryDate.getHours()).padStart(2, '0')}:${String(memoryDate.getMinutes()).padStart(2, '0')}`;
         
-        const chat = allChats[memory.chatId];
+        const chat = chatsMap[memory.chatId];
         const authorName = chat ? chat.name : memory.authorName;
         const authorAvatar = chat ? (chat.settings.aiAvatar || defaultAvatar) : defaultAvatar;
 
@@ -102,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         pinBtn.className = "pin-btn";
         pinBtn.title = "切换核心记忆";
         pinBtn.innerHTML = pinIconSVG;
-        pinBtn.style.color = memory.isImportant ? themeColor : '#9ca3af'; // gray-400
+        pinBtn.style.color = memory.isImportant ? themeColor : '#9ca3af';
 
         card.innerHTML = `
             <div class="flex items-center justify-between">
@@ -161,7 +187,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (distance < 0) {
                     clearInterval(timer);
-                    renderMemories(); // [修改] 倒计时结束后重绘整个列表，以更新排序和样式
+                    initialRender();
                     return;
                 }
 
@@ -169,18 +195,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                
+                const countdownEl = document.getElementById(countdownId);
+                if (countdownEl) {
+                    countdownEl.textContent = `${days}天 ${hours}时 ${minutes}分 ${seconds}秒`;
+                } else {
+                    clearInterval(timer); // Stop if element is gone
+                }
 
-                document.getElementById(countdownId).textContent = `${days}天 ${hours}时 ${minutes}分 ${seconds}秒`;
             }, 1000);
             activeTimers.push(timer);
         }
         return card;
     }
 
-
     // --- Event Handlers & Logic ---
     function populateFilterDropdown() {
-        const authors = [...new Set(allMemories.map(mem => mem.authorName))];
+        const authors = [...new Set(allMemories.map(mem => {
+            const chat = chatsMap[mem.chatId];
+            return chat ? chat.name : mem.authorName;
+        }))];
         charFilterSelect.innerHTML = '<option value="all">显示全部</option>';
         authors.forEach(author => {
             const option = document.createElement('option');
@@ -200,25 +234,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const newIsImportant = memory.isImportant ? 0 : 1;
         await db.memories.update(id, { isImportant: newIsImportant });
         
-        // 重新加载并渲染以反映排序和样式的变化
-        await loadData();
-        renderMemories();
+        await loadAllData();
+        initialRender();
     }
 
     async function handleDelete(id) {
         const memoryToDelete = allMemories.find(m => m.id === id);
         if (!memoryToDelete) return;
 
-        // 从 allChats 获取最新名字用于提示
-        const chat = allChats[memoryToDelete.chatId];
+        const chat = chatsMap[memoryToDelete.chatId];
         const authorName = chat ? chat.name : memoryToDelete.authorName;
 
         const confirmed = confirm(`确定要删除这条来自 “${authorName}” 的记录吗？`);
         if (confirmed) {
             await db.memories.delete(id);
-            // 重新加载数据并渲染
-            await loadData();
-            renderMemories();
+            await loadAllData();
+            initialRender();
         }
     }
 
@@ -232,29 +263,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!editingMemoryId) return;
         const newDescription = editTextArea.value.trim();
         if (!newDescription) {
-            alert("内容不能为空！");
+            showToast("内容不能为空！", 'error');
             return;
         }
         await db.memories.update(editingMemoryId, { description: newDescription });
         editModal.classList.add('hidden');
         editingMemoryId = null;
-        await loadData();
-        renderMemories();
+        await loadAllData();
+        initialRender();
     }
 
     // --- 颜色工具函数 ---
     function hexToRgba(hex, alpha = 1) {
-        if (!hex || !hex.startsWith('#')) return `rgba(238, 242, 255, ${alpha})`; // 返回一个安全的默认色
-        
+        if (!hex || !hex.startsWith('#')) return `rgba(238, 242, 255, ${alpha})`;
         const hexValue = hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex;
-        
         const r = parseInt(hexValue.slice(1, 3), 16);
         const g = parseInt(hexValue.slice(3, 5), 16);
         const b = parseInt(hexValue.slice(5, 7), 16);
-
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
-
 
     // --- Event Listeners ---
     filterBtn.addEventListener('click', () => filterModal.classList.remove('hidden'));
@@ -262,7 +289,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyFilterBtn.addEventListener('click', () => {
         currentFilter = charFilterSelect.value;
         filterModal.classList.add('hidden');
-        renderMemories();
+        initialRender();
+    });
+
+    listEl.addEventListener('scroll', () => {
+        if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 100) {
+            renderMoreMemories();
+        }
     });
 
     listEl.addEventListener('click', (e) => {
@@ -292,8 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filterAuthorId = urlParams.get('authorId');
         const backTo = urlParams.get('backTo');
 
-        // --- [修改] 主题色决定逻辑 ---
-        const bubbleThemes = [ // 定义预设主题用于查找
+        const bubbleThemes = [
             { name: '默认', value: 'default', colors: { userBg: '#dcf8c6' } },
             { name: '粉蓝', value: 'pink_blue', colors: { userBg: '#eff7ff' } },
             { name: '蓝白', value: 'blue_white', colors: { userBg: '#eff7ff' } },
@@ -301,12 +333,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             { name: '黑白', value: 'black_white', colors: { userBg: '#343a40' } },
         ];
         
-        // 1. 先加载所有数据
-        await loadData(); 
+        await loadAllData(); 
 
-        if (filterAuthorId && allChats[filterAuthorId]) {
-            // 情境A: 查看特定角色的回忆
-            const character = allChats[filterAuthorId];
+        if (filterAuthorId && chatsMap[filterAuthorId]) {
+            const character = chatsMap[filterAuthorId];
             const charThemeSetting = character.settings?.theme;
             let finalThemeColors = null;
 
@@ -335,19 +365,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.documentElement.style.setProperty('--theme-color', themeColor);
         // ---  UI定制逻辑，现在可以安全使用已设置好的 themeColor ---
         const filterBtnUiContainer = document.getElementById('filter-btn-container');
-        if (filterAuthorId && allChats[filterAuthorId]) {
-            const authorName = allChats[filterAuthorId].name;
+        if (filterAuthorId && chatsMap[filterAuthorId]) {
+            const authorName = chatsMap[filterAuthorId].name;
             currentFilter = authorName;
-
             headerTitle.textContent = `与 ${authorName} 的回忆`;
             filterBtnUiContainer.style.display = 'none';
-
             if (backTo === 'charProfile') {
                 backBtn.href = `charProfile.html?id=${filterAuthorId}`;
             }
         }
 
-        renderMemories(); // 最后渲染页面内容
+        initialRender();
     }
     main();
 });

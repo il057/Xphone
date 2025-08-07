@@ -65,19 +65,43 @@
     <script type="module">
         import { db } from './db.js';
 
+        const mainContent = document.querySelector('main.main-content');
         const listEl = document.getElementById('favorites-list');
 
-        async function renderFavorites() {
-            listEl.innerHTML = '<p class="text-center text-gray-500">加载中...</p>';
-            
-            const favorites = await db.favorites.orderBy('timestamp').reverse().toArray();
-            const chats = await db.chats.toArray().then(c => c.reduce((map, obj) => (map[obj.id] = obj, map), {}));
-            const xzoneSettings = await db.xzoneSettings.get('main') || {};
+        let offset = 0;
+        const limit = 10;
+        let isLoading = false;
+        let allFavoritesLoaded = false;
+        let chatsMap = {};
+        let xzoneSettings = {};
 
-            listEl.innerHTML = '';
+        async function loadAndRenderFavorites() {
+            if (isLoading || allFavoritesLoaded) return;
+            isLoading = true;
+
+            if (offset === 0) {
+                listEl.innerHTML = '<p class="text-center text-gray-500">加载中...</p>';
+            }
+
+            const [favorites, chats, settings] = await Promise.all([
+                db.favorites.orderBy('timestamp').reverse().offset(offset).limit(limit).toArray(),
+                Object.keys(chatsMap).length === 0 ? db.chats.toArray().then(c => c.reduce((map, obj) => (map[obj.id] = obj, map), {})) : Promise.resolve(chatsMap),
+                Object.keys(xzoneSettings).length === 0 ? db.xzoneSettings.get('main').then(s => s || {}) : Promise.resolve(xzoneSettings)
+            ]);
+            
+            chatsMap = chats;
+            xzoneSettings = settings;
+
+            if (offset === 0) {
+                listEl.innerHTML = ''; // Clear loading text
+            }
 
             if (favorites.length === 0) {
-                listEl.innerHTML = '<p class="text-center text-gray-500 py-8">收藏夹是空的</p>';
+                allFavoritesLoaded = true;
+                if (offset === 0) {
+                    listEl.innerHTML = '<p class="text-center text-gray-500 py-8">收藏夹是空的</p>';
+                }
+                isLoading = false;
                 return;
             }
 
@@ -96,14 +120,14 @@
                     if (post.authorId === 'user') {
                         authorName = xzoneSettings.nickname || '我';
                         authorAvatar = xzoneSettings.avatar;
-                    } else if (chats[post.authorId]) {
-                        authorName = chats[post.authorId].name;
-                        authorAvatar = chats[post.authorId].settings.aiAvatar;
+                    } else if (chatsMap[post.authorId]) {
+                        authorName = chatsMap[post.authorId].name;
+                        authorAvatar = chatsMap[post.authorId].settings.aiAvatar;
                     }
                     contentHtml = `<p class="mt-2">${post.content || post.publicText}</p>${post.imageUrl ? `<img src="${post.imageUrl}" class="mt-2 rounded-lg w-full">` : ''}`;
                 } else if (item.type === 'chat_message') {
                     const msg = item.content;
-                    const chat = chats[item.chatId];
+                    const chat = chatsMap[item.chatId];
                     sourceText = `来自与 ${chat.name} 的聊天・${new Date(item.timestamp).toLocaleDateString()}`;
                     if (msg.role === 'user') {
                         authorName = chat.isGroup ? (chat.settings.myNickname || '我') : '我';
@@ -131,14 +155,24 @@
                 delBtn.title = '取消收藏';
                 delBtn.onclick = async () => {
                     await db.favorites.delete(item.id);
-                    renderFavorites();
+                    // Instead of full re-render, just remove the element
+                    card.remove();
                 };
                 card.appendChild(delBtn);
                 listEl.appendChild(card);
             });
+
+            offset += favorites.length;
+            isLoading = false;
         }
         
-        document.addEventListener('DOMContentLoaded', renderFavorites);
+        mainContent.addEventListener('scroll', () => {
+            if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 200) {
+                loadAndRenderFavorites();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', loadAndRenderFavorites);
     </script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 import { db } from './db.js';
 import { showAlbumPickerModal } from './ui-helpers.js';
 import { applyThemeMode  } from './applyGlobalStyles.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DB & State ---
@@ -131,11 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             presetContainer.classList.remove('edit-mode'); 
             
-            alert('个性化设置已保存！');
+            showToast('个性化设置已保存！');
 
         } catch (error) {
             console.error("保存设置失败:", error);
-            alert("保存失败，请查看控制台获取错误信息。");
+            showToast("保存失败，请查看控制台获取错误信息。", 'error');
         } finally {
             saveAllBtn.textContent = '保存';
             saveAllBtn.disabled = false;
@@ -265,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setActiveSwatch(null);
             customColorMaker.classList.add('hidden');
         } else {
-            alert("请输入一个有效的图片URL。");
+            showToast("请输入一个有效的图片URL。", "error");
         }
     });
 
@@ -356,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 theme: themeColorPicker.value
             });
             renderPresets();
-            alert('预设已保存！将在下次点击"保存"按钮后生效。');
+            showToast('预设已保存！将在下次点击"保存"按钮后生效。');
         }
     });
     
@@ -374,7 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fontUrlInput.value = '';
             applyCustomFont(''); // Apply reset immediately
             // The change will be persisted on the next "Save All" click
-            alert("已恢复默认字体。请点击顶部的“保存”按钮以应用更改。");
+            showToast("已恢复默认字体。请点击顶部的“保存”按钮以应用更改。");
         }
     });
     

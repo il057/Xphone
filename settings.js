@@ -2,6 +2,7 @@
 // Import the shared database instance from db.js
 import { db } from './db.js';
 import { startActiveSimulation, stopActiveSimulation } from './simulationEngine.js';
+import { showToast } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -174,12 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // 如果启用了后台活动，启动模拟引擎
             await db.globalSettings.put(state.globalSettings);
 
-            alert('设置已成功保存！');
+            showToast('设置已成功保存！');
             await main();
 
         } catch (error) {
             console.error("保存设置失败:", error);
-            alert("保存失败，请查看控制台获取错误信息。");
+            showToast("保存失败，请查看控制台获取错误信息。", 'error');
         } finally {
             saveBtn.textContent = '保存';
             saveBtn.disabled = false;
@@ -203,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
         } else {
             if (!url) {
-                alert('请填写反代地址');
+                showToast('请填写反代地址', 'error');
                 return;
             }
             fetchUrl = `${url}/v1/models`;
@@ -240,9 +241,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 modelSelect.appendChild(option);
             });
-            alert('模型列表已更新');
+            showToast('模型列表已更新');
         } catch (error) {
-            alert(`拉取模型失败: ${error.message}`);
+            showToast(`拉取模型失败: ${error.message}`, 'error');
         } finally {
             fetchBtn.textContent = '拉取';
             fetchBtn.disabled = false;
@@ -292,11 +293,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            alert('导出成功！已将备份文件下载到您的设备。');
+            showToast('导出成功！已将备份文件下载到您的设备。');
 
         } catch (error) {
             console.error("导出数据时出错:", error);
-            alert(`导出失败: ${error.message}`);
+            showToast(`导出失败: ${error.message}`, 'error');
         }
     }
 
@@ -386,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            alert('导入成功！所有数据已成功恢复！页面即将刷新以应用所有更改。');
+            showToast('导入成功！所有数据已成功恢复！页面即将刷新以应用所有更改。');
 
             setTimeout(() => {
                 window.location.reload();
@@ -394,30 +395,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error("导入数据时出错:", error);
-            alert(`导入失败: 文件格式不正确或数据已损坏: ${error.message}`);
+            showToast(`导入失败: 文件格式不正确或数据已损坏: ${error.message}`, 'error');
         }
     }
 
     function handleEnableNotifications() {
         if (!("Notification" in window)) {
-            alert("抱歉，您的浏览器不支持桌面通知。");
+            showToast("抱歉，您的浏览器不支持桌面通知。", "error");
             return;
         }
 
         if (Notification.permission === "granted") {
-            alert("通知权限已经开启！");
+            showToast("通知权限已经开启！");
             new Notification("弦镜通知测试", { body: "如果看到这条消息，说明通知功能一切正常。" });
         } else if (Notification.permission !== "denied") {
             Notification.requestPermission().then(permission => {
                 if (permission === "granted") {
-                    alert("通知权限已成功开启！");
+                    showToast("通知权限已成功开启！");
                     new Notification("弦镜通知测试", { body: "您将会在后台收到角色的消息提醒。" });
                 } else {
-                    alert("您拒绝了通知权限，将无法收到后台消息提醒。");
+                    showToast("您拒绝了通知权限，将无法收到后台消息提醒。", "error");
                 }
             });
         } else {
-            alert("通知权限已被禁用。请在您的浏览器设置中手动开启本网站的通知权限。");
+            showToast("通知权限已被禁用。请在您的浏览器设置中手动开启本网站的通知权限。", "error");
         }
     }
 
@@ -499,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const gistId = syncGistIdInput.value.trim();
 
         if (!token || !gistId) {
-            alert('请先填写您的 GitHub Personal Access Token 和 Gist ID。');
+            showToast('请先填写您的 GitHub Personal Access Token 和 Gist ID。', 'error');
             return;
         }
         if (!confirm("确定要上传当前所有数据吗？这将覆盖云端的旧数据。")) return;
@@ -533,10 +534,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json();
                 throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
-            alert('数据上传成功！');
+            showToast('数据上传成功！');
         } catch (error) {
             console.error('上传失败:', error);
-            alert(`上传失败: ${error.message}`);
+            showToast(`上传失败: ${error.message}`, 'error');
         } finally {
             uploadDataBtn.textContent = '上传数据到云端';
             uploadDataBtn.disabled = false;
@@ -551,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const gistId = syncGistIdInput.value.trim();
 
         if (!token || !gistId) {
-            alert('请先填写您的 GitHub Personal Access Token 和 Gist ID。');
+            showToast('请先填写您的 GitHub Personal Access Token 和 Gist ID。', 'error');
             return;
         }
         if (!confirm('【严重警告】\n\n此操作将从云端下载数据并完全覆盖您当前设备上的所有数据！此操作不可撤销！\n\n确定要继续吗？')) return;
@@ -600,12 +601,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            alert('数据同步成功！页面即将刷新以应用所有更改。');
+            showToast('数据同步成功！页面即将刷新以应用所有更改。');
             setTimeout(() => window.location.reload(), 1500);
 
         } catch (error) {
             console.error('下载并恢复失败:', error);
-            alert(`下载并恢复失败: ${error.message}`);
+            showToast(`下载并恢复失败: ${error.message}`, 'error');
         } finally {
             downloadDataBtn.textContent = '从云端下载并覆盖本地';
             downloadDataBtn.disabled = false;
