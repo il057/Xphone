@@ -2,7 +2,7 @@
 // Import the shared database instance from db.js
 import { db, uploadImage, getActiveApiProfile } from './db.js'; 
 import { showUploadChoiceModal, showImagePickerModal, showAlbumPickerModal, promptForInput } from './ui-helpers.js'; // 导入三个助手
-import { showToast, showToastOnNextPage } from './ui-helpers.js';
+import { showToast, showToastOnNextPage, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DB & State ---
@@ -240,7 +240,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 为删除按钮添加点击事件
             deleteBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); // 防止触发色板的点击事件
-                if (confirm(`确定要删除预设 “${preset.name}” 吗？此操作不可恢复。`)) {
+                const confirmed = await showConfirmModal(
+                    '删除预设',
+                    `确定要删除预设 “${preset.name}” 吗？此操作不可恢复。`,
+                    '删除',
+                    '取消'
+                );
+                if (confirmed) {
                     // 从数据库删除
                     await db.bubbleThemePresets.delete(preset.name);
                     // 从内存中删除
@@ -493,17 +499,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function handleDeleteCharAvatar(avatarToDelete) {
-        if (confirm(`确定要删除头像 “${avatarToDelete.name}” 吗？`)) {
-            // 使用唯一的 ID 来精确查找和删除
-            const indexToDelete = chatData.settings.aiAvatarLibrary.findIndex(avatar => avatar.id === avatarToDelete.id);
+        const confirmed = await showConfirmModal(
+            '删除头像',
+            `确定要删除头像 “${avatarToDelete.name}” 吗？`,
+            '删除',
+            '取消'
+        );
+        if (!confirmed) return;
 
-            if (indexToDelete > -1) {
-                chatData.settings.aiAvatarLibrary.splice(indexToDelete, 1);
-                showToast('头像已删除。记得点击页面顶部的“保存”按钮来保存所有更改。', 'success');
-                await openCharAvatarPicker(); // 重新打开选择器以刷新列表
-            } else {
-                showToast('未找到要删除的头像，可能已被移除。', 'error');
-            }
+        // 使用唯一的 ID 来精确查找和删除
+        const indexToDelete = chatData.settings.aiAvatarLibrary.findIndex(avatar => avatar.id === avatarToDelete.id);
+
+        if (indexToDelete > -1) {
+            chatData.settings.aiAvatarLibrary.splice(indexToDelete, 1);
+            showToast('头像已删除。记得点击页面顶部的“保存”按钮来保存所有更改。', 'success');
+            await openCharAvatarPicker(); // 重新打开选择器以刷新列表
+        } else {
+            showToast('未找到要删除的头像，可能已被移除。', 'error');
         }
     }
 
@@ -781,7 +793,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     blockBtn.addEventListener('click', async () => {
         if (!chatData) return;
-        const confirmed = confirm(`确定要拉黑 “${chatData.name}” 吗？\n拉黑后您将无法向其发送消息，直到您将Ta移出黑名单。`);
+
+        const confirmed = await showConfirmModal(
+            '拉黑确认',
+            `确定要拉黑 “${chatData.name}” 吗？\n拉黑后您将无法向其发送消息，直到您将Ta移出黑名单。`,
+            '拉黑',
+            '取消'
+        );
         if (confirmed) {
             chatData.blockStatus = {
                 status: 'blocked_by_user',
@@ -796,7 +814,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     clearHistoryBtn.addEventListener('click', async () => {
         if (!chatData) return;
-        const confirmed = confirm(`此操作不可撤销！\n确定要永久删除与 “${chatData.name}” 的所有聊天记录吗？`);
+        const confirmed = await showConfirmModal(
+            '清空聊天记录',
+            `此操作不可撤销！\n确定要永久删除与 “${chatData.name}” 的所有聊天记录吗？`,
+            '删除',
+            '取消'
+        );
         if (confirmed) {
             chatData.history = [];
             await db.chats.put(chatData);
@@ -1011,7 +1034,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 deleteBtn.className = 'absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center';
                 deleteBtn.title = '删除此预设';
                 deleteBtn.addEventListener('click', async () => {
-                    if (confirm(`确定要删除样式预设 "${preset.name}" 吗？`)) {
+                    const confirmed = await showConfirmModal(
+                        '删除样式预设',
+                        `确定要删除样式预设 "${preset.name}" 吗？`,
+                        '删除',
+                        '取消'
+                    );
+                    if (confirmed) {
                         await db.bubbleCssPresets.delete(preset.name);
                         await loadAndRenderCssPresets();
                     }

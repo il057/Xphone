@@ -111,12 +111,13 @@
         const chatListContainer = document.getElementById('chat-list');
         const notificationChannel = new BroadcastChannel('xphone_notifications');
         let renderTimeout; // 用于防抖的计时器
+        let isRendering = false;
         
         // 监听来自后台的消息
         notificationChannel.onmessage = (event) => {
             if (event.data && event.data.type === 'new_message') {
                 console.log('接收到新消息广播，正在刷新聊天列表...');
-                loadAndRenderChats();
+                requestRender();
             }
         };
 
@@ -175,77 +176,83 @@
         }
 
         async function loadAndRenderChats() {
-            console.log("执行渲染: loadAndRenderChats");
-        
-            while (chatListContainer.firstChild) {
-                chatListContainer.removeChild(chatListContainer.firstChild);
-            }
-
-            const chats = await db.chats.orderBy('lastMessageTimestamp').reverse().toArray();
-
-            if (chats.length === 0) {
-                chatListContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">没有聊天记录</p>`;
-                return;
-            }
-
-            chats.forEach(chat => {
-                const chatItem = document.createElement('div');
-                chatItem.className = 'chat-list-item block border-b border-gray-100 cursor-pointer';            
+                if (isRendering) {
+                        console.log("渲染被阻止，因为另一个渲染正在进行中。");
+                        return;
+                }
+                isRendering = true; // 进入函数后，立刻“上锁”
+                console.log("执行渲染: loadAndRenderChats");
                 
-                // 3. 直接从 chat 对象上获取最后一条消息和时间戳
-                
-                const lastMessage = chat.lastMessageContent; // 直接获取
-                const previewText = formatMessagePreview(lastMessage); // 传递给格式化函数
-                const messageTime = formatTimestamp(chat.lastMessageTimestamp); // 直接使用时间戳
-
-                let avatarUrl = '';
-                if (chat.isGroup) {
-                    avatarUrl = chat.settings?.groupAvatar || 'https://i.postimg.cc/gc3QYCDy/1-NINE7-Five.jpg';
-                } else {
-                    avatarUrl = chat.settings?.aiAvatar || 'https://files.catbox.moe/kkll8p.svg';
+                while (chatListContainer.firstChild) {
+                        chatListContainer.removeChild(chatListContainer.firstChild);
                 }
 
-                chatItem.innerHTML = `
-                    <div class="flex items-start p-4 interactive-list-item">
-                        <div class="flex-shrink-0 mr-3 avatar-container avatar-link-target" data-id="${chat.id}"> 
-                            <img src="${avatarUrl}" class="avatar">
-                            <div class="unread-dot"></div>
-                        </div>
-                        <div class="pt-1 flex-grow">
-                            <div class="flex justify-between items-baseline">
-                                <p class="font-bold text-gray-800">${chat.name || chat.realName}</p>
-                                <p class="text-xs text-gray-400">${messageTime}</p>
-                            </div>
-                            <p class="text-sm text-gray-500 message-preview truncate">${previewText}</p> 
-                        </div>
-                    </div>
-                `;
+                const chats = await db.chats.orderBy('lastMessageTimestamp').reverse().toArray();
 
-                if (!chat.isGroup) {
-                    const avatarElement = chatItem.querySelector('.avatar-link-target');
-                    avatarElement.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const id = e.currentTarget.dataset.id;
-                        window.location.href = `charProfile.html?id=${id}`;
-                    });
+                if (chats.length === 0) {
+                        chatListContainer.innerHTML = `<p class="text-center text-gray-500 mt-8">没有聊天记录</p>`;
+                        return;
                 }
 
-                chatItem.addEventListener('click', () => {
-                    window.location.href = `chatRoom.html?id=${chat.id}`;
+                chats.forEach(chat => {
+                        const chatItem = document.createElement('div');
+                        chatItem.className = 'chat-list-item block border-b border-gray-100 cursor-pointer';            
+                        
+                        // 3. 直接从 chat 对象上获取最后一条消息和时间戳
+                        
+                        const lastMessage = chat.lastMessageContent; // 直接获取
+                        const previewText = formatMessagePreview(lastMessage); // 传递给格式化函数
+                        const messageTime = formatTimestamp(chat.lastMessageTimestamp); // 直接使用时间戳
+
+                        let avatarUrl = '';
+                        if (chat.isGroup) {
+                        avatarUrl = chat.settings?.groupAvatar || 'https://i.postimg.cc/gc3QYCDy/1-NINE7-Five.jpg';
+                        } else {
+                        avatarUrl = chat.settings?.aiAvatar || 'https://files.catbox.moe/kkll8p.svg';
+                        }
+
+                        chatItem.innerHTML = `
+                        <div class="flex items-start p-4 interactive-list-item">
+                                <div class="flex-shrink-0 mr-3 avatar-container avatar-link-target" data-id="${chat.id}"> 
+                                <img src="${avatarUrl}" class="avatar">
+                                <div class="unread-dot"></div>
+                                </div>
+                                <div class="pt-1 flex-grow">
+                                <div class="flex justify-between items-baseline">
+                                        <p class="font-bold text-gray-800">${chat.name || chat.realName}</p>
+                                        <p class="text-xs text-gray-400">${messageTime}</p>
+                                </div>
+                                <p class="text-sm text-gray-500 message-preview truncate">${previewText}</p> 
+                                </div>
+                        </div>
+                        `;
+
+                        if (!chat.isGroup) {
+                        const avatarElement = chatItem.querySelector('.avatar-link-target');
+                        avatarElement.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const id = e.currentTarget.dataset.id;
+                                window.location.href = `charProfile.html?id=${id}`;
+                        });
+                        }
+
+                        chatItem.addEventListener('click', () => {
+                        window.location.href = `chatRoom.html?id=${chat.id}`;
+                        });
+
+                        const unreadDot = chatItem.querySelector('.unread-dot');
+                        const unreadCount = chat.unreadCount || 0;
+                        if (unreadCount > 0) {
+                        unreadDot.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                        unreadDot.style.display = 'flex'; // Use flex for centering as per your CSS
+                        } else {
+                        unreadDot.style.display = 'none';
+                        }
+                        
+                        // This is the single, correct place to append the child.
+                        chatListContainer.appendChild(chatItem);
                 });
-
-                const unreadDot = chatItem.querySelector('.unread-dot');
-                const unreadCount = chat.unreadCount || 0;
-                if (unreadCount > 0) {
-                    unreadDot.textContent = unreadCount > 99 ? '99+' : unreadCount;
-                    unreadDot.style.display = 'flex'; // Use flex for centering as per your CSS
-                } else {
-                    unreadDot.style.display = 'none';
-                }
-                
-                // This is the single, correct place to append the child.
-                chatListContainer.appendChild(chatItem);
-            });
+                isRendering = false;
         }
 
         function setupEventListeners() {

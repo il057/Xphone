@@ -1,7 +1,7 @@
 // settings.js
 // Import the shared database instance from db.js
 import { db } from './db.js';
-import { showToast } from './ui-helpers.js';
+import { showToast, showConfirmModal } from './ui-helpers.js';
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -47,10 +47,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     const confirmed = confirm(`确定要删除世界书《${book.name}》吗？\n此操作不可撤销。`);
                     if (confirmed) {
                         try {
-                            await db.worldBooks.delete(book.id);
-                            // TODO: 还需要更新所有关联了此世界书的聊天设置
+                            // 使用数据库事务来确保数据一致性
+                            await db.transaction('rw', db.worldBooks, db.chats, db.xzoneGroups, async () => {
+                                const bookIdToDelete = book.id;
+
+                                // 1. 删除世界书本身
+                                await db.worldBooks.delete(bookIdToDelete);
+
+                                // 2. 移除所有单人角色对该世界书的引用
+                                const relatedChars = await db.chats.where('settings.worldBookId').equals(bookIdToDelete).toArray();
+                                for (const char of relatedChars) {
+                                    // 使用 Dexie 的 dotted notation 来更新内嵌对象
+                                    await db.chats.update(char.id, { 'settings.worldBookId': '' });
+                                }
+
+                                // 3. 移除所有分组对该世界书的引用
+                                const relatedGroups = await db.xzoneGroups.where('worldBookIds').equals(bookIdToDelete).toArray();
+                                for (const group of relatedGroups) {
+                                    const updatedBookIds = group.worldBookIds.filter(id => id !== bookIdToDelete);
+                                    await db.xzoneGroups.update(group.id, { worldBookIds: updatedBookIds });
+                                }
+                            });
+
                             showToast('删除成功！');
-                            renderWorldBookList();
+                            renderWorldBookList(); // 重新渲染列表
+
                         } catch (error) {
                             console.error('删除世界书失败:', error);
                             showToast('删除失败，详情请看控制台。', 'error');

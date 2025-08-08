@@ -1,6 +1,6 @@
 import { db, uploadImage } from './db.js'; 
-import { showUploadChoiceModal, showImagePickerModal, showToast } from './ui-helpers.js';
-import { showToast } from './ui-helpers.js';
+import { showUploadChoiceModal, showImagePickerModal } from './ui-helpers.js';
+import { showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- STATE ---
@@ -210,12 +210,19 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleDeletePersona(id) {
         const personaId = parseInt(id);
         const persona = await db.personaPresets.get(personaId);
-        if (confirm(`确定要删除人格预设 “${persona.name}” 吗？`)) {
+        const confirmed = await showConfirmModal(
+            '删除人格预设',
+            `确定要删除人格预设 “${persona.name}” 吗？此操作不可恢复。`,
+            '删除',
+            '取消'
+        );
+
+        if (confirmed) {
             await db.personaPresets.delete(personaId);
             
             // Check if the deleted persona was the default
             const settings = await db.globalSettings.get('main');
-            if(settings && settings.defaultPersonaId === personaId) {
+            if (settings && settings.defaultPersonaId === personaId) {
                 // Remove the default setting
                 await db.globalSettings.update('main', { defaultPersonaId: null });
                 await initializePage(); // Update main display to fallback
@@ -276,7 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleDeleteUserAvatar(avatarToDelete) {
-        if (confirm('确定要从头像库中删除这个头像吗？')) {
+        const confirmed = await showConfirmModal(
+            '删除头像',
+            `确定要从头像库中删除这个头像吗？`,
+            '删除',
+            '取消'
+        );
+        if (confirmed) {
             await db.userAvatarLibrary.delete(avatarToDelete.id);
             showToast('头像已删除。');
             await openUserAvatarPicker(activePersonaIdForAvatar); // 重新加载头像库

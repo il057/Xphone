@@ -471,3 +471,54 @@ export function showRawContentModal(title, rawContent) {
         });
     });
 }
+
+/**
+ * 显示一个通用的确认对话框。
+ * @param {string} title - 模态框的标题。
+ * @param {string} message - 要向用户确认的信息。
+ * @param {string} [confirmText='确认'] - 确认按钮的文本。
+ * @param {string} [cancelText='取消'] - 取消按钮的文本。
+ * @returns {Promise<boolean>} - 用户点击确认返回 true，取消返回 false。
+ */
+export function showConfirmModal(title, message, confirmText = '确认', cancelText = '取消') {
+    return new Promise((resolve) => {
+        // 将换行符 \n 替换为 <br> 以支持多行消息
+        const formattedMessage = message.replace(/\n/g, '<br>');
+
+        const modalHtml = `
+            <h3 class="text-lg font-semibold text-center p-4">${title}</h3>
+            <div class="p-4 text-center text-gray-600 leading-relaxed">${formattedMessage}</div>
+            <div class="p-4 border-t grid grid-cols-2 gap-3">
+                <button id="confirm-cancel-btn" class="modal-btn modal-btn-cancel">${cancelText}</button>
+                <button id="confirm-confirm-btn" class="modal-btn modal-btn-confirm">${confirmText}</button>
+            </div>
+        `;
+
+        const modal = createModal('dynamic-confirm-modal', modalHtml);
+        
+        const confirmBtn = modal.querySelector('#confirm-confirm-btn');
+        const cancelBtn = modal.querySelector('#confirm-cancel-btn');
+
+        // 如果是危险操作，让确认按钮变红
+        if (confirmText.includes('删除') || confirmText.includes('覆盖') || confirmText.includes('清空')) {
+            confirmBtn.style.backgroundColor = '#ef4444'; // red-500
+        }
+
+        const handleConfirm = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        const handleCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        const cleanup = () => {
+            modal.remove();
+        };
+
+        confirmBtn.addEventListener('click', handleConfirm, { once: true });
+        cancelBtn.addEventListener('click', handleCancel, { once: true });
+    });
+}

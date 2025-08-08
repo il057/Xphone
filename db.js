@@ -91,11 +91,55 @@ db.version(34).stores({
             // 填充新字段
             chat.lastMessageTimestamp = lastMessage.timestamp;
             chat.lastMessageContent = lastMessage; // 存储整个消息对象
+            if (chat.lastMessageTimestamp && typeof chat.lastMessageTimestamp === 'string') {
+                // 将字符串日期转换为数字格式的Unix时间戳 (毫秒)
+                chat.lastMessageTimestamp = new Date(chat.lastMessageTimestamp).getTime();
+                }
         }
     }).then(() => {
         console.log("版本 34 的数据迁移完成！");
     }).catch(err => {
         console.error("数据迁移失败:", err);
+    });
+});
+
+db.version(35).stores({
+    chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp', 
+    apiProfiles: '++id, &profileName',
+    globalSettings: '&id, activeApiProfileId',
+    userStickers: '++id, &url, name, order',
+    worldBooks: '&id, name',
+    musicLibrary: '&id',
+    personaPresets: '++id, name, avatar, gender, birthday, persona', 
+    xzoneSettings: '&id',
+    xzonePosts: '++id, timestamp, authorId',
+    xzoneAlbums: '++id, name, createdAt',
+    xzonePhotos: '++id, albumId',
+    favorites: '++id, [type+content.id], type, timestamp, chatId',
+    memories: '++id, chatId, [chatId+isImportant], authorName, isImportant, timestamp, type, targetDate',
+    bubbleThemePresets: '&name',
+    bubbleCssPresets: '&name, cssCode', 
+    globalAlbum: '++id, url',
+    userAvatarLibrary: '++id, &url, name',
+    xzoneGroups: '++id, name, worldBookIds',
+    relationships: '++id, [sourceCharId+targetCharId], sourceCharId, targetCharId', 
+    eventLog: '++id, timestamp, type, groupId, processedBy',
+    offlineSummary: '&id, timestamp',
+    callLogs: '++id, charId, type, startTime, duration'
+}).upgrade(tx => {
+    console.log("正在执行数据库版本 35 的迁移：将群聊成员转换为ID存储...");
+    return tx.table('chats').where('isGroup').equals(1).modify(group => {
+        // 检查 members 字段是否已经是新格式（数组里是字符串或数字）
+        // 或者第一个成员对象没有 id 属性，则认为需要迁移
+        if (group.members && group.members.length > 0 && typeof group.members[0] === 'object' && group.members[0] !== null) {
+            console.log(`正在迁移群聊 "${group.name}" 的成员...`);
+            // 将成员对象数组转换为成员ID数组
+            group.members = group.members.map(member => member.id);
+        }
+    }).then(() => {
+        console.log("版本 35 的数据迁移完成！");
+    }).catch(err => {
+        console.error("版本 35 数据迁移失败:", err);
     });
 });
 

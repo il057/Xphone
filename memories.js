@@ -1,6 +1,6 @@
 // phone/memories.js
 import { db } from './db.js';
-import { showToast } from './ui-helpers.js';
+import { showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -245,7 +245,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const chat = chatsMap[memoryToDelete.chatId];
         const authorName = chat ? chat.name : memoryToDelete.authorName;
 
-        const confirmed = confirm(`确定要删除这条来自 “${authorName}” 的记录吗？`);
+        const confirmed = await showConfirmModal(
+            '删除记忆',
+            `确定要删除这条来自 “${authorName}” 的记录吗？`,
+            '确认',
+            '取消'
+        );
+
         if (confirmed) {
             await db.memories.delete(id);
             await loadAllData();

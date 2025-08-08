@@ -3,7 +3,7 @@
 import { db } from './db.js';
 import { showAlbumPickerModal } from './ui-helpers.js';
 import { applyThemeMode  } from './applyGlobalStyles.js';
-import { showToast, promptForInput } from './ui-helpers.js';
+import { showToast, promptForInput, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DB & State ---
@@ -307,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     presetContainer.addEventListener('touchend', cancelLongPress);
     presetContainer.addEventListener('touchmove', cancelLongPress);
 
-    presetContainer.addEventListener('click', (e) => {
+    presetContainer.addEventListener('click', async (e) => {
         const swatch = e.target.closest('[data-wallpaper]');
         const customBtn = e.target.closest('#custom-swatch-btn');
         const deleteBtn = e.target.closest('.delete-btn');
@@ -327,7 +327,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (deleteBtn) {
             e.stopPropagation();
             const indexToDelete = parseInt(deleteBtn.parentElement.querySelector('[data-wallpaper]').dataset.index);
-            if(confirm(`确定要删除预设 "${state.wallpaperPresets[indexToDelete].name}" 吗？`)) {
+            const confirmed = await showConfirmModal(
+                '删除预设',
+                `确定要删除预设 "${state.wallpaperPresets[indexToDelete].name}" 吗？`,
+                '删除',
+                '取消'
+            );
+            if (confirmed) {
                 state.wallpaperPresets.splice(indexToDelete, 1);
                 renderPresets();
                 setActiveSwatch(currentWallpaperValue);

@@ -2,7 +2,7 @@
 // Import the shared database instance from db.js
 import { db } from './db.js';
 import { startActiveSimulation, stopActiveSimulation } from './simulationEngine.js';
-import { promptForInput, showToast } from './ui-helpers.js';
+import { promptForInput, showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -157,8 +157,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const newEnableState = document.getElementById('background-activity-switch').checked;
 
             if (newEnableState && !oldEnableState) {
-                const userConfirmed = confirm(
-                    "【高费用警告】\n\n您正在启用“后台角色活动”功能。\n\n这会使您的AI角色们在您不和他们聊天时，也能“独立思考”并主动给您发消息或进行社交互动，极大地增强沉浸感。\n\n但请注意：这会【在后台自动、定期地调用API】，即使您不进行任何操作。根据您的角色数量和检测间隔，这可能会导致您的API费用显著增加。\n\n您确定要开启吗？"
+                const userConfirmed = await showConfirmModal(
+                    '启用后台活动',
+                    "【高费用警告】\n\n您正在启用“后台角色活动”功能。\n\n这会使您的AI角色们在您不和他们聊天时，也能“独立思考”并主动给您发消息或进行社交互动，极大地增强沉浸感。\n\n但请注意：这会【在后台自动、定期地调用API】，即使您不进行任何操作。根据您的角色数量和检测间隔，这可能会导致您的API费用显著增加。\n\n您确定要开启吗？",
+                    '确认',
+                    '取消'
                 );
 
                 if (!userConfirmed) {
@@ -254,10 +257,16 @@ document.addEventListener('DOMContentLoaded', () => {
      * 导出完整备份数据
      */
     async function exportBackup() {
-        if (!confirm("确定要导出所有数据吗？这将生成一个包含您所有聊天记录和设置的JSON文件。")) return;
+        const confirmed = await showConfirmModal(
+            '导出备份',
+            '确定要导出所有数据吗？这将生成一个包含您所有聊天记录和设置的JSON文件。',
+            '导出',
+            '取消'
+        );
+        if (!confirmed) return;
         try {
             const backupData = {
-                version: 34, // 确保导出版本与当前数据库版本一致
+                version: 35, // 确保导出版本与当前数据库版本一致
                 timestamp: Date.now()
             };
 
@@ -308,8 +317,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function importBackup(file) {
         if (!file) return;
 
-        const confirmed = confirm(
-            '【严重警告】\n\n导入备份将完全覆盖您当前的所有数据，包括聊天、动态、设置等。此操作不可撤销！\n\n您确定要继续吗？'
+        const confirmed = await showConfirmModal(
+            '导入备份',
+            '【严重警告】\n\n导入备份将完全覆盖您当前的所有数据，包括聊天、动态、设置等。此操作不可撤销！\n\n您确定要继续吗？',
+            '导入',
+            '取消'
         );
 
         if (!confirmed) return;
@@ -381,7 +393,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!profileIdToDelete) return;
         
         const profileToDelete = state.allProfiles.find(p => p.id === profileIdToDelete);
-        if (confirm(`确定要删除方案 “${profileToDelete.profileName}” 吗？`)) {
+
+        const confirmed = await showConfirmModal(
+            '删除方案',
+            `确定要删除方案 “${profileToDelete.profileName}” 吗？`,
+            '删除',
+            '取消'
+        );
+        if (confirmed) {
             await db.apiProfiles.delete(profileIdToDelete);
             
             // 如果删除的是当前激活的方案，则将激活方案重置为第一个
@@ -400,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function packAllData() {
         const backupData = {
-            version: 34, 
+            version: 35, // 确保导出版本与当前数据库版本一致
             timestamp: Date.now()
         };
         const tableNames = db.tables.map(t => t.name);
@@ -429,7 +448,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('请先填写您的 GitHub Personal Access Token 和 Gist ID。', 'error');
             return;
         }
-        if (!confirm("确定要上传当前所有数据吗？这将覆盖云端的旧数据。")) return;
+        const confirmed = await showConfirmModal(
+            '上传数据',
+            '确定要上传当前所有数据吗？这将覆盖云端的旧数据。',
+            '上传',
+            '取消'
+        );
+        if (!confirmed) return;
 
         uploadDataBtn.textContent = '上传中...';
         uploadDataBtn.disabled = true;
@@ -481,7 +506,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('请先填写您的 GitHub Personal Access Token 和 Gist ID。', 'error');
             return;
         }
-        if (!confirm('【严重警告】\n\n此操作将从云端下载数据并完全覆盖您当前设备上的所有数据！此操作不可撤销！\n\n确定要继续吗？')) return;
+        const confirmed = await showConfirmModal(
+            '下载数据',
+            '【严重警告】\n\n此操作将从云端下载数据并完全覆盖您当前设备上的所有数据！此操作不可撤销！\n\n确定要继续吗？',
+            '下载',
+            '取消'
+        );
+        if (!confirmed) return;
 
         downloadDataBtn.textContent = '下载中...';
         downloadDataBtn.disabled = true;
@@ -559,6 +590,18 @@ document.addEventListener('DOMContentLoaded', () => {
 async function restoreDataFromBackup(backupData) {
    const backupVersion = backupData.version || 0;
 
+   if (backupVersion < 35 && backupData.chats) {
+        console.log(`检测到旧版本备份 (v${backupVersion})，正在迁移群聊成员格式...`);
+        backupData.chats.forEach(chat => {
+            // 如果是群聊，且成员列表是对象数组
+            if (chat.isGroup && chat.members && chat.members.length > 0 && typeof chat.members[0] === 'object' && chat.members[0] !== null) {
+                // 将其转换为只包含ID的数组
+                chat.members = chat.members.map(member => member.id);
+            }
+        });
+        console.log("群聊成员格式迁移完成。");
+    }
+
     if (backupVersion < 34 && backupData.chats) {
         console.log(`检测到旧版本备份 (v${backupVersion})，正在执行手动迁移...`);
         // 遍历备份文件中的 chats 数据
@@ -569,6 +612,10 @@ async function restoreDataFromBackup(backupData) {
                 // 在内存中直接为这条 chat 数据添加新字段
                 chat.lastMessageTimestamp = lastMessage.timestamp;
                 chat.lastMessageContent = lastMessage;
+                    if (chat.lastMessageTimestamp && typeof chat.lastMessageTimestamp === 'string') {
+                            // 将字符串日期转换为数字格式的Unix时间戳 (毫秒)
+                            chat.lastMessageTimestamp = new Date(chat.lastMessageTimestamp).getTime();
+                    }
             }
         });
         console.log("手动迁移完成，现在写入数据库...");

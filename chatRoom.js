@@ -3,7 +3,7 @@ import * as spotifyManager from './spotifyManager.js';
 import { runOfflineSimulation } from './simulationEngine.js';
 import { updateRelationshipScore } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
-import { showToast, showToastOnNextPage, showRawContentModal } from './ui-helpers.js';
+import { showToast, showToastOnNextPage, showRawContentModal, showConfirmModal } from './ui-helpers.js';
 
 // --- State and Constants ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -107,6 +107,8 @@ const bubbleThemes = [
     { name: '黑白', value: 'black_white', colors: { userBg: '#343a40', userText: '#f8f9fa', aiBg: '#f8f9fa', aiText: '#343a40' } },
 ];
 
+let groupMemberDetailsMap = new Map();
+
 // --- 通话界面DOM元素 ---
 const callScreenModal = document.getElementById('call-screen-modal');
 const callInfo = document.getElementById('call-info');
@@ -196,6 +198,11 @@ async function init() {
     // We no longer save myPersona or myAvatar to the chat object.
 
     isGroupChat = currentChat.isGroup;
+
+    if (isGroupChat && currentChat.members.length > 0) {
+        const memberDetails = await db.chats.bulkGet(currentChat.members);
+        groupMemberDetailsMap = new Map(memberDetails.filter(Boolean).map(m => [m.id, m]));
+    }
     
     // Call setup functions only once
     setupUI();
@@ -480,12 +487,6 @@ function renderMessages() {
         if (bubbleWrapper) flexContainer.appendChild(bubbleWrapper);
     });
 
-    if (isGroupChat) {
-        currentChat.members.forEach(m => {
-            m.avatar = m.avatar || 'https://files.catbox.moe/kkll8p.svg';
-            m.name = m.name || '未知成员';
-        });
-    }
 
     chatContainer.appendChild(flexContainer);
     // Scroll to the bottom on initial load
@@ -607,10 +608,11 @@ function createBubble(msg) {
         if (isUser) {
             avatar.src = activeUserPersona?.avatar || 'https://files.catbox.moe/kkll8p.svg';
         } else if (isGroupChat) {
-            const member = currentChat.members.find(m => m.name === msg.senderName);
-            avatar.src = member ? member.avatar : 'https://files.catbox.moe/kkll8p.svg';
+                const member = groupMemberDetailsMap.get(msg.senderId);
+                // 注意：头像路径在 settings.aiAvatar 中
+                avatar.src = member ? member.settings.aiAvatar : 'https://files.catbox.moe/kkll8p.svg'; 
         } else {
-            avatar.src = currentChat.settings.aiAvatar || 'https://files.catbox.moe/kkll8p.svg';
+                avatar.src = currentChat.settings.aiAvatar || 'https://files.catbox.moe/kkll8p.svg';
         }
 
         // --- Content Container (for name, bubble, etc.) ---
@@ -619,7 +621,7 @@ function createBubble(msg) {
         
         // --- Sender Name (for group chats) ---
         if (isGroupChat && !isUser) {
-            const member = currentChat.members.find(m => m.name === msg.senderName);
+            const member = groupMemberDetailsMap.get(msg.senderId);
             const senderNameDisplay = member ? (member.name || member.realName) : (msg.senderName || '未知成员');
             const senderName = document.createElement('div');
             senderName.className = 'text-xs text-gray-500 mb-1';
@@ -1012,7 +1014,13 @@ async function setupEventListeners() {
             if (!sticker) return;
 
             if (action === 'delete_sticker') {
-                if (confirm(`确定要删除表情 "${sticker.name}" 吗？`)) {
+                const confirmed = await showConfirmModal(
+                    '删除表情',
+                    `确定要删除表情 "${sticker.name}" 吗？`,
+                    '删除',
+                    '取消'
+                )
+                if (confirmed) {
                     await db.userStickers.delete(sticker.id);
                     stickerPanelRendered = false; // 强制下次打开时重新渲染
                 }
@@ -1152,8 +1160,13 @@ async function setupEventListeners() {
             const msg = currentChat.history.find(m => toMillis(m.timestamp) === timestamp);
 
             if (msg && msg.role === 'assistant') {
-                const confirmed = confirm(`要接收来自 ${msg.senderName || currentChat.name} 的转账 ¥${msg.amount.toFixed(2)} 吗？`);
-                
+                const confirmed = await showConfirmModal(
+                    '转账确认',
+                    `要接收来自 ${msg.senderName || currentChat.name} 的转账 ¥${msg.amount.toFixed(2)} 吗？`,
+                    '确认',
+                    '取消'
+                );
+
                 // 为 AI 添加一条隐藏的系统提示，告知它你的决定
                 const hiddenReply = {
                     role: 'system',
@@ -1633,6 +1646,8 @@ async function getAiResponse( charIdToTrigger = null ) {
             relationsContext += "（你尚未加入任何分组。）\n";
         }
 
+        const stickers = await db.userStickers.toArray();
+
         if (isCallActive) {
             // ---- 分支1：当前处于通话模式 ----
             isAiRespondingInCall = true;
@@ -1710,8 +1725,7 @@ async function getAiResponse( charIdToTrigger = null ) {
    
         // --- 1. Show "Typing" status BEFORE the API call ---
         const { proxyUrl, apiKey, model } = apiConfig;
-        
-        const stickers = await db.userStickers.toArray();
+
         const stickerListForPrompt = stickers.length > 0 
             ? stickers.map(s => `- "${s.name}"`).join('\n')
             : '- (表情库是空的)';
@@ -1794,24 +1808,24 @@ ${commentsText}
         if (isGroupChat) {
             const userNickname = activeUserPersona?.name || '我';
             const userPersona = activeUserPersona?.persona || '用户的角色设定未知。';
-            const membersList = currentChat.members.map(m => `- ${m.name}: ${m.settings?.aiPersona || '无'}`).join('\n');
 
             let privateChatsContextForPrompt = "";
             const membersWithPrivateChat = await Promise.all(currentChat.members.map(async (member) => {
-                const privateChat = await db.chats.get(member.id);
+                const privateChat = await db.chats.get(member);
                 return { member, privateChat };
             }));
 
             for (const { member, privateChat } of membersWithPrivateChat) {
                 if (privateChat && privateChat.history.length > 0) {
-                    const recentPrivateMessages = privateChat.history
-                        .filter(m => !m.isHidden) // 过滤掉隐藏消息
-                        .slice(-20) // 获取最近20条
-                        .map(msg => {
-                            const sender = msg.role === 'user' ? userNickname : member.name;
-                            let content = convertMessageForAI(msg); // 使用现有函数转换消息内容
-                            return `${sender}: ${content.substring(0, 50)}`;
-                        }).join('\n');
+                        const recentPrivateMessages = privateChat.history
+                                .filter(m => !m.isHidden)
+                                .slice(-20)
+                                .map(msg => {
+                                        const sender = msg.role === 'user' ? userNickname : member.name;
+                                        let content = convertMessageForAI(msg);
+                                        const timeAgo = formatRelativeTime(msg.timestamp);
+                                        return `[${timeAgo}] ${sender}: ${content.substring(0, 50)}`;
+                                }).join('\n');
                     
                     if(recentPrivateMessages) {
                         privateChatsContextForPrompt += `\n- 你 (${member.name}) 与用户“${userNickname}”最近的私聊内容摘要:\n---\n${recentPrivateMessages}\n---\n`;
@@ -1871,7 +1885,7 @@ ${worldBookContext}
 - **生日**: ${activeUserPersona?.birthday || '未设置'}
 
 ## 3.2 AI角色档案 (AI Character Profiles)
-${currentChat.members.map(m => `
+${Array.from(groupMemberDetailsMap.values()).map(m => `
 ---
 ### 角色名: ${m.realName} (昵称: ${m.name})
 - **ID**: ${m.id}
@@ -2006,14 +2020,15 @@ ${privateChatsContextForPrompt}
                 if (sharedGroups.length > 0) {
                     for (const group of sharedGroups) {
                         if (group.history.length > 0) {
-                            const recentGroupMessages = group.history
-                                .filter(m => !m.isHidden)
-                                .slice(-5) // 获取群聊的最近5条消息
-                                .map(msg => {
-                                    const sender = msg.role === 'user' ? (group.settings.myNickname || '我') : msg.senderName;
-                                    let content = convertMessageForAI(msg);
-                                    return `${sender}: ${content.substring(0, 50)}`;
-                                }).join('\n');
+                                const recentGroupMessages = group.history
+                                        .filter(m => !m.isHidden)
+                                        .slice(-5)
+                                        .map(msg => {
+                                                const sender = msg.role === 'user' ? (group.settings.myNickname || '我') : msg.senderName;
+                                                let content = convertMessageForAI(msg);
+                                                const timeAgo = formatRelativeTime(msg.timestamp);
+                                                return `[${timeAgo}] ${sender}: ${content.substring(0, 50)}`;
+                                        }).join('\n');
                             
                             if(recentGroupMessages) {
                                 groupChatsContextForPrompt += `\n- 在群聊【${group.name}】中的最新动态:\n---\n${recentGroupMessages}\n---\n`;
@@ -2454,7 +2469,7 @@ ${musicPromptSection}
             }
 
             // 3. 根据是群聊还是单聊，获取所有参与的AI角色
-            const allAiParticipants = isGroupChat ? currentChat.members : [currentChat];
+            const allAiParticipants = isGroupChat ? Array.from(groupMemberDetailsMap.values()) : [currentChat];
 
             // 4. 为每个AI角色添加昵称和真实姓名到查找表
             allAiParticipants.forEach(p => {
@@ -2493,17 +2508,16 @@ ${musicPromptSection}
             }
             let actorName;
             let actorMember = null;
-
+            const actorId = action.senderId;
             if (isGroupChat) {
-                // 在群聊中，每个动作都必须指明是哪个角色执行的
-                const actorId = action.senderId;
+                // 在群聊中，每个动作都必须指明是哪个角色执行的 
                 if (!actorId) {
                     console.warn("Group chat AI action is missing 'senderId' field, skipping:", action);
                     continue; 
                 }
 
-                actorMember = currentChat.members.find(m => m.id === actorId); // 通过 ID 查找
-                
+                actorMember = groupMemberDetailsMap.get(actorId);
+
                 if (!actorMember) {
                     console.warn(`AI tried to use a non-existent member id: "${actorId}". Skipping action.`);
                     continue;
@@ -2514,7 +2528,7 @@ ${musicPromptSection}
                 actorName = currentChat.name;
             }
 
-            const getActorChat = async () => isGroupChat ? (await db.chats.get(actorMember.id)) : currentChat;
+            const getActorChat = async () => isGroupChat ? actorMember : currentChat;
 
             if (!action.type) {
                 console.warn("AI action is missing 'type' field, skipping:", action);
@@ -2523,7 +2537,13 @@ ${musicPromptSection}
 
             switch (action.type) {
                 case 'text': {
-                    const textMessage = { role: 'assistant', senderName: actorName, content: action.content, timestamp: messageTimestamp++ };
+                    const textMessage = { 
+                        role: 'assistant', 
+                        senderName: actorName, 
+                        senderId: actorId,
+                        content: action.content, 
+                        timestamp: messageTimestamp++ 
+                    };
                     currentChat.history.push(textMessage);
                     currentChat.lastMessageTimestamp = textMessage.timestamp;
                     currentChat.lastMessageContent = textMessage;
@@ -2536,6 +2556,7 @@ ${musicPromptSection}
                     const photoMessage = {
                         role: 'assistant',
                         senderName: actorName, // actorName 变量确保了在群聊和私聊中都能正确显示发送者
+                        senderId: actorId,
                         type: 'text_photo', // 复用现有类型来显示图片消息
                         content: `${action.description}`, // 将AI的描述作为内容
                         timestamp: new Date(messageTimestamp++)
@@ -2552,6 +2573,7 @@ ${musicPromptSection}
                         const replyMessage = {
                             role: 'assistant',
                             senderName: actorName,
+                            senderId: actorId,
                             content: action.reply_content,
                             quote: {
                                 senderName: targetMsg.senderName || (targetMsg.role === 'user' ? (activeUserPersona?.name || '我') : currentChat.name),
@@ -2570,6 +2592,7 @@ ${musicPromptSection}
                     const transferMessage = {
                         role: 'assistant',
                         senderName: actorName,
+                        senderId: actorId,
                         type: 'transfer',
                         amount: action.amount,
                         note: action.note,
@@ -2620,6 +2643,7 @@ ${musicPromptSection}
                     const packetMessage = {
                         role: 'assistant',
                         senderName: actorName,
+                        senderId: actorId,
                         type: 'red_packet',
                         packetType: action.packetType,
                         timestamp: new Date(messageTimestamp++),
@@ -2683,6 +2707,7 @@ ${musicPromptSection}
                     const waimaiMessage = {
                         role: 'assistant',
                         senderName: actorName,
+                        senderId: actorId,
                         type: 'waimai_request',
                         productInfo: action.productInfo,
                         amount: action.amount,
@@ -2717,6 +2742,7 @@ ${musicPromptSection}
                     const linkMessage = {
                         role: 'assistant',
                         senderName: actorName,
+                        senderId: actorId,
                         type: 'share_link',
                         title: action.title,
                         description: action.description,
@@ -2758,7 +2784,7 @@ ${musicPromptSection}
                     break;
                 }
                 case 'update_status': {
-                    const statusTarget = isGroupChat ? actorMember : currentChat;
+                    const statusTarget = await getActorChat();
                     if (!statusTarget.status) statusTarget.status = {};
                     const oldStatusText = statusTarget.status.text || '在线';
                     statusTarget.status.text = action.text || oldStatusText;
@@ -2811,7 +2837,7 @@ ${musicPromptSection}
                 }
 
                 case 'update_name': {
-                    const nameTarget = isGroupChat ? actorMember : currentChat;
+                    const nameTarget = await getActorChat();
                     const oldName = nameTarget.name;
                     // 确认这里优先使用 action.name
                     const newName = action.newName || action.name;
@@ -2829,7 +2855,7 @@ ${musicPromptSection}
 
                 case 'set_background': {
                     const albumPhotos = await db.globalAlbum.toArray();
-                    const backgroundOwner = isGroupChat ? (await db.chats.get(actorMember.id)) : currentChat;
+                    const backgroundOwner = await getActorChat();
                     if (backgroundOwner) {
                         const descriptionToFind = action.description;
                         const foundPhoto = albumPhotos.find(p => p.description === descriptionToFind);
@@ -2847,7 +2873,7 @@ ${musicPromptSection}
                 }
 
                 case 'create_post': {
-                    const postAuthorId = isGroupChat ? actorMember.id : currentChat.id;
+                    const postAuthorId = await getActorChat().id;
                     const postAuthorChat = await db.chats.get(postAuthorId);
                     if (postAuthorChat) {
                         const postData = {
@@ -2892,7 +2918,7 @@ ${musicPromptSection}
                 case 'like_post': {
                     const postToLike = await db.xzonePosts.get(action.postId);
                     if (postToLike) {
-                        const actorId = isGroupChat ? actorMember.id : charId;
+                        const actorId = await getActorChat().id;
                         if (!postToLike.likes) postToLike.likes = [];
                         
                         // 检查是否已经点赞，避免重复
@@ -2908,7 +2934,7 @@ ${musicPromptSection}
                 case 'comment_on_post': {
                     const postToComment = await db.xzonePosts.get(action.postId);
                     if (postToComment && action.commentText) {
-                        const actorId = isGroupChat ? actorMember.id : charId;
+                        const actorId = (await getActorChat()).id;
                         if (!postToComment.comments) postToComment.comments = [];
                         
                         // 添加评论，评论者ID为actorId
@@ -2921,7 +2947,8 @@ ${musicPromptSection}
                 case 'voice_message': {
                     const voiceMessage = {
                         role: 'assistant',
-                        senderName: actorName, // This correctly identifies the sender in group/single chats
+                        senderName: actorName, 
+                        senderId: actorId,
                         type: 'voice_message',
                         content: action.content, // The text content of the voice message
                         timestamp: new Date(messageTimestamp++)
@@ -3031,6 +3058,7 @@ ${musicPromptSection}
                             const stickerMessage = {
                                 role: 'assistant',
                                 senderName: actorName,
+                                senderId: actorId,
                                 type: 'sticker',
                                 content: stickerToSend.url,
                                 meaning: stickerToSend.name,
@@ -3047,6 +3075,7 @@ ${musicPromptSection}
                             const fallbackMessage = {
                                 role: 'assistant',
                                 senderName: actorName,
+                                senderId: actorId,
                                 type: 'text', // Send as a standard text bubble.
                                 content: `[${stickerName}]`, // Use the AI's description as the content. The brackets help signify an action.
                                 timestamp: new Date(messageTimestamp++)
@@ -3108,6 +3137,7 @@ ${musicPromptSection}
                     const fallbackMessage = {
                         role: 'assistant',
                         senderName: actorName,
+                        senderId: actorId,
                         content: `[未识别指令: ${action.type}] ${JSON.stringify(action)}`,
                         timestamp: new Date(messageTimestamp++)
                     };
@@ -3198,14 +3228,13 @@ function openRedPacketModal() {
     // 填充专属红包的接收人列表
     const receiverSelect = document.getElementById('rp-direct-receiver');
     receiverSelect.innerHTML = '';
-    currentChat.members.forEach(member => {
-        const option = document.createElement('option');
-        // 使用群昵称，如果没有则使用本名
-        const memberDisplayName = member.name || member.realName;
-        option.value = memberDisplayName;
-        option.textContent = memberDisplayName;
-        receiverSelect.appendChild(option);
-    });
+        for (const member of groupMemberDetailsMap.values()) {
+                const option = document.createElement('option');
+                const memberDisplayName = member.name || member.realName;
+                option.value = memberDisplayName;
+                option.textContent = memberDisplayName;
+                receiverSelect.appendChild(option);
+        }
     
     // 默认显示拼手气红包页签
     document.getElementById('rp-tab-group').click();
@@ -3587,15 +3616,21 @@ async function favoriteMessage () {
  * Deletes the active message after confirmation.
  */
 async function deleteMessage() {
-    if (!activeMessageMenu.timestamp) return;
-    
-    const confirmed = confirm('确定要删除这条消息吗？');
-    if (confirmed) {
-        // Use activeMessageMenu.timestamp which holds the correct value.
-        currentChat.history = currentChat.history.filter(m => toMillis(m.timestamp) !== activeMessageMenu.timestamp);
-        await db.chats.put(currentChat);
-        renderMessages();
-    }
+        const timestampToDelete = activeMessageMenu.timestamp;
+        if (!timestampToDelete) return;
+
+        const confirmed = await showConfirmModal(
+                '删除消息',
+                '确定要删除这条消息吗？',
+                '删除',
+                '取消'
+        );
+        if (confirmed) {
+                // 使用我们预先保存的局部变量进行过滤
+                currentChat.history = currentChat.history.filter(m => toMillis(m.timestamp) !== timestampToDelete);
+                await db.chats.put(currentChat);
+                renderMessages();
+        }
 }
 
 /**
@@ -3726,7 +3761,12 @@ function toggleMessageSelection(rawTs) {
 async function deleteSelectedMessages() {
     if (selectedMessages.size === 0) return;
 
-    const confirmed = confirm(`确定要删除选中的 ${selectedMessages.size} 条消息吗？`);
+    const confirmed = await showConfirmModal(
+        '删除消息',
+        `确定要删除选中的 ${selectedMessages.size} 条消息吗？`,
+        '确认',
+        '取消'
+    );
     if (confirmed) {
         const timestampsToDelete = Array.from(selectedMessages);       // 均为 number
         currentChat.history = currentChat.history.filter(
@@ -4325,17 +4365,27 @@ async function handleMultiImageUpload(event) {
     }
 }
 
+/**
+ * 格式化时间戳为相对时间字符串
+ * @param {Date | string | number} timestamp - 要格式化的时间戳
+ * @returns {string} - 格式化后的字符串 (例如 "刚刚", "5分钟前", "昨天")
+ */
 function formatRelativeTime(timestamp) {
         const now = new Date();
         const date = new Date(timestamp);
         const diffMs = now - date;
-        const diffMinutes = Math.round(diffMs / 1000 / 60);
+        const diffSeconds = Math.round(diffMs / 1000);
+        const diffMinutes = Math.round(diffSeconds / 60);
+        const diffHours = Math.round(diffMinutes / 60);
+        const diffDays = Math.round(diffHours / 24);
 
         if (diffMinutes < 1) return '刚刚';
         if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-        if (now.toDateString() === date.toDateString()) return `今天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
-        return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-    }
+        if (diffHours < 24) return `${diffHours}小时前`;
+        if (diffDays === 1) return '昨天';
+        if (diffDays < 7) return `${diffDays}天前`;
+        return date.toLocaleDateString('zh-CN'); // 超过一周则显示具体日期
+}
 
 // --- 通话核心功能函数 ---
 

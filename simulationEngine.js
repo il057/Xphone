@@ -2,6 +2,7 @@ import { db, apiLock, getActiveApiProfile } from './db.js';
 const notificationChannel = new BroadcastChannel('xphone_notifications');
 
 
+
 /**
  * 离线模拟引擎的主函数
  * 当用户重新打开应用时调用此函数。
@@ -489,9 +490,12 @@ export async function runActiveSimulationTick() {
                 // 每个心跳周期，每个群聊有 15% 的几率发生一次主动行为
                 if (group.members && group.members.length > 0 && Math.random() < groupChatProbability) {
                     // 从群成员中随机挑选一个“搞事”的
-                    const actor = group.members[Math.floor(Math.random() * group.members.length)];
-                    console.log(`群聊 "${group.name}" 被唤醒，随机挑选 "${actor.name}" 发起行动...`);
-                    await triggerInactiveGroupAiAction(actor, group);
+                    const actorId = group.members[Math.floor(Math.random() * group.members.length)];
+                    const actor = await db.chats.get(actorId); // 获取完整的角色信息
+                    if (actor) {
+                        console.log(`群聊 "${group.name}" 被唤醒，随机挑选 "${actor.name}" 发起行动...`);
+                        await triggerInactiveGroupAiAction(actor, group);
+                    }
                 }
             }
         }
@@ -511,10 +515,11 @@ async function triggerInactiveAiAction(charId) {
     const apiConfig = await getActiveApiProfile(); 
     if (!apiConfig) return; // 如果没有任何API方案，则中止
     
-    const [personaPresets, globalSettings] = await Promise.all([
-        db.personaPresets.toArray(),
-        db.globalSettings.get('main')
-    ]);
+        const [personaPresets, globalSettings, stickers] = await Promise.all([
+                db.personaPresets.toArray(),
+                db.globalSettings.get('main'),
+                db.userStickers.toArray() // <-- 新增这行
+        ]);
 
     let activeUserPersona = null;
     if (personaPresets) {
@@ -650,7 +655,10 @@ ${commentsText}
         const lastMessageTime = new Date(lastUserMessage.timestamp).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
         recentContextSummary = `在 ${lastMessageTime}，用户 (${userNickname}) 最后对你说：“${String(lastUserMessage.content).substring(0, 50)}...”。`;
     }
-
+        const stickerListForPrompt = stickers.length > 0 
+                ? stickers.map(s => `- "${s.name}"`).join('\n')
+                : '- (表情库是空的)';
+                
     const conversationHistory = chat.history.filter(m => !m.isHidden).slice(-20); // 获取最近20条可见消息
 
     let comprehensiveConversationSummary = "这是你们最近的对话记录：\n";
@@ -727,6 +735,9 @@ ${commentsText}
 # PART 3: 可用后台工具箱 (请选择一项)
 -   **保持沉默 (do_nothing)**: 如果经过思考，你认为当前情景下，你的角色确实没有行动的理由（例如：深夜正在睡觉、心情低落不想说话、或没有值得互动的新鲜事），才选择此项。
 -   主动发消息给用户: \`[{"type": "text", "content": "你想对用户说的话..."}]\`
+-   发送表情: \`[{"type": "send_sticker", "name": "表情描述文字"}]\` 
+-   发送语音 (文字模拟): \`[{"type": "voice_message", "content": "语音的文字内容"}]\` 
+-   发送图片 (文字描述): \`[{"type": "send_photo", "description": "对图片内容的详细描述"}]\`
 -   发布文字动态: \`[{"type": "create_post", "postType": "text", "content": "动态的文字内容...", "mentionIds": ["(可选)要@的角色ID"]}]\`
 -   发布图片动态: \`[{"type": "create_post", "postType": "image", "publicText": "(可选)配图文字", "imageDescription": "对图片的详细描述", "mentionIds": ["(可选)要@的角色ID"]}]\`
 -   点赞动态: \`[{"type": "like_post", "postId": 12345}]\` (postId 必须是下面看到的动态ID)
@@ -757,6 +768,10 @@ ${comprehensiveConversationSummary}
 ${recentPostsSummary}
 
 ${mentionableFriendsPrompt}
+
+## 4.6 你的可用资源库 (必须精确匹配名称) // <-- 新增整个 4.6 节
+- **你的可用表情库**:
+${stickerListForPrompt}
 
 # PART 5: 最终输出格式要求
 你的整个回复必须是一个【单一的JSON对象】，该对象必须包含一个名为 "actions" 的键，其值是一个包含【一个或多个行动对象的数组】。你可以一次性发送多条短消息来模拟真人的聊天习惯。
@@ -850,29 +865,41 @@ ${mentionableFriendsPrompt}
                     console.log(`后台活动: 角色 "${actorName}" 决定保持沉默。`);
                     break;
                 case 'text':
-                    const textMessage = {
-                        role: 'assistant',
-                        senderName: actorName,
-                        content: action.content,
-                        timestamp: Date.now()
-                    };
-                    chat.history.push(textMessage);
-                    chat.lastMessageTimestamp = textMessage.timestamp;
-                    chat.lastMessageContent = textMessage;
-                    chat.unreadCount = (chat.unreadCount || 0) + 1;
-                    await db.chats.put(chat);
-                    notificationChannel.postMessage({ type: 'new_message' });
-                    if (Notification.permission === 'granted') {
-                        const senderChat = allChatsMap.get(charId);
-                        const notificationOptions = {
-                            body: action.content,
-                            icon: senderChat?.settings?.aiAvatar || 'https://files.catbox.moe/kkll8p.svg',
-                            tag: `xphone-message-${charId}`
-                        };
-                        new Notification(`${actorName}给你发来一条新消息`, notificationOptions);
-                    }
-                    console.log(`后台活动: 角色 "${actorName}" 主动发送了消息: ${action.content}`);
-                    break;
+                case 'send_sticker':
+                case 'voice_message':
+                case 'send_photo': 
+                        { 
+                                let messageContent = {};
+                                if (action.type === 'send_sticker') {
+                                        // 查找表情URL
+                                        const sticker = stickers.find(s => s.name === action.name);
+                                        if (sticker) {
+                                                messageContent = { content: sticker.url, meaning: sticker.name };
+                                        } else {
+                                                // 如果找不到表情，则作为文本发送
+                                                action.type = 'text';
+                                                messageContent = { content: `[表情: ${action.name}]` };
+                                        }
+                                } else if (action.type === 'send_photo') {
+                                        messageContent = { content: action.description };
+                                }
+                                else {
+                                        messageContent = { content: action.content };
+                                }
+
+                                const message = {
+                                        role: 'assistant',
+                                        senderName: actorName,
+                                        senderId: charId,
+                                        type: action.type,
+                                        timestamp: Date.now(),
+                                        ...messageContent
+                                };
+
+                                // 调用新的统一处理函数
+                                await processAndNotify(chat, message, allChatsMapForNotify);
+                        }
+                        break;
                 case 'create_post':
                     const postData = {
                         authorId: charId,
@@ -1052,177 +1079,204 @@ ${contextSummary || "（没有找到相关的对话记录）"}
  * @param {object} group - 该成员所在的群聊对象
  */
 async function triggerInactiveGroupAiAction(actor, group) {
-    const apiConfig = await getActiveApiProfile();
-    if (!apiConfig) return;
+        const apiConfig = await getActiveApiProfile();
+        if (!apiConfig) return;
 
-    let isApiConfigMissing = false;
-    if (apiConfig?.apiProvider === 'gemini') {
-        if (!apiConfig?.apiKey || !apiConfig.model) isApiConfigMissing = true;
-    } else {
-        if (!apiConfig?.proxyUrl || !apiConfig?.apiKey || !apiConfig.model) isApiConfigMissing = true;
-    }
-    if (isApiConfigMissing) return;
-    
-    const currentTime = new Date().toLocaleString('zh-CN', { dateStyle: 'full', timeStyle: 'short' });
-    const userNickname = group.settings.myNickname || '我';
-    
-    const membersList = group.members.map(m => `- ${m.name}: ${m.settings?.aiPersona || '无'}`).join('\n');
-    const recentHistory = group.history.filter(m => !m.isHidden).slice(-10); // 获取最近10条可见消息
+        let isApiConfigMissing = false;
+        if (apiConfig?.apiProvider === 'gemini') {
+                if (!apiConfig?.apiKey || !apiConfig.model) isApiConfigMissing = true;
+        } else {
+                if (!apiConfig?.proxyUrl || !apiConfig?.apiKey || !apiConfig.model) isApiConfigMissing = true;
+        }
+        if (isApiConfigMissing) return;
 
-    let recentContextSummary = "群里最近很安静。";
-    if (recentHistory.length > 0) {
-        const lastMsg = recentHistory[recentHistory.length - 1];
-        const lastMessageTime = new Date(lastMsg.timestamp).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
-        recentContextSummary = `在 ${lastMessageTime}，群里最后的对话是关于：“...${String(lastMsg.content).substring(0, 40)}...”。`;
-    }
+        const currentTime = new Date().toLocaleString('zh-CN', { dateStyle: 'full', timeStyle: 'short' });
+        const userNickname = group.settings.myNickname || '我';
+        const stickers = await db.userStickers.toArray();
+        const stickerListForPrompt = stickers.length > 0
+                ? stickers.map(s => `- "${s.name}"`).join('\n')
+                : '- (表情库是空的)';
+        const memberDetails = await db.chats.bulkGet(group.members);
+        // 使用获取到的详细信息来生成列表
+        const membersList = memberDetails.filter(Boolean).map(m => `- ${m.name}: ${m.settings?.aiPersona || '无'}`).join('\n');
+        const recentHistory = group.history.filter(m => !m.isHidden).slice(-10); // 获取最近10条可见消息
 
-    const systemPrompt = `
-        # 你的任务
-        你现在是群聊【${group.name}】中的角色“${actor.name}”。现在是${currentTime}，群里很安静，你可以【主动发起一个动作】，来表现你的个性和独立生活，让群聊热闹起来。
-         # 内心独白 (决策前必须思考)
-        1.  **我 (${actor.name}) 此刻的心理状态是什么？** (开心/无聊/好奇...)
-        2.  **我 (${actor.name}) 现在最想做什么？** (分享趣事/找人聊天/反驳观点...)
-        3.  **根据以上两点，我有必要发言或行动吗？**
+        let recentContextSummary = "群里最近很安静。";
+        if (recentHistory.length > 0) {
+                const lastMsg = recentHistory[recentHistory.length - 1];
+                const lastMessageTime = new Date(lastMsg.timestamp).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
+                recentContextSummary = `在 ${lastMessageTime}，群里最后的对话是关于：“...${String(lastMsg.content).substring(0, 40)}...”。`;
+        }
 
-        # 核心规则
-        1.  **【发言选择与沉默铁律】**: 并不是每个角色都需要在每一轮都发言。在决定一个角色是否发言前，你必须进行上述的“内心独白”。如果评估结果是没有必要行动，就【必须】选择“保持沉默”。真实感来源于克制。
-        2.  **【时间感知铁律】**: 你的行动【必须】符合你的人设和当前时间 (${currentTime})。你需要参考下方“最近的群聊内容”中记录的**上一次互动时间**，如果距离现在已经很久，你的发言应该是开启一个符合当前时间的新话题，而不是突然回复一个旧话题。
-        3.  你的回复【必须】是一个包含【一个动作】的JSON数组。
-        4.  你【不能】扮演用户("${userNickname}")或其他任何角色，只能是你自己("${actor.name}")。
-        5.  **【【【称呼自然化铁律】】】**: 你的称呼方式必须反映你与对方的关系、好感度以及当前的对话氛围。不要总是生硬地使用全名或简称。
-            1.  **@提及**: 使用 \`@\` 符号时，后面必须跟对方的【昵称】 (例如: @az)。
+        const systemPrompt = `
+# 你的任务
+你现在是群聊【${group.name}】中的角色“${actor.name}”。现在是${currentTime}，群里很安静，你可以【主动发起一个动作】，来表现你的个性和独立生活，让群聊热闹起来。
+        # 内心独白 (决策前必须思考)
+1.  **我 (${actor.name}) 此刻的心理状态是什么？** (开心/无聊/好奇...)
+2.  **我 (${actor.name}) 现在最想做什么？** (分享趣事/找人聊天/反驳观点...)
+3.  **根据以上两点，我有必要发言或行动吗？**
 
-            2.  **正文称呼**:
-                * **日常/普通朋友**: 优先使用对方的【简称】或【名字】 (例如：英文名只说First Name，像 "Alex"；中文名只说名，像“星辰”)。这是最常用、最自然的称呼方式。
-                * **亲密朋友/恋人**: 在合适的时机，你可以根据人设和对话氛围，使用更亲昵的【昵称】或【爱称】 (例如：'Lexie', '阿辰', '小笨蛋')。这由你自行判断，能极大地体现角色的个性和你们的特殊关系。
-                * **正式/严肃/陌生场合**: 只有在这些特殊情况下，才使用【全名】 (例如: "Alex Vanderbilt")。
+# 核心规则
+1.  **【发言选择与沉默铁律】**: 并不是每个角色都需要在每一轮都发言。在决定一个角色是否发言前，你必须进行上述的“内心独白”。如果评估结果是没有必要行动，就【必须】选择“保持沉默”。真实感来源于克制。
+2.  **【时间感知铁律】**: 你的行动【必须】符合你的人设和当前时间 (${currentTime})。你需要参考下方“最近的群聊内容”中记录的**上一次互动时间**，如果距离现在已经很久，你的发言应该是开启一个符合当前时间的新话题，而不是突然回复一个旧话题。
+3.  你的回复【必须】是一个包含【一个动作】的JSON数组。
+4.  你【不能】扮演用户("${userNickname}")或其他任何角色，只能是你自己("${actor.name}")。
+5.  **【【【称呼自然化铁律】】】**: 你的称呼方式必须反映你与对方的关系、好感度以及当前的对话氛围。不要总是生硬地使用全名或简称。
+        1.  **@提及**: 使用 \`@\` 符号时，后面必须跟对方的【昵称】 (例如: @az)。
 
-            这会让你的角色更加真实和有人情味。
+        2.  **正文称呼**:
+        * **日常/普通朋友**: 优先使用对方的【简称】或【名字】 (例如：英文名只说First Name，像 "Alex"；中文名只说名，像“星辰”)。这是最常用、最自然的称呼方式。
+        * **亲密朋友/恋人**: 在合适的时机，你可以根据人设和对话氛围，使用更亲昵的【昵称】或【爱称】 (例如：'Lexie', '阿辰', '小笨蛋')。这由你自行判断，能极大地体现角色的个性和你们的特殊关系。
+        * **正式/严肃/陌生场合**: 只有在这些特殊情况下，才使用【全名】 (例如: "Alex Vanderbilt")。
 
-        # 你可以做什么？ (根据你的人设【选择一项】最想做的)
-        - **开启新话题**: 问候大家，或者分享一件你正在做/想做的事。
-        - **@某人**: 主动与其他AI成员或用户互动。
-        - **发表情包**: 用一个表情来表达你此刻的心情。
-        - **发红包**: 如果你心情好或想庆祝，可以发个红包。
-        - **发起外卖**: 肚子饿了？喊大家一起点外卖。
+        这会让你的角色更加真实和有人情味。
 
-        # 指令格式 (你的回复【必须】是包含一个对象的JSON数组):
-        - 保持沉默: \`[{"type": "do_nothing"}]\` (如果你根据人设和当前情况，觉得没有必要进行任何互动，就使用这个指令)
-        - 发消息: \`[{"type": "text", "name": "${actor.name}", "content": "你想说的话..."}]\`
-        - 发表情: \`[{"type": "send_sticker", "name": "${actor.name}", "stickerName": "表情描述"}]\`
-        - 发红包: \`[{"type": "red_packet", "name": "${actor.name}", "packetType": "lucky", "amount": 8.88, "count": 3, "greeting": "来抢！"}]\`
-        - 发起外卖: \`[{"type": "waimai_request", "name": "${actor.name}", "productInfo": "一份麻辣烫", "amount": 30}]\`
-        
-        # 供你决策的参考信息：
-        - 你的角色设定: ${actor.persona || '无'}
-        - 群成员列表: 
-        ${membersList}
-        - 最近的群聊内容:
-        ${recentContextSummary}
+# 你可以做什么？ (根据你的人设【选择一项】最想做的)
+- **开启新话题**: 问候大家，或者分享一件你正在做/想做的事。
+- **@某人**: 主动与其他AI成员或用户互动。
+- **发表情包**: 用一个表情来表达你此刻的心情。
+- **发红包**: 如果你心情好或想庆祝，可以发个红包。
+- **发起外卖**: 肚子饿了？喊大家一起点外卖。
+
+# 指令格式 (你的回复【必须】是包含一个对象的JSON数组):
+- 保持沉默: \`[{"type": "do_nothing"}]\` (如果你根据人设和当前情况，觉得没有必要进行任何互动，就使用这个指令)
+- 发消息: \`[{"type": "text", "name": "${actor.name}", "content": "你想说的话..."}]\`
+- 发表情: \`[{"type": "send_sticker", "name": "${actor.name}", "stickerName": "表情描述"}]\`
+- 发红包: \`[{"type": "red_packet", "name": "${actor.name}", "packetType": "lucky", "amount": 8.88, "count": 3, "greeting": "来抢！"}]\`
+- 发起外卖: \`[{"type": "waimai_request", "name": "${actor.name}", "productInfo": "一份麻辣烫", "amount": 30}]\`
+
+# 供你决策的参考信息：
+- 你的角色设定: ${actor.persona || '无'}
+- 群成员列表: 
+${membersList}
+- 最近的群聊内容:
+${recentContextSummary}
+
+- **你的可用表情库**:  
+${stickerListForPrompt}
     `;
 
-    try {
-        let response;
+        try {
+                let response;
 
-        if (apiConfig.apiProvider === 'gemini') {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-            const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
-            response = await fetch(geminiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: geminiContents,
-                    generationConfig: {
-                        temperature: 0.9,
-                        // Gemini API 需要通过MIME type来确保返回的是JSON
-                        responseMimeType: "application/json",
-                    }
-                })
-            });
+                if (apiConfig.apiProvider === 'gemini') {
+                        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
+                        const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
+                        response = await fetch(geminiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                        contents: geminiContents,
+                                        generationConfig: {
+                                                temperature: 0.9,
+                                                // Gemini API 需要通过MIME type来确保返回的是JSON
+                                                responseMimeType: "application/json",
+                                        }
+                                })
+                        });
 
-        } else {
-            // 原有的默认/反代 API 逻辑
-            response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                body: JSON.stringify({
-                    model: apiConfig.model,
-                    messages: [{ role: 'system', content: systemPrompt }],
-                    temperature: 0.9,
-                    // 旧API通过 response_format 参数要求JSON
-                    response_format: { type: "json_object" }
-                })
-            });
+                } else {
+                        // 原有的默认/反代 API 逻辑
+                        response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                                body: JSON.stringify({
+                                        model: apiConfig.model,
+                                        messages: [{ role: 'system', content: systemPrompt }],
+                                        temperature: 0.9,
+                                        // 旧API通过 response_format 参数要求JSON
+                                        response_format: { type: "json_object" }
+                                })
+                        });
+                }
+
+
+                if (!response.ok) throw new Error(await response.text());
+
+                const data = await response.json();
+                let rawContent;
+
+                if (apiConfig.apiProvider === 'gemini') {
+                        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0]) {
+                                rawContent = data.candidates[0].content.parts[0].text;
+                        } else {
+                                console.error("Invalid Gemini API response for triggerInactiveGroupAiAction:", data);
+                                throw new Error("Invalid Gemini API response structure.");
+                        }
+                } else {
+                        rawContent = data.choices[0].message.content;
+                }
+
+                const parsedObject = extractAndParseJson(rawContent);
+
+                // Check if parsing was successful and if the object contains the "actions" array.
+                if (!parsedObject || !Array.isArray(parsedObject.actions)) {
+                        console.error(`角色 "${chat.name}" 的独立行动失败: AI返回的内容不是预期的 { "actions": [...] } 格式。`, {
+                                originalResponse: rawContent,
+                                parsedResult: parsedObject
+                        });
+                        return; // Safely exit if the format is wrong.
+                }
+
+                // Correctly reference the actions array within the parsed object.
+                const responseArray = parsedObject.actions;
+
+                for (const action of responseArray) {
+                        // 因为这是后台活动，我们只处理几种简单的主动行为
+                        switch (action.type) {
+                                case 'do_nothing':
+                                        console.log(`后台群聊活动: "${actor.name}" 在 "${group.name}" 中决定保持沉默。`);
+                                        break;
+                                case 'text':
+                                case 'send_sticker':
+                                case 'red_packet':
+                                case 'waimai_request':
+                                        { 
+                                                let messageContent = {};
+                                                let messageType = action.type;
+
+                                                if (action.type === 'send_sticker') {
+                                                        const sticker = stickers.find(s => s.name === action.stickerName);
+                                                        if (sticker) {
+                                                                messageContent = { content: sticker.url, meaning: sticker.name };
+                                                        } else {
+                                                                // 找不到表情，则作为文本发送
+                                                                messageType = 'text';
+                                                                messageContent = { content: `[表情: ${action.stickerName}]` };
+                                                        }
+                                                } else if (action.type === 'text') {
+                                                        messageContent = { content: action.content };
+                                                } else if (action.type === 'red_packet') {
+                                                        messageContent = { ...action };
+                                                } else if (action.type === 'waimai_request') {
+                                                        messageContent = { ...action, status: 'pending' };
+                                                }
+
+                                                const message = {
+                                                        role: 'assistant',
+                                                        senderName: actor.name,
+                                                        senderId: actor.id, // 别忘了加上 senderId
+                                                        type: messageType,
+                                                        timestamp: Date.now(),
+                                                        ...messageContent
+                                                };
+
+                                        const groupToUpdate = await db.chats.get(group.id);
+                                        groupToUpdate.history.push(message);
+                                        groupToUpdate.lastMessageTimestamp = message.timestamp;
+                                        groupToUpdate.lastMessageContent = message;
+                                        groupToUpdate.unreadCount = (groupToUpdate.unreadCount || 0) + 1;
+                                        await db.chats.put(groupToUpdate);
+                                        notificationChannel.postMessage({ type: 'new_message' });
+
+                                        console.log(`后台群聊活动: "${actor.name}" 在 "${group.name}" 中执行了 ${action.type} 动作。`);
+                                        break;
+                                }
+                        }
+                }
+        } catch (error) {
+                console.error(`角色 "${actor.name}" 在群聊 "${group.name}" 的独立行动失败:`, error);
         }
-
-
-        if (!response.ok) throw new Error(await response.text());
-        
-        const data = await response.json();
-        let rawContent;
-
-        if (apiConfig.apiProvider === 'gemini') {
-            if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-                rawContent = data.candidates[0].content.parts[0].text;
-            } else {
-                console.error("Invalid Gemini API response for triggerInactiveGroupAiAction:", data);
-                throw new Error("Invalid Gemini API response structure.");
-            }
-        } else {
-            rawContent = data.choices[0].message.content;
-        }
-
-        const parsedObject = extractAndParseJson(rawContent);
-
-        // Check if parsing was successful and if the object contains the "actions" array.
-        if (!parsedObject || !Array.isArray(parsedObject.actions)) {
-            console.error(`角色 "${chat.name}" 的独立行动失败: AI返回的内容不是预期的 { "actions": [...] } 格式。`, {
-                originalResponse: rawContent,
-                parsedResult: parsedObject
-            });
-            return; // Safely exit if the format is wrong.
-        }
-        
-        // Correctly reference the actions array within the parsed object.
-        const responseArray = parsedObject.actions;
-
-        for (const action of responseArray) {
-            // 因为这是后台活动，我们只处理几种简单的主动行为
-            switch (action.type) {
-                case 'do_nothing':
-                    console.log(`后台群聊活动: "${actor.name}" 在 "${group.name}" 中决定保持沉默。`);
-                    break;
-                case 'text':
-                case 'send_sticker':
-                case 'red_packet':
-                case 'waimai_request':
-                    const message = {
-                        role: 'assistant',
-                        senderName: actor.name,
-                        type: action.type,
-                        timestamp: Date.now(),
-                        // 根据action类型填充不同字段
-                        ...(action.type === 'text' && { content: action.content }),
-                        ...(action.type === 'send_sticker' && { content: "一个表情", meaning: action.stickerName }), // sticker需要转换
-                        ...(action.type === 'red_packet' && { ...action }),
-                        ...(action.type === 'waimai_request' && { ...action, status: 'pending' }),
-                    };
-                    
-                    const groupToUpdate = await db.chats.get(group.id);
-                    groupToUpdate.history.push(message);
-                    groupToUpdate.lastMessageTimestamp = message.timestamp;
-                    groupToUpdate.lastMessageContent = message;
-                    groupToUpdate.unreadCount = (groupToUpdate.unreadCount || 0) + 1;
-                    await db.chats.put(groupToUpdate);
-                    notificationChannel.postMessage({ type: 'new_message' });
-                    
-                    console.log(`后台群聊活动: "${actor.name}" 在 "${group.name}" 中执行了 ${action.type} 动作。`);
-                    break;
-            }
-        }
-    } catch (error) {
-        console.error(`角色 "${actor.name}" 在群聊 "${group.name}" 的独立行动失败:`, error);
-    }
 }
 
 /**
@@ -1273,14 +1327,73 @@ function extractAndParseJson(raw) {
         return null;
     }
 }
+
+/**
+ * 格式化时间戳为相对时间字符串
+ * @param {Date | string | number} timestamp - 要格式化的时间戳
+ * @returns {string} - 格式化后的字符串 (例如 "刚刚", "5分钟前", "昨天")
+ */
 function formatRelativeTime(timestamp) {
         const now = new Date();
         const date = new Date(timestamp);
         const diffMs = now - date;
-        const diffMinutes = Math.round(diffMs / 1000 / 60);
+        const diffSeconds = Math.round(diffMs / 1000);
+        const diffMinutes = Math.round(diffSeconds / 60);
+        const diffHours = Math.round(diffMinutes / 60);
+        const diffDays = Math.round(diffHours / 24);
 
         if (diffMinutes < 1) return '刚刚';
         if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-        if (now.toDateString() === date.toDateString()) return `今天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
-        return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-    }
+        if (diffHours < 24) return `${diffHours}小时前`;
+        if (diffDays === 1) return '昨天';
+        if (diffDays < 7) return `${diffDays}天前`;
+        return date.toLocaleDateString('zh-CN'); // 超过一周则显示具体日期
+}
+
+/**
+ * 统一处理AI生成的后台消息：保存到数据库、更新状态并发送通知。
+ * @param {object} chat - 需要更新的聊天对象。
+ * @param {object} message - 要添加的消息对象。
+ * @param {Map<string, object>} allChatsMap - 用于快速查找头像的聊天对象Map。
+ */
+async function processAndNotify(chat, message, allChatsMap) {
+        chat.history.push(message);
+        chat.lastMessageTimestamp = message.timestamp;
+        chat.lastMessageContent = message; // 存储完整消息对象以供预览
+        chat.unreadCount = (chat.unreadCount || 0) + 1;
+        await db.chats.put(chat);
+
+        // 发送跨页面通知
+        const notificationChannel = new BroadcastChannel('xphone_notifications');
+        notificationChannel.postMessage({ type: 'new_message' });
+
+        // 触发桌面通知
+        if (Notification.permission === 'granted') {
+                const senderChat = allChatsMap.get(chat.id); // 使用传入的Map
+                let notificationBody = '';
+
+                // 根据消息类型生成不同的通知内容
+                switch (message.type) {
+                        case 'sticker':
+                                notificationBody = `[表情] ${message.meaning}`;
+                                break;
+                        case 'voice_message':
+                                notificationBody = `[语音] ${message.content}`;
+                                break;
+
+                        case 'text_photo':
+                                notificationBody = `[图片] ${message.content}`;
+                                break;
+                        default: // 'text' and others
+                                notificationBody = message.content;
+                }
+
+                const notificationOptions = {
+                        body: notificationBody,
+                        icon: senderChat?.settings?.aiAvatar || 'https://files.catbox.moe/kkll8p.svg',
+                        tag: `xphone-message-${chat.id}` // 使用tag可以防止同一角色的消息产生过多重复通知
+                };
+                new Notification(`${message.senderName}给你发来一条新消息`, notificationOptions);
+        }
+        console.log(`后台活动: 角色 "${message.senderName}" 主动发送了 ${message.type || 'text'} 消息。`);
+}

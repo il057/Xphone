@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { showToast } from './ui-helpers.js';
+import { showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DOM Elements ---
@@ -59,7 +59,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function deleteSelectedLogs() {
         const count = selectedLogs.size;
         if (count === 0) return;
-        if (!confirm(`确定要删除选中的 ${count} 条通话记录吗？\n此操作将同步删除聊天记录中的隐藏上下文。`)) return;
+        const confirmed = await showConfirmModal(
+            '删除通话记录',
+            `确定要删除选中的 ${count} 条通话记录吗？\n此操作将同步删除聊天记录中的隐藏上下文。`,
+            '删除',
+            '取消'
+        );
+        if (!confirmed) return;
 
         try {
             const logsToDelete = await db.callLogs.bulkGet(Array.from(selectedLogs));

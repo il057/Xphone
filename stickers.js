@@ -1,6 +1,6 @@
 // phone/stickers.js (使用共享UI组件的新版本)
 import { db, uploadImage, getActiveApiProfile } from './db.js';
-import { showUploadChoiceModal, promptForInput, showToast } from './ui-helpers.js';
+import { showUploadChoiceModal, promptForInput, showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
@@ -320,7 +320,13 @@ ${text}
 
     deleteSelectedBtn.addEventListener('click', async () => {
         if (selectedStickers.size === 0) return showToast('请先选择要操作的表情。', 'error');
-        if (confirm(`确定要删除选中的 ${selectedStickers.size} 个表情吗？`)) {
+        const confirmed = await showConfirmModal(
+            '删除表情',
+            `确定要删除选中的 ${selectedStickers.size} 个表情吗？`,
+            '删除',
+            '取消'
+        );
+        if (confirmed) {
             await db.userStickers.bulkDelete(Array.from(selectedStickers));
             toggleEditMode();
         }

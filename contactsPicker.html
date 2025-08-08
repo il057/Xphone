@@ -87,7 +87,7 @@
                     ctx.drawImage(img, x, y, cell, cell);
                     res();
                 };
-                img.onerror = () => res();                   // 失败留空即可
+                img.onerror = () => res(); // 失败留空即可
                 img.src = url || fallback;
                 }))
             );
@@ -155,12 +155,7 @@
             const membersData = (await db.chats.bulkGet(memberIds)).filter(Boolean);
 
             // 1. 更新成员列表
-            group.members = membersData.map(m => ({
-                id: m.id,
-                name: m.name,
-                avatar: m.settings?.aiAvatar || 'https://files.catbox.moe/kkll8p.svg',
-                persona: m.settings?.aiPersona || ''
-            }));
+            group.members = memberIds;
 
             // 2. 重新生成并更新群头像
             const avatarUrls = membersData
@@ -197,12 +192,7 @@
                 name: groupName.trim(),
                 isGroup: 1,
                 history: [],
-                members: membersData.map(m => ({
-                    id: m.id,
-                    name: m.name,
-                    avatar: m.settings?.aiAvatar || 'https://files.catbox.moe/kkll8p.svg',
-                    persona: m.settings?.aiPersona || ''
-                })),
+                members: memberIds,
                 settings: {
                     groupAvatar: groupAvatarUri, // 保存Base64编码的URI
                     myNickname: '我',
@@ -281,7 +271,7 @@
                     applyThemeColor('#3b82f6'); // 回退到默认色
                 }
 
-                const existingMemberIds = group ? group.members.map(m => m.id) : [];
+                const existingMemberIds = group ? group.members : []; // 直接使用这个数组
                 await renderContacts(existingMemberIds);
             } else {
                 headerTitle.textContent = '选择联系人';

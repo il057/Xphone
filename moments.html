@@ -251,7 +251,7 @@
     
 <script type="module">
     import { db } from './db.js';
-    import { showToast } from './ui-helpers.js';
+    import { showToast, showConfirmModal } from './ui-helpers.js';
 
     // 固定ID，用于区分“当前用户”，而不是依赖易变的昵称
     const CURRENT_USER_ID = 'user';
@@ -726,7 +726,13 @@
 
         if (target.closest('.delete-post-btn')) {
             e.preventDefault();
-            if (confirm('确定要删除这条动态吗？')) {
+            const confirmed = await showConfirmModal(
+                '删除动态', 
+                '确定要删除这条动态吗？',
+                '删除',
+                '取消'
+            );
+            if (confirmed) {
                 await db.xzonePosts.delete(postId);
                 postEl.remove();
             }

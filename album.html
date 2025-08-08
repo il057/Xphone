@@ -87,7 +87,7 @@
 
     <script type="module">
         import { db, uploadImage } from './db.js';
-        import { showUploadChoiceModal, promptForInput, showToast } from './ui-helpers.js';
+        import { showUploadChoiceModal, promptForInput, showToast, showConfirmModal } from './ui-helpers.js';
 
         // --- DOM Elements ---
         const gridEl = document.getElementById('photo-grid');
@@ -156,10 +156,16 @@
         }
 
         async function deletePhoto(photoId) {
-            if (confirm("确定要从公共相册中删除这张照片吗？")) {
-                await db.globalAlbum.delete(photoId);
-                await renderAlbum();
-            }
+            const confirmed = await showConfirmModal(
+                '删除照片',
+                '确定要从公共相册中删除这张照片吗？',
+                '删除',
+                '取消'
+            );
+            if (!confirmed) return;
+
+            await db.globalAlbum.delete(photoId);
+            await renderAlbum();
         }
         
         // --- Event Listeners Setup ---
