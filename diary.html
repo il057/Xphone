@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+        <meta charset="UTF-8">
+        <script>
+                (function () {
+                        try {
+                                const themeMode = localStorage.getItem('xphone-theme-mode');
+                                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+                                if (themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark)) {
+                                        document.documentElement.classList.add('dark');
+                                }
+                        } catch (e) { }
+                })();
+        </script>
+
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+        <link rel="manifest" href="./manifest.json">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Xphone">
+        <meta name="theme-color" content="#3b82f6" />
+        <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+
+        <title>日记</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+        <script type="module" src="applyGlobalStyles.js" defer></script>
+        <link rel="stylesheet" href="sharedStyles.css">
+
+        <style>
+                :root {
+                        --theme-color: #3b82f6;
+                }
+
+                body {
+                        font-family: 'Inter', sans-serif;
+                }
+
+                .header-btn {
+                        color: #888888;
+                        transition: color 0.2s ease-in-out;
+                }
+
+                .header-btn:hover {
+                        color: var(--theme-color);
+                }
+
+                .diary-card .highlight {
+                        background-color: #fef08a;
+                        /* yellow-200 */
+                        padding: 0 2px;
+                        border-radius: 3px;
+                }
+
+                html.dark .diary-card .highlight {
+                        background-color: #facc15;
+                        /* yellow-400 */
+                        color: #422006;
+                }
+
+                .diary-card .spoiler {
+                        background-color: #374151;
+                        /* gray-700 */
+                        color: transparent;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        padding: 0 2px;
+                        border-radius: 3px;
+                }
+
+                .diary-card .spoiler:hover {
+                        background-color: #4b5563;
+                        /* gray-600 */
+                }
+
+                .diary-card .spoiler.revealed {
+                        background-color: transparent;
+                        color: inherit;
+                }
+
+                html.dark .diary-card .spoiler {
+                        background-color: #9ca3af;
+                        /* gray-400 */
+                }
+
+                html.dark .diary-card .spoiler:hover {
+                        background-color: #6b7280;
+                        /* gray-500 */
+                }
+        </style>
+</head>
+
+<body class="bg-gray-100">
+        <div class="w-full h-full mx-auto flex flex-col bg-white">
+                <header class="app-header">
+                        <div class="flex items-center justify-between relative">
+                                <a href="javascript:history.back()" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+                                                viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                </a>
+                                <h1 id="header-title" class="text-base font-semibold text-gray-800">日记</h1>
+                                <div class="w-6"></div>
+                        </div>
+                </header>
+
+                <main id="diary-list" class="flex-grow main-content px-4 pb-4 space-y-4">
+                </main>
+        </div>
+
+        <div id="edit-modal"
+                class="hidden fixed inset-0 bg-black bg-opacity-50 z-20 flex items-center justify-center p-4">
+                <div class="bg-white rounded-lg w-full max-w-sm p-4">
+                        <h3 class="font-semibold text-lg mb-4">编辑日记</h3>
+                        <textarea id="edit-textarea" class="w-full p-2 border rounded-md" rows="8"></textarea>
+                        <div class="mt-4">
+                                <label for="edit-keywords-input"
+                                        class="block text-sm font-medium text-gray-700 mb-1">关键词 (用逗号分隔)</label>
+                                <input type="text" id="edit-keywords-input" class="w-full p-2 border rounded-md">
+                        </div>
+                        <div class="flex justify-end gap-2 mt-4">
+                                <button id="cancel-edit" class="px-4 py-2 bg-gray-200 rounded-md">取消</button>
+                                <button id="save-edit" class="px-4 py-2 text-white rounded-md"
+                                        style="background-color: var(--theme-color);">保存</button>
+                        </div>
+                </div>
+        </div>
+
+
+        <script type="module" src="diary.js" defer></script>
+</body>
+
+</html>

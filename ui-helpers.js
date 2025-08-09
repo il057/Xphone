@@ -447,9 +447,9 @@ export function displayToastFromSession() {
  * @param {string} rawContent - 要显示的原始文本内容。
  */
 export function showRawContentModal(title, rawContent) {
-    const modalHtml = `
+        const modalHtml = `
             <h3 class="text-lg font-semibold text-center p-4 border-b">${title}</h3>
-            <main class="flex-grow p-4 overflow-y-auto">
+            <main class="flex-grow p-4 overflow-y-auto" style="max-height: 70vh;">
                 <pre class="whitespace-pre-wrap text-xs text-gray-600 font-mono" style="word-break: break-all;">${rawContent}</pre>
             </main>
             <footer class="p-4 border-t grid grid-cols-2 gap-3">
@@ -457,19 +457,19 @@ export function showRawContentModal(title, rawContent) {
                 <button id="close-raw-content-modal" class="modal-btn modal-btn-confirm">关闭</button>
             </footer>
     `;
-    const modal = createModal('raw-content-modal', modalHtml);
+        const modal = createModal('raw-content-modal', modalHtml);
 
-    const cleanup = () => modal.remove();
+        const cleanup = () => modal.remove();
 
-    modal.querySelector('#close-raw-content-modal').addEventListener('click', cleanup);
-    modal.querySelector('#copy-raw-content-btn').addEventListener('click', () => {
-        navigator.clipboard.writeText(rawContent).then(() => {
-            showToast('已复制到剪贴板');
-        }).catch(err => {
-            showToast('复制失败', 'error');
-            console.error('Copy failed', err);
+        modal.querySelector('#close-raw-content-modal').addEventListener('click', cleanup);
+        modal.querySelector('#copy-raw-content-btn').addEventListener('click', () => {
+                navigator.clipboard.writeText(rawContent).then(() => {
+                        showToast('已复制到剪贴板');
+                }).catch(err => {
+                        showToast('复制失败', 'error');
+                        console.error('Copy failed', err);
+                });
         });
-    });
 }
 
 /**

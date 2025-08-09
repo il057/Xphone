@@ -374,7 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (filterAuthorId && chatsMap[filterAuthorId]) {
             const authorName = chatsMap[filterAuthorId].name;
             currentFilter = authorName;
-            headerTitle.textContent = `与 ${authorName} 的回忆`;
+            headerTitle.textContent = `与 ${chatsMap[filterAuthorId].realName} 的回忆`;
             filterBtnUiContainer.style.display = 'none';
             if (backTo === 'charProfile') {
                 backBtn.href = `charProfile.html?id=${filterAuthorId}`;

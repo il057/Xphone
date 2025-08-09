@@ -41,7 +41,9 @@ const urlsToCache = [
   './contactsPicker.html',
   './help.html',
   './callLog.html',
-  './callLog.js'
+  './callLog.js',
+  './diary.html',
+  './diary.js'
 ];
 
 // 安装 Service Worker 并缓存文件

@@ -102,6 +102,9 @@
                 <a id="view-memories-btn" href="#" class="block p-4 bg-gray-50 rounded-lg text-center font-medium text-gray-700 hover:bg-gray-100">
                     回忆
                 </a>
+                <a id="view-diaries-btn" href="#" class="block p-4 bg-gray-50 rounded-lg text-center font-medium text-gray-700 hover:bg-gray-100">
+                        日记
+                </a>
             </div>
             
             <div class="fixed bottom-10 left-0 right-0 px-6">
@@ -203,7 +206,8 @@
             const editBtn = document.getElementById('profile-edit-btn');
             const viewPostsBtn = document.getElementById('view-posts-btn');
             const viewMemoriesBtn = document.getElementById('view-memories-btn');
-            
+            const viewDiariesBtn = document.getElementById('view-diaries-btn');
+
             // --- Render Logic ---
             avatar.src = chat.settings.aiAvatar || 'https://files.catbox.moe/kkll8p.svg';
             remark.textContent = chat.name || chat.realName;
@@ -251,6 +255,7 @@
             editBtn.href = `charEditProfile.html?id=${charId}`;
             viewPostsBtn.href = `moments.html?authorId=${charId}`;
             viewMemoriesBtn.href = `memories.html?authorId=${charId}&backTo=charProfile`;
+            viewDiariesBtn.href = `diary.html?authorId=${charId}`;
             sendMessageBtn.addEventListener('click', () => {
                 // Change this line to point to the new chat room
                 window.location.href = `chatRoom.html?id=${charId}`; 

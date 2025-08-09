@@ -143,6 +143,32 @@ db.version(35).stores({
     });
 });
 
+db.version(36).stores({
+        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp',
+        apiProfiles: '++id, &profileName',
+        globalSettings: '&id, activeApiProfileId',
+        userStickers: '++id, &url, name, order',
+        worldBooks: '&id, name',
+        musicLibrary: '&id',
+        personaPresets: '++id, name, avatar, gender, birthday, persona',
+        xzoneSettings: '&id',
+        xzonePosts: '++id, timestamp, authorId',
+        xzoneAlbums: '++id, name, createdAt',
+        xzonePhotos: '++id, albumId',
+        favorites: '++id, [type+content.id], type, timestamp, chatId',
+        memories: '++id, chatId, [chatId+isImportant], authorName, isImportant, timestamp, type, targetDate',
+        bubbleThemePresets: '&name',
+        bubbleCssPresets: '&name, cssCode',
+        globalAlbum: '++id, url',
+        userAvatarLibrary: '++id, &url, name',
+        xzoneGroups: '++id, name, worldBookIds',
+        relationships: '++id, [sourceCharId+targetCharId], sourceCharId, targetCharId',
+        eventLog: '++id, timestamp, type, groupId, processedBy',
+        offlineSummary: '&id, timestamp',
+        callLogs: '++id, charId, type, startTime, duration',
+        diaries: '++id, chatId, authorId, timestamp, content, keywords, &[authorId+timestamp]'
+});
+
 /**
  * 获取当前激活的API连接方案
  * @returns {Promise<object|null>}
