@@ -867,7 +867,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         
                         // 删除该角色的所有回忆
                         await db.memories.where('chatId').equals(idToDelete).delete();
-
+                        await db.diaries.where('authorId').equals(idToDelete).delete();
+                        
                         // 删除与该角色聊天相关的收藏
                         await db.favorites.where('chatId').equals(idToDelete).delete();
                         

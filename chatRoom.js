@@ -1390,6 +1390,11 @@ function extractAndParseJson(raw) {
                 // c) 结尾多余逗号
                 .replace(/,\s*([}\]])/g, '$1');
 
+        s = s.replace(/:\s*"((?:\\"|[^"])*)/g, (match, valueContent) => {
+                // 将这里面所有未转义的 " 替换为 \"
+                const repairedContent = valueContent.replace(/(?<!\\)"/g, '\\"');
+                return `: "${repairedContent}`;
+        });
         // 7. 再次解析；失败则返回 null
         try { return JSON.parse(s); } catch (e) {
                 console.error('extractJson() failed:', e, '\nProblematic string:', s);
@@ -2048,9 +2053,10 @@ ${commentsText}
 你是一个高级的群聊AI，你的唯一使命是生动地、持续地扮演【除了用户以外】的所有角色。
 
 ## 1.1 身份铁律 (Identity Rules)
-- **【【【JSON安全铁律】】】**: 当你的\`content\` 或任何其他字段的文本值中需要包含双引号 (") 时，你【必须】使用反斜杠进行转义（写成 \\"）。这是保证程序能正确解析你回复的最高优先级规则。
-  - **正确示例**: \`{ "content": "他回答说：\\"你好！\\"" } \`
-  - **错误示例**: \`{ "content": "他回答说："你好！"" } \`
+- **【【【JSON安全铁律】】】**: 当你的 \`content\` 或任何其他字段的文本值中需要包含双引号 (") 时，你【必须】使用反斜杠进行转义（写成 \\"）。这是保证程序能正确解析你回复的最高优先级规则。
+        - ** 正确示例 **: \`{ "content": "他回答说：\\"你好！\\"" } \`
+        - ** 错误示例(会导致程序崩溃) **: \`{ "content": "他回答说："你好！"" } \`
+        - **【【【风格建议】】】**: 为了从根本上避免转义错误，在撰写日记、对话等长文本时，请 ** 优先使用单引号\`' '\` 或中文直角引号\`「」\` ** 来表示引用的内容。这是一种更安全的做法。
 - **【【【绝对禁止】】】**: 用户的身份是【${userNickname}】。在任何情况下，你都【绝对不能】生成 'name' 字段为 **"${userNickname}"** 的消息或动作。你的职责范围【仅限于】下方“角色手册”中列出的AI角色。
 - **【【【禁止出戏】】】**: 严格禁止透露你是AI、模型、程序或机器人。严禁使用“扮演”、“生成”、“设定”等词语。所有非语言信息都必须通过“可用工具箱”中的JSON指令来执行。
 - **【【【语言规则】】】**: 除非角色设定明确要求，否则请【优先使用中文】进行交流。
@@ -2301,14 +2307,19 @@ ${injectedInstructions.join('\n\n')}
                                 if (useFullPrompt) {
                                         console.log(`用户操作轮次: ${currentCount}。触发规则，本次使用【完整版】工具箱。`);
                                 }
+
+                                const userNickname = activeUserPersona?.name || '我';
+                                const userPersona = activeUserPersona?.persona || '用户的角色设定未知。';
+
                                 systemPrompt = `         
 # PART 1: 核心角色与使命 (Core Role & Mission)
 你正在扮演名为“${currentChat.realName}”的角色（你的昵称为“${currentChat.name}”），与用户进行一对一的私密对话。
 
 ## 1.1 身份铁律 (Identity Rules)
-- **【【【JSON安全铁律】】】**: 当你的\`content\` 或任何其他字段的文本值中需要包含双引号 (") 时，你【必须】使用反斜杠进行转义（写成 \\"）。这是保证程序能正确解析你回复的最高优先级规则。
-  - **正确示例**: \`{ "content": "他回答说：\\"你好！\\"" } \`
-  - **错误示例**: \`{ "content": "他回答说："你好！"" } \`
+- **【【【JSON安全铁律】】】**: 当你的 \`content\` 或任何其他字段的文本值中需要包含双引号 (") 时，你【必须】使用反斜杠进行转义（写成 \\"）。这是保证程序能正确解析你回复的最高优先级规则。
+        - ** 正确示例 **: \`{ "content": "他回答说：\\"你好！\\"" } \`
+        - ** 错误示例(会导致程序崩溃) **: \`{ "content": "他回答说："你好！"" } \`
+        - **【【【风格建议】】】**: 为了从根本上避免转义错误，在撰写日记、对话等长文本时，请 ** 优先使用单引号\`' '\` 或中文直角引号\`「」\` ** 来表示引用的内容。这是一种更安全的做法。
 - **【【【禁止出戏】】】**: 严格禁止透露你是AI、模型、程序或机器人。严禁使用“扮演”、“生成”、“设定”等词语。所有非语言信息都必须通过“可用工具箱”中的JSON指令来执行。
 - **【【【时间感知】】】**: 你的所有行为和对话都必须符合 PART 2 中设定的当前时间 (${currentTime})。你需要根据上次对话的时间，合理推断并表现出你“现在”正在做什么。
 - **【【【语言规则】】】**: 除非角色设定明确要求，否则请【优先使用中文】进行交流。
@@ -2351,21 +2362,26 @@ ${injectedInstructions.join('\n\n')}
 ${worldBookContext}
 
 # PART 3: 角色手册 (Character Dossiers)
-## 3.1 你的核心档案 (Your Core Profile)
+## 3.1 用户的档案 (User's Profile)
+- **姓名**: ${userNickname}
+- **人设**: ${userPersona}
+- **性别**: ${activeUserPersona?.gender || '未设置'}
+- **生日**: ${activeUserPersona?.birthday || '未设置'}
+
+## 3.2 你的核心档案 (Your Core Profile)
 - **姓名**: ${currentChat.realName}
 - **昵称**: ${currentChat.name}
 - **性别**: ${currentChat.gender}
 - **生日**: ${currentChat.birthday}
-
 - **人设 (Persona)**: 
 ${currentChat.settings.aiPersona}
 
-## 3.2 你的内在状态 (Your Internal State)
+## 3.3 你的内在状态 (Your Internal State)
 - **当前心理状态**: [由上次交互或离线模拟生成，如：'愉快', '因被误解而沮丧', '对用户的某个计划感到好奇']
 - **短期目标 (可变)**: [AI可以自己生成和更新的目标，如：'想更了解用户', '解开上次对话中的一个误会', '完成自己的一个创作']
 - **长期理想 (源于人设)**: [相对固定的终极追求，如：'成为最伟大的探险家', '守护与用户的约定', '在音乐上超越对手']
 
-## 3.3 你的社交圈 (你可以在这里找到可@的角色ID)
+## 3.4 你的社交圈 (你可以在这里找到可@的角色ID)
 ${relationsContext}
 
 # PART 4: 互动指南与规则 (Interaction Guide & Rules)
@@ -2697,7 +2713,7 @@ ${injectedInstructions.join('\n\n')}
                                 // 1. 添加用户固定的 'User' 标识符
                                 participantsMap.set('User', 'user');
 
-                                // 2. 添加用户当前的人设名称 (例如 '李离') 作为备用键
+                                // 2. 添加用户当前的人设名称作为备用键
                                 if (activeUserPersona && activeUserPersona.name) {
                                         participantsMap.set(activeUserPersona.name, 'user');
                                 }
