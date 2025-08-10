@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
             li.addEventListener('mousedown', (e) => {
                 pressTimer = window.setTimeout(async () => {
                     e.preventDefault();
-                    const confirmed = confirm(`确定要删除世界书《${book.name}》吗？\n此操作不可撤销。`);
+                    const confirmed = await showConfirmModal("删除世界书", `确定要删除世界书《${book.name}》吗？\n此操作不可撤销。`, "删除", "取消");
                     if (confirmed) {
                         try {
                             // 使用数据库事务来确保数据一致性
@@ -55,18 +55,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                 await db.worldBooks.delete(bookIdToDelete);
 
                                 // 2. 移除所有单人角色对该世界书的引用
-                                const relatedChars = await db.chats.where('settings.worldBookId').equals(bookIdToDelete).toArray();
-                                for (const char of relatedChars) {
-                                    // 使用 Dexie 的 dotted notation 来更新内嵌对象
-                                    await db.chats.update(char.id, { 'settings.worldBookId': '' });
-                                }
+                                    const relatedChars = await db.chats.filter(chat => chat.settings && chat.settings.worldBookId === bookIdToDelete).toArray();
+                                    for (const char of relatedChars) {
+                                            // 使用 Dexie 的 dotted notation 来更新内嵌对象
+                                            await db.chats.update(char.id, { 'settings.worldBookId': '' });
+                                    }
 
-                                // 3. 移除所有分组对该世界书的引用
-                                const relatedGroups = await db.xzoneGroups.where('worldBookIds').equals(bookIdToDelete).toArray();
-                                for (const group of relatedGroups) {
-                                    const updatedBookIds = group.worldBookIds.filter(id => id !== bookIdToDelete);
-                                    await db.xzoneGroups.update(group.id, { worldBookIds: updatedBookIds });
-                                }
+                                    // 3. 移除所有分组对该世界书的引用
+                                    const relatedGroups = await db.xzoneGroups.where('worldBookIds').equals(bookIdToDelete).toArray();
+                                    for (const group of relatedGroups) {
+                                            const updatedBookIds = group.worldBookIds.filter(id => id !== bookIdToDelete);
+                                            await db.xzoneGroups.update(group.id, { worldBookIds: updatedBookIds });
+                                    }
                             });
 
                             showToast('删除成功！');

@@ -3914,6 +3914,15 @@ async function deleteMessage() {
         if (confirmed) {
                 // 使用我们预先保存的局部变量进行过滤
                 currentChat.history = currentChat.history.filter(m => toMillis(m.timestamp) !== timestampToDelete);
+                if (currentChat.history.length > 0) {
+                        const newLastMessage = currentChat.history[currentChat.history.length - 1];
+                        currentChat.lastMessageTimestamp = newLastMessage.timestamp;
+                        currentChat.lastMessageContent = newLastMessage;
+                } else {
+                        currentChat.lastMessageTimestamp = null;
+                        currentChat.lastMessageContent = null;
+                }
+
                 await db.chats.put(currentChat);
                 renderMessages();
         }
@@ -4059,8 +4068,17 @@ async function deleteSelectedMessages() {
                         m => !timestampsToDelete.includes(toMillis(m.timestamp))
                 );
 
+                if (currentChat.history.length > 0) {
+                        const newLastMessage = currentChat.history[currentChat.history.length - 1];
+                        currentChat.lastMessageTimestamp = newLastMessage.timestamp;
+                        currentChat.lastMessageContent = newLastMessage;
+                } else {
+                        currentChat.lastMessageTimestamp = null;
+                        currentChat.lastMessageContent = null;
+                }
+
                 await db.chats.put(currentChat);
-                exitSelectionMode(); // This will also trigger a re-render
+                exitSelectionMode();
         }
 }
 

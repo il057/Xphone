@@ -821,9 +821,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             '取消'
         );
         if (confirmed) {
-            chatData.history = [];
-            await db.chats.put(chatData);
-            showToast('聊天记录已清空！');
+                chatData.history = [];
+                chatData.lastMessageTimestamp = null;
+                chatData.lastMessageContent = null;
+                await db.chats.put(chatData);
+                showToast('聊天记录已清空！');
         }
     });
 

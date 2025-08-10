@@ -737,7 +737,7 @@ ${commentsText}
 -   主动发消息给用户: \`[{"type": "text", "content": "你想对用户说的话..."}]\`
 -   发送表情: \`[{"type": "send_sticker", "name": "表情描述文字"}]\` 
 -   发送语音 (文字模拟): \`[{"type": "voice_message", "content": "语音的文字内容"}]\` 
--   发送图片 (文字描述): \`[{"type": "send_photo", "description": "对图片内容的详细描述"}]\`
+-   发送图片 (文字描述): \`[{"type": "text_photo", "description": "对图片内容的详细描述"}]\`
 -   发布文字动态: \`[{"type": "create_post", "postType": "text", "content": "动态的文字内容...", "mentionIds": ["(可选)要@的角色ID"]}]\`
 -   发布图片动态: \`[{"type": "create_post", "postType": "image", "publicText": "(可选)配图文字", "imageDescription": "对图片的详细描述", "mentionIds": ["(可选)要@的角色ID"]}]\`
 -   点赞动态: \`[{"type": "like_post", "postId": 12345}]\` (postId 必须是下面看到的动态ID)
@@ -867,7 +867,7 @@ ${stickerListForPrompt}
                 case 'text':
                 case 'send_sticker':
                 case 'voice_message':
-                case 'send_photo': 
+                case 'text_photo': 
                         { 
                                 let messageContent = {};
                                 if (action.type === 'send_sticker') {
@@ -880,8 +880,9 @@ ${stickerListForPrompt}
                                                 action.type = 'text';
                                                 messageContent = { content: `[表情: ${action.name}]` };
                                         }
-                                } else if (action.type === 'send_photo') {
+                                } else if (action.type === 'text_photo') {
                                         messageContent = { content: action.description };
+                                        
                                 }
                                 else {
                                         messageContent = { content: action.content };
@@ -897,7 +898,7 @@ ${stickerListForPrompt}
                                 };
 
                                 // 调用新的统一处理函数
-                                await processAndNotify(chat, message, allChatsMapForNotify);
+                                await processAndNotify(chat, message, allChatsMap);
                         }
                         break;
                 case 'create_post':
