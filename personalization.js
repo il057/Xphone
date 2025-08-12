@@ -636,7 +636,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         resetFontBtn.addEventListener('click', async () => {
-                if (confirm("确定要恢复默认字体吗？")) {
+                const confirmed = await showConfirmModal('恢复默认字体', '确定要恢复默认字体吗？', '恢复', '取消');
+                if (confirmed) {
                         fontUrlInput.value = '';
                         applyCustomFont(''); // Apply reset immediately
                         // The change will be persisted on the next "Save All" click

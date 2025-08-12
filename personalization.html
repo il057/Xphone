@@ -141,6 +141,30 @@
                         margin-bottom: 1rem;
                         border: 1px solid #e5e7eb;
                 }
+                /* 1. 壁纸模式选择器：将选中项的文字颜色应用为主题色 */
+                input[name="wallpaper-mode"].peer:checked+span {
+                        color: var(--theme-color);
+                }
+
+                /* 2. 外观主题模式：将单选框的选中颜色应用为主题色 */
+                input[name="theme-mode"].form-radio {
+                        accent-color: var(--theme-color);
+                }
+
+                /* 3. 恢复默认字体按钮：鼠标悬停时文字颜色应用为主题色 */
+                #reset-font-btn:hover {
+                        color: var(--theme-color);
+                }
+
+                /* 深色模式下修复字体按钮的背景和边框，以获得更好效果 */
+                html.dark #reset-font-btn {
+                        background-color: var(--content-bg-color-dark);
+                        border-color: var(--border-color-dark);
+                }
+                html.dark #reset-font-btn:hover {
+                        background-color: var(--hover-bg-color-dark);
+                }
+                
         </style>
 </head>
 

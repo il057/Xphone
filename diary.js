@@ -1,5 +1,5 @@
 import { db } from './db.js';
-
+import { showToast ,showConfirmModal } from './ui-helpers.js';
 document.addEventListener('DOMContentLoaded', async () => {
         // --- DOM Elements & State ---
         const listEl = document.getElementById('diary-list');
@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const newKeywordsString = editKeywordsInput.value.trim();
 
                 if (!newContent) {
-                        alert("日记内容不能为空！");
+                        showToast("日记内容不能为空！", "error");
                         return;
                 }
 
@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (deleteBtn) {
                         const diaryId = parseInt(deleteBtn.dataset.deleteId);
-                        const confirmed = confirm("确定要删除这篇日记吗？此操作不可撤销。");
+                        const confirmed = await showConfirmModal("删除日记", "确定要删除这篇日记吗？此操作不可撤销。", "删除", "取消");
                         if (confirmed) {
                                 await db.diaries.delete(diaryId);
                                 renderDiaries();
