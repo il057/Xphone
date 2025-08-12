@@ -286,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 await db.diaries.where('authorId').equals(id).delete();
                                 await db.callLogs.where('charId').equals(id).delete();
                                 await db.favorites.where('chatId').equals(id).delete();
+                                await db.diaries.where('authorId').equals(id).delete();
                         }
                 });
                 showToast(`已成功重置 ${selectedIds.length} 个角色的内容。`, 'success');
