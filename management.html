@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+        <meta charset="UTF-8">
+        <script>
+                (function () {
+                        try {
+                                // 使用同步的 localStorage 获取主题设置，这比数据库快得多
+                                const themeMode = localStorage.getItem('xphone-theme-mode');
+                                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+                                if (themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark)) {
+                                        document.documentElement.classList.add('dark');
+                                }
+                                // 如果是 'light' 或者 localStorage 中没设置，则不做任何事，保持默认
+                        } catch (e) {
+                                // 捕获异常，以防 localStorage 被禁用
+                        }
+                })();
+        </script>
+
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+        <link rel="manifest" href="./manifest.json">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Xphone">
+        <meta name="theme-color" content="#3b82f6" />
+        <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+
+        <title>高级工具</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+        <script type="module" src="applyGlobalStyles.js" defer></script>
+        <link rel="stylesheet" href="sharedStyles.css">
+
+        <script src="https://sdk.scdn.co/spotify-player.js"></script>
+        <script type="module" src="./spotifyManager.js" defer></script>
+
+        <style>
+                :root {
+                        --theme-color: #3b82f6;
+                }
+        
+                .management-btn {
+                        display: flex;
+                        align-items: center;
+                        width: 100%;
+                        padding: 0.75rem 1rem;
+                        /* 12px 16px */
+                        background-color: white;
+                        border-radius: 0.5rem;
+                        /* 8px */
+                        border: 1px solid #e5e7eb;
+                        /* gray-200 */
+                        transition: background-color 0.2s, border-color 0.2s;
+                        font-weight: 500;
+                        color: #1f2937;
+                        /* gray-800 */
+                }
+        
+                .management-btn:hover {
+                        background-color: #f9fafb;
+                        /* gray-50 */
+                        border-color: #d1d5db;
+                        /* gray-300 */
+                }
+        
+                html.dark .management-btn {
+                        background-color: var(--content-bg-color-dark);
+                        border-color: var(--border-color-dark);
+                        color: var(--text-color-primary-dark);
+                }
+        
+                html.dark .management-btn:hover {
+                        background-color: var(--hover-bg-color-dark);
+                }
+        
+                .management-btn svg {
+                        margin-right: 0.75rem;
+                        /* 12px */
+                        color: #6b7280;
+                        /* gray-500 */
+                }
+        
+                html.dark .management-btn svg {
+                        color: var(--text-color-secondary-dark);
+                }
+        
+                .btn-danger {
+                        color: #dc2626;
+                        /* red-600 */
+                }
+        
+                .btn-danger svg {
+                        color: #dc2626;
+                        /* red-600 */
+                }
+        
+                html.dark .btn-danger {
+                        color: #f87171;
+                        /* red-400 */
+                }
+        
+                html.dark .btn-danger svg {
+                        color: #f87171;
+                        /* red-400 */
+                }
+        </style>
+</head>
+
+<body class="bg-gray-100">
+        <div class="w-full h-full mx-auto flex flex-col">
+                <header class="app-header">
+                        <div class="flex items-center justify-between">
+                                <a href="javascript:history.back()" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                                stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                </a>
+                                <h1 class="text-base font-semibold text-gray-800">高级工具</h1>
+                                <div class="w-6"></div>
+                        </div>
+                </header>
+                <main class="flex-grow main-content px-4 pb-4 space-y-4">
+                        <div class="space-y-6">
+                        
+                                <section class="bg-white p-4 rounded-xl shadow-sm">
+                                        <h2 class="text-lg font-semibold text-gray-900 mb-3">角色卡片</h2>
+                                        <p class="text-xs text-gray-500 mb-4">您可以导出单个角色为`.json`格式的角色卡文件，分享给他人；或导入他人分享的角色卡。</p>
+                                        <div class="grid grid-cols-2 gap-3">
+                                                <button id="export-char-btn" class="management-btn justify-center">导出角色</button>
+                                                <button id="import-char-btn" class="management-btn justify-center">导入角色</button>
+                                                <input type="file" id="import-char-input" class="hidden" accept=".json">
+                                        </div>
+                                </section>
+                        
+                                <section class="bg-white p-4 rounded-xl shadow-sm">
+                                        <h2 class="text-lg font-semibold text-gray-900 mb-3">批量清理工具</h2>
+                                        <p class="text-xs text-gray-500 mb-4">以下为高级批量操作，主要用于修复因历史数据格式错误导致的AI行为异常，或进行大规模清理。请谨慎使用，所有操作均不可撤销。</p>
+                                        <div class="space-y-3">
+                                                <button id="batch-repair-btn" class="management-btn">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                                                viewBox="0 0 16 16">
+                                                                <path d="M... (path data for a tool icon) ..." />
+                                                        </svg>
+                                                        <span>修复聊天记录</span>
+                                                </button>
+                                                <button id="batch-clear-history-btn" class="management-btn">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                                                viewBox="0 0 16 16">
+                                                                <path d="... (path data for a clear icon) ..." />
+                                                        </svg>
+                                                        <span>清空聊天记录</span>
+                                                </button>
+                                                <button id="batch-reset-content-btn" class="management-btn">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                                                viewBox="0 0 16 16">
+                                                                <path d="... (path data for a reset icon) ..." />
+                                                        </svg>
+                                                        <span>重置角色内容</span>
+                                                </button>
+                                                <button id="batch-delete-chars-btn" class="management-btn btn-danger">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                                                viewBox="0 0 16 16">
+                                                                <path d="... (path data for a trash icon) ..." />
+                                                        </svg>
+                                                        <span>删除角色</span>
+                                                </button>
+                                        </div>
+                                </section>
+                        
+                        </div>
+                </main>
+        </div>
+        <script type="module" src="management.js" defer></script>
+</body>
+
+</html>
