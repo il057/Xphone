@@ -1,468 +1,653 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-    <meta charset="UTF-8">
-    <script>
-      (function() {
-        try {
-          // 使用同步的 localStorage 获取主题设置，这比数据库快得多
-          const themeMode = localStorage.getItem('xphone-theme-mode'); 
-          const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          
-          if (themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark)) {
-            document.documentElement.classList.add('dark');
-          }
-          // 如果是 'light' 或者 localStorage 中没设置，则不做任何事，保持默认
-        } catch (e) {
-          // 捕获异常，以防 localStorage 被禁用
-        }
-      })();
-    </script>
+        <meta charset="UTF-8">
+        <script>
+                (function () {
+                        try {
+                                // 使用同步的 localStorage 获取主题设置，这比数据库快得多
+                                const themeMode = localStorage.getItem('xphone-theme-mode');
+                                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
-    <link rel="manifest" href="./manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Xphone">
-    <meta name="theme-color" content="#3b82f6"/>
-    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
-    
-    <title>帮助</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
-    <link rel="stylesheet" href="sharedStyles.css">
-    <script type="module" src="applyGlobalStyles.js" defer></script> 
-    <script src="https://sdk.scdn.co/spotify-player.js"></script>
-    <script type="module" src="./spotifyManager.js" defer></script>
-    <style>
-       :root {
-    --theme-color: #3b82f6;
-    /* 浅色模式变量 */
-    --bg-color-light: #f3f4f6;
-    --content-bg-color-light: #ffffff;
-    --text-color-primary-light: #1f2937;
-    --text-color-secondary-light: #4b5563;
-    --border-color-light: #e5e7eb;
-    --hover-bg-color-light: #f9fafb;
-    /* 深色模式变量 */
-    --bg-color-dark: #111827; /* 更深的背景色 */
-    --content-bg-color-dark: #1f2937; /* 面板背景色 */
-    --text-color-primary-dark: #f9fafb;
-    --text-color-secondary-dark: #d1d5db; /* 提高次要文本对比度 */
-    --border-color-dark: #374151;
-    --hover-bg-color-dark: #374151;
-}
+                                if (themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark)) {
+                                        document.documentElement.classList.add('dark');
+                                }
+                                // 如果是 'light' 或者 localStorage 中没设置，则不做任何事，保持默认
+                        } catch (e) {
+                                // 捕获异常，以防 localStorage 被禁用
+                        }
+                })();
+        </script>
 
-/* --- 1. 全局与布局优化 --- */
-body {
-    font-family: 'Inter', sans-serif;
-    background-color: var(--bg-color-light);
-    color: var(--text-color-primary-light);
-}
-html.dark body {
-    background-color: var(--bg-color-dark);
-    color: var(--text-color-primary-dark);
-}
-/* 增加主内容区域的上下间距，让标题和底部有呼吸感 */
-main.main-content {
-    padding-top: 1.5rem;    /* 24px */
-    padding-bottom: 2.5rem; /* 40px */
-}
-/* 增加每个可折叠区域之间的垂直间距 */
-main.main-content > details {
-    margin-bottom: 1rem; /* 16px */
-}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 
-/* --- 2. 字体与排版优化 --- */
-/* 欢迎语和介绍文本的样式 */
-section.mb-4 h2 {
-    color: var(--text-color-primary-light); /* 标题使用主色 */
-    font-weight: 700; /* 加粗 */
-}
-html.dark section.mb-4 h2 {
-    color: var(--text-color-primary-dark);
-}
-/* 增加段落行高，提升可读性 */
-.details-content p, .details-content li {
-    line-height: 1.75;
-    color: var(--text-color-secondary-light);
-}
-html.dark .details-content p, html.dark .details-content li {
-    color: var(--text-color-secondary-dark);
-}
-/* 子标题加粗，层级更清晰 */
-.details-content h4 {
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    color: var(--text-color-primary-light);
-}
-html.dark .details-content h4 {
-     color: var(--text-color-primary-dark);
-}
+        <link rel="manifest" href="./manifest.json">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Xphone">
+        <meta name="theme-color" content="#3b82f6" />
+        <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
 
-/* --- 3. 组件样式优化 --- */
+        <title>帮助</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+        <link rel="stylesheet" href="sharedStyles.css">
+        <script type="module" src="applyGlobalStyles.js" defer></script>
+        <script src="https://sdk.scdn.co/spotify-player.js"></script>
+        <script type="module" src="./spotifyManager.js" defer></script>
+        <style>
+                :root {
+                        --theme-color: #3b82f6;
+                        /* 浅色模式变量 */
+                        --bg-color-light: #f3f4f6;
+                        --content-bg-color-light: #ffffff;
+                        --text-color-primary-light: #1f2937;
+                        --text-color-secondary-light: #4b5563;
+                        --border-color-light: #e5e7eb;
+                        --hover-bg-color-light: #f9fafb;
+                        /* 深色模式变量 */
+                        --bg-color-dark: #000000;
+                        /* 背景 -> 纯黑 */
+                        --content-bg-color-dark: #1c1c1e;
+                        /* 面板 -> iOS风格深灰 */
+                        --text-color-primary-dark: #f9fafb;
+                        --text-color-secondary-dark: #8e8e93;
+                        /* 次要文本 -> iOS风格灰色 */
+                        --border-color-dark: #38383a;
+                        /* 边框 -> iOS风格灰色 */
+                        --hover-bg-color-dark: #2c2c2e;
+                }
 
-/* a. 高亮文本样式优化 (更柔和) */
-.highlight {
-    background-color: rgba(59, 130, 246, 0.15); /* 主题色的半透明背景 */
-    color: var(--theme-color); /* 主题色文字 */
-    padding: 0.2rem 0.4rem;
-    border-radius: 0.375rem; /* rounded-md */
-    font-weight: 600;
-}
-html.dark .highlight {
-    background-color: rgba(96, 165, 250, 0.2); /* 深色模式下稍微亮一点的背景 */
-    color: #93c5fd; /* blue-300 */
-}
+                /* --- 1. 全局与布局优化 --- */
+                body {
+                        font-family: 'Inter', sans-serif;
+                        background-color: var(--bg-color-light);
+                        color: var(--text-color-primary-light);
+                }
 
-/* b. 折叠面板(Accordion)样式优化 */
-details {
-    border: 1px solid var(--border-color-light);
-    border-radius: 0.75rem; /* 更大的圆角 (rounded-xl) */
-    transition: all 0.2s ease-in-out;
-}
-html.dark details {
-    border-color: var(--border-color-dark);
-}
-details[open] {
-    border-color: var(--theme-color);
-}
+                html.dark body {
+                        background-color: var(--bg-color-dark);
+                        color: var(--text-color-primary-dark);
+                }
 
-details > summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 1.25rem; /* 增加内边距 */
-    background-color: var(--content-bg-color-light);
-    border-radius: 0.75rem;
-    font-weight: 600;
-    font-size: 1.125rem; /* 增大字号 (text-lg) */
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background-color 0.2s;
-    color: var(--text-color-primary-light);
-}
-html.dark details > summary {
-    background-color: var(--content-bg-color-dark);
-    color: var(--text-color-primary-dark);
-}
+                /* 增加主内容区域的上下间距，让标题和底部有呼吸感 */
+                main.main-content {
+                        padding-top: 1.5rem;
+                        /* 24px */
+                        padding-bottom: 2.5rem;
+                        /* 40px */
+                }
 
-details > summary:hover {
-    background-color: var(--hover-bg-color-light);
-}
-html.dark details > summary:hover {
-    background-color: var(--hover-bg-color-dark);
-}
+                /* 增加每个可折叠区域之间的垂直间距 */
+                main.main-content>details {
+                        margin-bottom: 1rem;
+                        /* 16px */
+                }
 
-details > summary::-webkit-details-marker { display: none; }
+                /* --- 2. 字体与排版优化 --- */
+                /* 欢迎语和介绍文本的样式 */
+                section.mb-4 h2 {
+                        color: var(--text-color-primary-light);
+                        /* 标题使用主色 */
+                        font-weight: 700;
+                        /* 加粗 */
+                }
 
-/* 优化 + 号为更精致的 Chevron 图标 */
-details > summary::after {
-    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%239ca3af'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd' /%3E%3C/svg%3E");
-    width: 1.25rem; /* w-5 */
-    height: 1.25rem; /* h-5 */
-    transition: transform 0.3s ease-in-out;
-}
-html.dark details > summary::after {
-    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23d1d5db'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd' /%3E%3C/svg%3E");
-}
+                html.dark section.mb-4 h2 {
+                        color: var(--text-color-primary-dark);
+                }
 
-details[open] > summary::after {
-    transform: rotate(180deg);
-}
-details[open] > summary {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-}
+                /* 增加段落行高，提升可读性 */
+                .details-content p,
+                .details-content li {
+                        line-height: 1.75;
+                        color: var(--text-color-secondary-light);
+                }
 
-.details-content {
-    padding: 0 1.5rem 1.5rem 1.5rem; /* 调整内边距 */
-    border-top: 1px solid var(--border-color-light);
-    background-color: var(--content-bg-color-light);
-    border-bottom-left-radius: 0.75rem;
-    border-bottom-right-radius: 0.75rem;
-}
-html.dark .details-content {
-    border-top-color: var(--border-color-dark);
-    background-color: var(--content-bg-color-dark);
-}
+                html.dark .details-content p,
+                html.dark .details-content li {
+                        color: var(--text-color-secondary-dark);
+                }
 
-/* c. 代码/文本框样式优化 (针对表情包批量导入) */
-#json-prompt-code {
-    background-color: #f3f4f6;
-    border: 1px solid var(--border-color-light);
-    color: var(--text-color-secondary-light);
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-}
-html.dark #json-prompt-code {
-    background-color: #1f2937; /* content-bg-dark */
-    border-color: var(--border-color-dark);
-    color: var(--text-color-secondary-dark);
-}
+                /* 子标题加粗，层级更清晰 */
+                .details-content h4 {
+                        font-weight: 700;
+                        margin-bottom: 0.5rem;
+                        color: var(--text-color-primary-light);
+                }
 
-/* 链接样式 */
-a {
-    color: var(--theme-color);
-    text-decoration: none;
-    font-weight: 500;
-}
-a:hover {
-    text-decoration: underline;
-}
-#json-prompt-code {
-    background-color: #f3f4f6;
-    border-color: #e5e7eb; /* 更浅的边框色 */
-    color: var(--text-color-secondary-light);
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-}
-html.dark #json-prompt-code {
-    background-color: #1f2937;
-    border-color: var(--border-color-dark); /* 深色模式下的柔和边框 */
-    color: var(--text-color-secondary-dark);
-}
+                html.dark .details-content h4 {
+                        color: var(--text-color-primary-dark);
+                }
 
-#prompt-accordion {
-    border: 1px solid var(--border-color-light);
-    border-radius: 0.5rem; /* rounded-lg */
-    background-color: var(--content-bg-color-light);
-    transition: all 0.2s ease-in-out;
-}
-html.dark #prompt-accordion {
-    border-color: var(--border-color-dark);
-    background-color: var(--content-bg-color-dark);
-}
+                /* --- 3. 组件样式优化 --- */
 
-#prompt-accordion > summary {
-    list-style: none;
-    cursor: pointer;
-    padding: 0.75rem 1rem;
-    font-weight: 500;
-    font-size: 0.875rem; /* text-sm */
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-#prompt-accordion > summary::-webkit-details-marker { display: none; }
+                /* a. 高亮文本样式优化 (更柔和) */
+                .highlight {
+                        background-color: rgba(59, 130, 246, 0.15);
+                        /* 主题色的半透明背景 */
+                        color: var(--theme-color);
+                        /* 主题色文字 */
+                        padding: 0.2rem 0.4rem;
+                        border-radius: 0.375rem;
+                        /* rounded-md */
+                        font-weight: 600;
+                }
 
-#prompt-accordion > summary #copy-prompt-btn {
-    color: var(--text-color-secondary-light);
-    background-color: #e5e7eb; /* gray-200 */
-}
-html.dark #prompt-accordion > summary #copy-prompt-btn {
-    color: var(--text-color-secondary-dark);
-    background-color: #374151; /* gray-700 */
-}
-#prompt-accordion > summary #copy-prompt-btn:hover {
-    background-color: #d1d5db; /* gray-300 */
-}
-html.dark #prompt-accordion > summary #copy-prompt-btn:hover {
-    background-color: #4b5563; /* gray-600 */
-}
+                html.dark .highlight {
+                        background-color: rgba(96, 165, 250, 0.2);
+                        /* 深色模式下稍微亮一点的背景 */
+                        color: #93c5fd;
+                        /* blue-300 */
+                }
 
-/* 展开后的内容区域样式 */
-#prompt-accordion .details-content {
-    border: none; /* 移除之前添加的左边框 */
-    margin: 0; /* 移除外边距 */
-    padding: 1rem;
-    border-top: 1px solid var(--border-color-light);
-}
-html.dark #prompt-accordion .details-content {
-    border-top-color: var(--border-color-dark);
-}
+                /* b. 折叠面板(Accordion)样式优化 */
+                details {
+                        border: 1px solid var(--border-color-light);
+                        border-radius: 0.75rem;
+                        /* 更大的圆角 (rounded-xl) */
+                        transition: all 0.2s ease-in-out;
+                }
 
-/* 让 pre 标签的背景透明，以融入父容器 */
-#prompt-accordion pre {
-    background-color: transparent !important;
-    border: none !important;
-}
-/* --- 4. 布局与间距微调 (新增) --- */
+                html.dark details {
+                        border-color: var(--border-color-dark);
+                }
 
-/* 增加每个可折叠区域之间的垂直间距 */
-main.main-content > details {
-    margin-bottom: 1.5rem; /* 24px, 之前是 1rem */
-}
+                details[open] {
+                        border-color: var(--theme-color);
+                }
 
-/* 显著增加大的内容版块（如“第三方服务”、“进阶功能”）之间的顶部间距 */
-section[id] {
-    margin-top: 2.5rem; /* 40px */
-    padding-top: 2.5rem; /* 40px */
-    border-top: 1px solid var(--border-color-light);
-}
-html.dark section[id] {
-    border-top-color: var(--border-color-dark);
-}
+                details>summary {
+                        list-style: none;
+                        cursor: pointer;
+                        padding: 1.25rem;
+                        /* 增加内边距 */
+                        background-color: var(--content-bg-color-light);
+                        border-radius: 0.75rem;
+                        font-weight: 600;
+                        font-size: 1.125rem;
+                        /* 增大字号 (text-lg) */
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        transition: background-color 0.2s;
+                        color: var(--text-color-primary-light);
+                }
 
-/* 移除原有的边距，统一由上面的新规则控制 */
-#services-guide, #Advance-guide {
-    margin-top: 0;
-}
-.section-card {
-    border-radius: 0.75rem; /* rounded-xl */
-    overflow: hidden; /* 关键：确保子元素的圆角生效 */
-    border: 1px solid var(--border-color-light);
-    margin-top: 2.5rem;
-}
-html.dark .section-card {
-    border-color: var(--border-color-dark);
-}
+                html.dark details>summary {
+                        background-color: var(--content-bg-color-dark);
+                        color: var(--text-color-primary-dark);
+                }
 
-.section-card-header {
-    padding: 1.25rem;
-    background-color: var(--content-bg-color-light);
-}
-html.dark .section-card-header {
-    background-color: var(--content-bg-color-dark);
-}
-.section-card-header p {
-    margin-top: 0.25rem;
-    font-size: 0.875rem;
-    color: var(--text-color-secondary-light);
-}
-html.dark .section-card-header p {
-    color: var(--text-color-secondary-dark);
-}
+                details>summary:hover {
+                        background-color: var(--hover-bg-color-light);
+                }
 
-.section-card-content {
-    background-color: var(--bg-color-light);
-}
-html.dark .section-card-content {
-    background-color: var(--bg-color-dark);
-}
+                html.dark details>summary:hover {
+                        background-color: var(--hover-bg-color-dark);
+                }
 
-/* 移除卡片内部 details 元素的独立样式，使其融入卡片 */
-.section-card-content details {
-    border: none;
-    border-radius: 0;
-    margin-bottom: 0;
-    border-top: 1px solid var(--border-color-light);
-}
-html.dark .section-card-content details {
-    border-top-color: var(--border-color-dark);
-}
-.section-card-content details:first-child {
-    border-top: none; /* 第一个不需要顶部边框 */
-}
+                details>summary::-webkit-details-marker {
+                        display: none;
+                }
 
-/* 调整卡片内部 summary 的样式 */
-.section-card-content details > summary {
-    font-size: 1rem; /* 调小一点字号 */
-    font-weight: 500;
-    border-radius: 0;
-}/* --- 6. 帮助文档UI颜色修复与最终润色 (新增) --- */
+                /* 优化 + 号为更精致的 Chevron 图标 */
+                details>summary::after {
+                        content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%239ca3af'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd' /%3E%3C/svg%3E");
+                        width: 1.25rem;
+                        /* w-5 */
+                        height: 1.25rem;
+                        /* h-5 */
+                        transition: transform 0.3s ease-in-out;
+                }
 
-/* 为“AI自主生活”内部的模块指定浅色模式下的背景 */
-.details-content .bg-gray-50 {
-    background-color: #f9fafb; /* gray-50 */
-}
-html.dark .details-content .bg-gray-50 {
-    background-color: rgba(31, 41, 55, 0.5); /* dark:bg-gray-800/50 */
-}
+                html.dark details>summary::after {
+                        content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23d1d5db'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd' /%3E%3C/svg%3E");
+                }
 
-/* 统一所有部分的标题栏h2字体大小和加粗 */
-.section-card-header h2 {
-    font-size: 1.125rem; /* text-lg */
-    font-weight: 600; /* semibold */
-}
+                details[open]>summary::after {
+                        transform: rotate(180deg);
+                }
 
-/* 优化“快速上手指南”的步骤文本样式 */
-#quick-start-guide .details-content p, 
-#quick-start-guide .section-card-content p {
-    color: var(--text-color-primary-light);
-}
-html.dark #quick-start-guide .details-content p, 
-html.dark #quick-start-guide .section-card-content p {
-    color: var(--text-color-primary-dark);
-}
-    </style>
+                details[open]>summary {
+                        border-bottom-left-radius: 0;
+                        border-bottom-right-radius: 0;
+                }
+
+                .details-content {
+                        padding: 0 1.5rem 1.5rem 1.5rem;
+                        /* 调整内边距 */
+                        border-top: 1px solid var(--border-color-light);
+                        background-color: var(--content-bg-color-light);
+                        border-bottom-left-radius: 0.75rem;
+                        border-bottom-right-radius: 0.75rem;
+                }
+
+                html.dark .details-content {
+                        border-top-color: var(--border-color-dark);
+                        background-color: var(--content-bg-color-dark);
+                }
+
+                /* c. 代码/文本框样式优化 (针对表情包批量导入) */
+                #json-prompt-code {
+                        background-color: #f3f4f6;
+                        border: 1px solid var(--border-color-light);
+                        color: var(--text-color-secondary-light);
+                        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+                }
+
+                html.dark #json-prompt-code {
+                        background-color: #1f2937;
+                        /* content-bg-dark */
+                        border-color: var(--border-color-dark);
+                        color: var(--text-color-secondary-dark);
+                }
+
+                /* 链接样式 */
+                a {
+                        color: var(--theme-color);
+                        text-decoration: none;
+                        font-weight: 500;
+                }
+
+                a:hover {
+                        text-decoration: underline;
+                }
+
+                #json-prompt-code {
+                        background-color: #f3f4f6;
+                        border-color: #e5e7eb;
+                        /* 更浅的边框色 */
+                        color: var(--text-color-secondary-light);
+                        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+                }
+
+                html.dark #json-prompt-code {
+                        background-color: #1f2937;
+                        border-color: var(--border-color-dark);
+                        /* 深色模式下的柔和边框 */
+                        color: var(--text-color-secondary-dark);
+                }
+
+                #prompt-accordion {
+                        border: 1px solid var(--border-color-light);
+                        border-radius: 0.5rem;
+                        /* rounded-lg */
+                        background-color: var(--content-bg-color-light);
+                        transition: all 0.2s ease-in-out;
+                }
+
+                html.dark #prompt-accordion {
+                        border-color: var(--border-color-dark);
+                        background-color: var(--content-bg-color-dark);
+                }
+
+                #prompt-accordion>summary {
+                        list-style: none;
+                        cursor: pointer;
+                        padding: 0.75rem 1rem;
+                        font-weight: 500;
+                        font-size: 0.875rem;
+                        /* text-sm */
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                }
+
+                #prompt-accordion>summary::-webkit-details-marker {
+                        display: none;
+                }
+
+                #prompt-accordion>summary #copy-prompt-btn {
+                        color: var(--text-color-secondary-light);
+                        background-color: #e5e7eb;
+                        /* gray-200 */
+                }
+
+                html.dark #prompt-accordion>summary #copy-prompt-btn {
+                        color: var(--text-color-secondary-dark);
+                        background-color: #374151;
+                        /* gray-700 */
+                }
+
+                #prompt-accordion>summary #copy-prompt-btn:hover {
+                        background-color: #d1d5db;
+                        /* gray-300 */
+                }
+
+                html.dark #prompt-accordion>summary #copy-prompt-btn:hover {
+                        background-color: #4b5563;
+                        /* gray-600 */
+                }
+
+                /* 展开后的内容区域样式 */
+                #prompt-accordion .details-content {
+                        border: none;
+                        /* 移除之前添加的左边框 */
+                        margin: 0;
+                        /* 移除外边距 */
+                        padding: 1rem;
+                        border-top: 1px solid var(--border-color-light);
+                }
+
+                html.dark #prompt-accordion .details-content {
+                        border-top-color: var(--border-color-dark);
+                }
+
+                /* 让 pre 标签的背景透明，以融入父容器 */
+                #prompt-accordion pre {
+                        background-color: transparent !important;
+                        border: none !important;
+                }
+
+                /* --- 4. 布局与间距微调 (新增) --- */
+
+                /* 增加每个可折叠区域之间的垂直间距 */
+                main.main-content>details {
+                        margin-bottom: 1.5rem;
+                        /* 24px, 之前是 1rem */
+                }
+
+                /* 显著增加大的内容版块（如“第三方服务”、“进阶功能”）之间的顶部间距 */
+                section[id] {
+                        margin-top: 2.5rem;
+                        /* 40px */
+                        padding-top: 2.5rem;
+                        /* 40px */
+                        border-top: 1px solid var(--border-color-light);
+                }
+
+                html.dark section[id] {
+                        border-top-color: var(--border-color-dark);
+                }
+
+                /* 移除原有的边距，统一由上面的新规则控制 */
+                #services-guide,
+                #Advance-guide {
+                        margin-top: 0;
+                }
+
+                .section-card {
+                        border-radius: 0.75rem;
+                        /* rounded-xl */
+                        overflow: hidden;
+                        /* 关键：确保子元素的圆角生效 */
+                        border: 1px solid var(--border-color-light);
+                        margin-top: 2.5rem;
+                }
+
+                html.dark .section-card {
+                        border-color: var(--border-color-dark);
+                }
+
+                .section-card-header {
+                        padding: 1.25rem;
+                        background-color: var(--content-bg-color-light);
+                }
+
+                html.dark .section-card-header {
+                        background-color: var(--content-bg-color-dark);
+                }
+
+                .section-card-header p {
+                        margin-top: 0.25rem;
+                        font-size: 0.875rem;
+                        color: var(--text-color-secondary-light);
+                }
+
+                html.dark .section-card-header p {
+                        color: var(--text-color-secondary-dark);
+                }
+
+                .section-card-content {
+                        background-color: var(--bg-color-light);
+                }
+
+                html.dark .section-card-content {
+                        background-color: var(--bg-color-dark);
+                }
+
+                /* 移除卡片内部 details 元素的独立样式，使其融入卡片 */
+                .section-card-content details {
+                        border: none;
+                        border-radius: 0;
+                        margin-bottom: 0;
+                        border-top: 1px solid var(--border-color-light);
+                }
+
+                html.dark .section-card-content details {
+                        border-top-color: var(--border-color-dark);
+                }
+
+                .section-card-content details:first-child {
+                        border-top: none;
+                        /* 第一个不需要顶部边框 */
+                }
+
+                /* 调整卡片内部 summary 的样式 */
+                .section-card-content details>summary {
+                        font-size: 1rem;
+                        /* 调小一点字号 */
+                        font-weight: 500;
+                        border-radius: 0;
+                }
+
+                /* --- 6. 帮助文档UI颜色修复与最终润色 (新增) --- */
+
+                /* 为“AI自主生活”内部的模块指定浅色模式下的背景 */
+                .details-content .bg-gray-50 {
+                        background-color: #f9fafb;
+                        /* gray-50 */
+                }
+
+                html.dark .details-content .bg-gray-50 {
+                        background-color: rgba(31, 41, 55, 0.5);
+                        /* dark:bg-gray-800/50 */
+                }
+
+                /* 统一所有部分的标题栏h2字体大小和加粗 */
+                .section-card-header h2 {
+                        font-size: 1.125rem;
+                        /* text-lg */
+                        font-weight: 600;
+                        /* semibold */
+                }
+
+                /* 优化“快速上手指南”的步骤文本样式 */
+                #quick-start-guide .details-content p,
+                #quick-start-guide .section-card-content p {
+                        color: var(--text-color-primary-light);
+                }
+
+                html.dark #quick-start-guide .details-content p,
+                html.dark #quick-start-guide .section-card-content p {
+                        color: var(--text-color-primary-dark);
+                }
+        </style>
 </head>
-<body class="bg-gray-100">
-    <div class="w-full h-full mx-auto flex flex-col">
-        <header class="app-header">
-            <div class="flex items-center justify-between relative">
-                <a href="index.html" class="header-btn p-1.5 -ml-1.5 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-                </a>
-                <h1 class="text-base font-semibold text-gray-800">帮助</h1>
-                <button id="toggle-all-btn" class="header-btn text-sm font-semibold px-2 py-1 whitespace-nowrap">全部展开</button>
-            </div>
-        </header>
-        <main class="flex-grow main-content p-4 space-y-2">
-            <section id="services-guide" class="section-card">
-                <div class="section-card-header">
-                    <h2 class="text-xl font-bold mb-2">基础功能介绍</h2>
-                     <p class="text-sm">点击下方标题可展开查看各项功能的详细介绍。</p>
-                </div>
-                <div class="section-card-content">
-                    <details>
-                            <summary>主屏幕 (Home)</summary>
-                <div class="details-content space-y-4">
-                    <p>应用的主入口，展示当前时间和日期，底部Dock栏陈列了所有核心应用。</p>
-                    <ul class="list-disc list-inside text-sm space-y-1">
-                        <li><span class="highlight">壁纸</span>: 主屏幕的背景。您可以在<a href="#personalization-help" class="underline">个性化</a>设置中进行更换。</li>
-                        <li><span class="highlight">应用Dock栏</span>: 快速访问<a href="#x-message-help" class="underline">弦镜</a>、<a href="#music-help" class="underline">音乐</a>、<a href="#summary-help" class="underline">简报</a>、<a href="#album-help" class="underline">相册</a>等核心应用。</li>
-                    </ul>
-                </div>
-            </details>
 
-            <details id="x-message-help">
-                <summary>弦镜 (聊天应用)</summary>
-                <div class="details-content space-y-4">
-                    <p>应用的核心，集成了聊天、联系人、动态和个人主页四大功能，是您与AI角色互动的主要平台。</p>
-                    <details>
-                        <summary>四大主界面</summary>
-                        <div class="details-content space-y-3">
-                            <div>
-                                <h4 class="font-semibold">聊天列表 (<code>chat.html</code>)</h4>
-                                <p class="text-sm">显示您所有好友和群聊的列表，按最新消息时间排序。未读消息会有红点提示。点击头像可进入<a href="#char-profile-help" class="underline">角色资料页</a>或点击其他位置进入<a href="#chatroom-help" class="underline">聊天室</a>。</p>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold">通讯录 (<code>contacts.html</code>)</h4>
-                                <p class="text-sm">管理您的所有AI好友和群聊。您可以<span class="highlight">创建新角色</span>、<span class="highlight">发起群聊</span>、查看好友分组、以及进入<span class="highlight">角色资料页</span>。</p>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold">动态 (<code>moments.html</code>)</h4>
-                                <p class="text-sm">一个类似朋友圈的功能，您和AI角色都可以在此发布图文动态，并进行点赞、评论等互动。AI角色也会根据其人设和经历，在后台独立发布动态。</p>
-                            </div>
-                             <div>
-                              
-                                    <h4 class="font-semibold">我 (<code>me.html</code>)</h4>
-                                    <p class="text-sm">您的个人中心。在这里可以管理您的<span class="highlight">多个人格预设</span>、查看<span class="highlight">收藏</span>、<span class="highlight">回忆</span>、<span class="highlight">关系图谱</span>、管理<span class="highlight">表情包</span>以及进入<span class="highlight">世界设定</span>。</p>
-                                    <ul class="list-disc list-inside text-sm mt-2 space-y-1">
-                                        <li><strong>人格预设 (Persona)</strong>: 您可以创建多个“你”的身份。每个预设包含不同的头像、昵称、人设等。
-                                            <ul class="list-circle list-inside ml-4">
-                                                <li><strong>默认人格</strong>: “默认人格”主要应用于<span class="highlight">未分组的角色</span>、所有<span class="highlight">未单独绑定人格的群聊</span>，以及决定“我”界面的主头像/昵称和发布动态时的默认身份。</li>
-                                                <li><strong>关联分组/群聊</strong>: 您可以将特定的人格预设应用到某些分组或群聊上。当您在这些关联的对话中发言时，AI会认为您正在扮演这个人格，从而做出更贴合情景的回应。例如，您可以创建一个“严厉上司”的人格并关联到“工作”分组。</li>
-                                            </ul>
-                                        </li>
-                                        <li>
-                                            <strong>收藏 (Favorites)</strong>:
-                                            您可以将<span class="highlight">聊天中的重要消息</span>或<span class="highlight">动态区的精彩帖子</span>收藏起来，方便日后随时回顾。
-                                        </li>
-                                        <li>
-                                            <strong>回忆 (Memories)</strong>:
-                                            您可以查看所有角色创建的日记/回忆，或者是与您定下的约定（倒计时）事件。未完成的倒计时会优先显示在顶部，其次是您收藏的回忆，其余条目则会按照从新到旧的顺序排序。
-                                            角色与您对话时会参考您与TA最近的三条回忆。
-                                        </li>
-                                        <li>
-                                            <strong>关系图谱 (Relation Map)</strong>:
-                                            将所有角色和您的不同人格预设之间的关系可视化。
-                                            <ul class="list-circle list-inside ml-4">
-                                                <li><strong>连线与箭头</strong>: 每条连线代表一个角色对另一个角色的看法，箭头指向被看待的一方。</li>
-                                                <li><strong>颜色与粗细</strong>: 线的颜色代表关系的性质（如恋人、朋友、对手等），粗细则代表好感度的强度。</li>
-                                                <li><strong>双向关系</strong>: 角色之间的关系不是单向的。角色A可能将角色B视为“朋友”，而角色B可能将角色A视为“对手”，这会通过两条不同颜色和粗细的弧线来表示。</li>
-                                            </ul>
-                                        </li>
-                                        <li><strong>表情包 (Stickers)</strong>: 您可以添加自定义表情包。支持通过URL或本地上传单个添加，也支持<span class="highlight">批量导入</span>。
-                                            批量导入后请刷新界面以查看新表情包。
-                                            <div class="mt-2">
-                                                <details id="prompt-accordion" class="mt-2">
-                                                <summary>
-                                                    <span>批量导入JSON格式与转换Prompt</span>
-                                                    <button id="copy-prompt-btn" class="px-2 py-1 text-xs font-semibold rounded-md transition-colors">复制</button>
-                                                </summary>
-                                                <div class="details-content">
-                                                    <pre id="json-prompt-code" class="w-full p-0 text-xs font-mono bg-transparent dark:bg-transparent whitespace-pre-wrap">
+<body class="bg-gray-100">
+        <div class="w-full h-full mx-auto flex flex-col">
+                <header class="app-header">
+                        <div class="flex items-center justify-between relative">
+                                <a href="index.html" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+                                                viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                </a>
+                                <h1 class="text-base font-semibold text-gray-800">帮助</h1>
+                                <button id="toggle-all-btn"
+                                        class="header-btn text-sm font-semibold px-2 py-1 whitespace-nowrap">全部展开</button>
+                        </div>
+                </header>
+                <main class="flex-grow main-content px-4 space-y-2">
+                        <section id="services-guide" class="section-card">
+                                <div class="section-card-header">
+                                        <h2 class="text-xl font-bold mb-2">基础功能介绍</h2>
+                                        <p class="text-sm">点击下方标题可展开查看各项功能的详细介绍。</p>
+                                </div>
+                                <div class="section-card-content">
+                                        <details>
+                                                <summary>主屏幕 (Home)</summary>
+                                                <div class="details-content space-y-4">
+                                                        <p>应用的主入口，展示当前时间和日期，底部Dock栏陈列了所有核心应用。</p>
+                                                        <ul class="list-disc list-inside text-sm space-y-1">
+                                                                <li><span class="highlight">壁纸</span>: 主屏幕的背景。您可以在<a
+                                                                                href="#personalization-help"
+                                                                                class="underline">个性化</a>设置中进行更换。</li>
+                                                                <li><span class="highlight">应用Dock栏</span>: 快速访问<a
+                                                                                href="#x-message-help"
+                                                                                class="underline">弦镜</a>、<a
+                                                                                href="#music-help"
+                                                                                class="underline">音乐</a>、<a
+                                                                                href="#summary-help"
+                                                                                class="underline">简报</a>、<a
+                                                                                href="#album-help"
+                                                                                class="underline">相册</a>等核心应用。</li>
+                                                        </ul>
+                                                </div>
+                                        </details>
+
+                                        <details id="x-message-help">
+                                                <summary>弦镜 (聊天应用)</summary>
+                                                <div class="details-content space-y-4">
+                                                        <p>应用的核心，集成了聊天、联系人、动态和个人主页四大功能，是您与AI角色互动的主要平台。</p>
+                                                        <details>
+                                                                <summary>四大主界面</summary>
+                                                                <div class="details-content space-y-3">
+                                                                        <div>
+                                                                                <h4 class="font-semibold">聊天列表
+                                                                                        (<code>chat.html</code>)</h4>
+                                                                                <p class="text-sm">
+                                                                                        显示您所有好友和群聊的列表，按最新消息时间排序。未读消息会有红点提示。点击头像可进入<a
+                                                                                                href="#char-profile-help"
+                                                                                                class="underline">角色资料页</a>或点击其他位置进入<a
+                                                                                                href="#chatroom-help"
+                                                                                                class="underline">聊天室</a>。
+                                                                                </p>
+                                                                        </div>
+                                                                        <div>
+                                                                                <h4 class="font-semibold">通讯录
+                                                                                        (<code>contacts.html</code>)
+                                                                                </h4>
+                                                                                <p class="text-sm">
+                                                                                        管理您的所有AI好友和群聊。您可以<span
+                                                                                                class="highlight">创建新角色</span>、<span
+                                                                                                class="highlight">发起群聊</span>、查看好友分组、以及进入<span
+                                                                                                class="highlight">角色资料页</span>。
+                                                                                </p>
+                                                                        </div>
+                                                                        <div>
+                                                                                <h4 class="font-semibold">动态
+                                                                                        (<code>moments.html</code>)</h4>
+                                                                                <p class="text-sm">
+                                                                                        一个类似朋友圈的功能，您和AI角色都可以在此发布图文动态，并进行点赞、评论等互动。AI角色也会根据其人设和经历，在后台独立发布动态。
+                                                                                </p>
+                                                                        </div>
+                                                                        <div>
+
+                                                                                <h4 class="font-semibold">我
+                                                                                        (<code>me.html</code>)</h4>
+                                                                                <p class="text-sm">您的个人中心。在这里可以管理您的<span
+                                                                                                class="highlight">多个人格预设</span>、查看<span
+                                                                                                class="highlight">收藏</span>、<span
+                                                                                                class="highlight">回忆</span>、<span
+                                                                                                class="highlight">关系图谱</span>、管理<span
+                                                                                                class="highlight">表情包</span>以及进入<span
+                                                                                                class="highlight">世界设定</span>。
+                                                                                </p>
+                                                                                <ul
+                                                                                        class="list-disc list-inside text-sm mt-2 space-y-1">
+                                                                                        <li><strong>人格预设
+                                                                                                        (Persona)</strong>:
+                                                                                                您可以创建多个“你”的身份。每个预设包含不同的头像、昵称、人设等。
+                                                                                                <ul
+                                                                                                        class="list-circle list-inside ml-4">
+                                                                                                        <li><strong>默认人格</strong>:
+                                                                                                                “默认人格”主要应用于<span
+                                                                                                                        class="highlight">未分组的角色</span>、所有<span
+                                                                                                                        class="highlight">未单独绑定人格的群聊</span>，以及决定“我”界面的主头像/昵称和发布动态时的默认身份。
+                                                                                                        </li>
+                                                                                                        <li><strong>关联分组/群聊</strong>:
+                                                                                                                您可以将特定的人格预设应用到某些分组或群聊上。当您在这些关联的对话中发言时，AI会认为您正在扮演这个人格，从而做出更贴合情景的回应。例如，您可以创建一个“严厉上司”的人格并关联到“工作”分组。
+                                                                                                        </li>
+                                                                                                </ul>
+                                                                                        </li>
+                                                                                        <li>
+                                                                                                <strong>收藏
+                                                                                                        (Favorites)</strong>:
+                                                                                                您可以将<span
+                                                                                                        class="highlight">聊天中的重要消息</span>或<span
+                                                                                                        class="highlight">动态区的精彩帖子</span>收藏起来，方便日后随时回顾。
+                                                                                        </li>
+                                                                                        <li>
+                                                                                                <strong>回忆
+                                                                                                        (Memories)</strong>:
+                                                                                                您可以查看所有角色创建的日记/回忆，或者是与您定下的约定（倒计时）事件。未完成的倒计时会优先显示在顶部，其次是您收藏的回忆，其余条目则会按照从新到旧的顺序排序。
+                                                                                                角色与您对话时会参考您与TA最近的三条回忆。
+                                                                                        </li>
+                                                                                        <li>
+                                                                                                <strong>关系图谱 (Relation
+                                                                                                        Map)</strong>:
+                                                                                                将所有角色和您的不同人格预设之间的关系可视化。
+                                                                                                <ul
+                                                                                                        class="list-circle list-inside ml-4">
+                                                                                                        <li><strong>连线与箭头</strong>:
+                                                                                                                每条连线代表一个角色对另一个角色的看法，箭头指向被看待的一方。
+                                                                                                        </li>
+                                                                                                        <li><strong>颜色与粗细</strong>:
+                                                                                                                线的颜色代表关系的性质（如恋人、朋友、对手等），粗细则代表好感度的强度。
+                                                                                                        </li>
+                                                                                                        <li><strong>双向关系</strong>:
+                                                                                                                角色之间的关系不是单向的。角色A可能将角色B视为“朋友”，而角色B可能将角色A视为“对手”，这会通过两条不同颜色和粗细的弧线来表示。
+                                                                                                        </li>
+                                                                                                        <li><strong
+                                                                                                                        class="highlight">聚焦查看</strong>:
+                                                                                                                在图谱上单击任意角色或用户的头像，视图将自动缩放并高亮显示所有与该角色直接相关的关系，便于清晰查看。
+                                                                                                        </li>
+                                                                                                        <li><strong
+                                                                                                                        class="highlight">智能过滤</strong>:
+                                                                                                                为避免关系网过于杂乱，好感度在
+                                                                                                                [-100,
+                                                                                                                100]
+                                                                                                                范围内的“普通”关系默认不显示。
+                                                                                                        </li>
+                                                                                                </ul>
+                                                                                        </li>
+                                                                                        <li>
+                                                                                                <strong>通话记录 (Call
+                                                                                                        Log)</strong>:
+                                                                                                在这里可以查看您与所有角色的通话历史。
+                                                                                                <ul
+                                                                                                        class="list-circle list-inside ml-4">
+                                                                                                        <li>记录会显示通话类型（视频/语音）、发起方（呼入/呼出）和通话时间。
+                                                                                                        </li>
+                                                                                                        <li>点击任意一条记录，可以展开查看本次通话期间的详细对话文字稿。
+                                                                                                        </li>
+                                                                                                </ul>
+                                                                                        </li>
+                                                                                        <li><strong>表情包
+                                                                                                        (Stickers)</strong>:
+                                                                                                您可以添加自定义表情包。支持通过URL或本地上传单个添加，也支持<span
+                                                                                                        class="highlight">批量导入</span>。
+                                                                                                <br>
+                                                                                                现在，您可以直接粘贴从别处复制的文本列表，AI会自动尝试将其转换为所需的JSON格式，省去您手动复制Prompt去第三方网站转换的步骤。
+                                                                                                批量导入后请刷新界面以查看新表情包。
+                                                                                                <div class="mt-2">
+                                                                                                        <details id="prompt-accordion"
+                                                                                                                class="mt-2">
+                                                                                                                <summary>
+                                                                                                                        <span>批量导入JSON格式与转换Prompt</span>
+                                                                                                                        <button id="copy-prompt-btn"
+                                                                                                                                class="px-2 py-1 text-xs font-semibold rounded-md transition-colors">复制</button>
+                                                                                                                </summary>
+                                                                                                                <div
+                                                                                                                        class="details-content">
+                                                                                                                        <pre id="json-prompt-code"
+                                                                                                                                class="w-full p-0 text-xs font-mono bg-transparent dark:bg-transparent whitespace-pre-wrap">
 角色： 你是一个精准的文本到JSON格式转换器。
 任务： 你的任务是将用户提供的表情包列表文本，严格按照指定的规则转换为JSON数组格式。
 输入文本格式规则：
@@ -477,287 +662,548 @@ html.dark #quick-start-guide .section-card-content p {
 你的回复只能包含最终的JSON代码块，不要添加任何解释、注释或额外的文字。
 需要转换的文本：{下面粘贴世界书}
                                             </pre>
+                                                                                                                </div>
+                                                                                                        </details>
+                                                                                                </div>
+                                                                                        </li>
+                                                                                        <li>
+                                                                                                <strong>世界设定 (World
+                                                                                                        Setting)</strong>:
+                                                                                                这里是您世界观的核心。您可以在此处添加或编辑世界观设定、角色背景故事、重要事件等内容。
+                                                                                                <ul
+                                                                                                        class="list-circle list-inside ml-4">
+                                                                                                        <li><strong>世界书</strong>:
+                                                                                                                记录所有角色的背景故事、重要事件和设定。
+                                                                                                        </li>
+                                                                                                        <li><strong>编年史</strong>:
+                                                                                                                记录所有角色的历史事件和时间线。
+                                                                                                        </li>
+                                                                                                </ul>
+                                                                                        </li>
+                                                                                </ul>
+
+                                                                        </div>
+                                                                </div>
+                                                        </details>
+                                                        <details id="chatroom-help">
+                                                                <summary>聊天室</summary>
+                                                                <div class="details-content space-y-3">
+                                                                        <div>
+                                                                                <h4 class="font-semibold">核心功能</h4>
+                                                                                <ul
+                                                                                        class="list-disc list-inside text-sm">
+                                                                                        <li><span
+                                                                                                        class="highlight">发送消息</span>:
+                                                                                                输入文本后点击发送按钮或按Enter键。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">等待回复</span>:
+                                                                                                点击闪烁的星星图标，让AI角色对当前对话作出回应。此功能会消耗API额度。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">长按消息</span>:
+                                                                                                长按任意消息气泡可以进行<span
+                                                                                                        class="highlight">复制</span>、<span
+                                                                                                        class="highlight">收藏</span>、<span
+                                                                                                        class="highlight">引用</span>、<span
+                                                                                                        class="highlight">多选</span>或<span
+                                                                                                        class="highlight">删除</span>操作。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">拍一拍</span>:
+                                                                                                双击对方或自己的头像，可以触发“拍一拍”互动。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">查看资料</span>:
+                                                                                                点击右上角图标，可以进入角色资料页。</li>
+                                                                                </ul>
+                                                                        </div>
+                                                                        <div>
+                                                                                <h4 class="font-semibold">底部功能栏按钮</h4>
+                                                                                <ul
+                                                                                        class="list-disc list-inside text-sm">
+                                                                                        <li><span
+                                                                                                        class="highlight">表情</span>:
+                                                                                                打开并发送您在“我” ->
+                                                                                                “表情”中添加的自定义表情。</li>
+                                                                                        <li><span
+                                                                                                        class="highlight">发送图片(描述)</span>:
+                                                                                                发送关于图片的描述。</li>
+                                                                                        <li><span
+                                                                                                        class="highlight">发送图片(真实)</span>:
+                                                                                                从<a href="#album-help"
+                                                                                                        class="underline">相册</a>或本地上传真实图片。为了使用这项功能，需要在<a
+                                                                                                        href="#settings-help"
+                                                                                                        class="underline">设置</a>中使用支持视觉的模型，如Gemini
+                                                                                                2.5 Pro等。</li>
+                                                                                        <li><span
+                                                                                                        class="highlight">转账/红包</span>:
+                                                                                                在私聊中向对方发起模拟转账，或在群聊中发拼手气/专属红包。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">发送语音</span>:
+                                                                                                模拟发送一条语音消息。</li>
+                                                                                        <li><span
+                                                                                                        class="highlight">外卖代付</span>:
+                                                                                                向对方发起一个模拟的外卖代付请求，对方可以同意或拒绝。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">一起听</span>:
+                                                                                                需要关联Spotify。选择一个歌单，与角色一起欣赏音乐。角色可以控制暂停，或者切歌。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">通话</span>:
+                                                                                                与角色发起模拟的语音或视频通话。通话期间，你们的对话会被实时记录。
+                                                                                        </li>
+                                                                                        <li><span
+                                                                                                        class="highlight">切换主题色</span>:
+                                                                                                切换UI元素的主题高亮色来源（您的气泡颜色或对方的气泡颜色）。
+                                                                                        </li>
+                                                                                </ul>
+                                                                        </div>
+                                                                </div>
+                                                        </details>
                                                 </div>
-                                            </details>
-                                            </div>
-                                        </li>
-                                        <li>
-                                            <strong>世界设定 (World Setting)</strong>: 
-                                            这里是您世界观的核心。您可以在此处添加或编辑世界观设定、角色背景故事、重要事件等内容。
-                                            <ul class="list-circle list-inside ml-4">
-                                                <li><strong>世界书</strong>: 记录所有角色的背景故事、重要事件和设定。</li>
-                                                <li><strong>编年史</strong>: 记录所有角色的历史事件和时间线。</li>
-                                            </ul>
-                                        </li>       
-                                    </ul>
-                               
-                            </div>
-                        </div>
-                    </details>
-                    <details id="chatroom-help">
-                        <summary>聊天室</summary>
-                         <div class="details-content space-y-3">
-                            <div>
-                                <h4 class="font-semibold">核心功能</h4>
-                                <ul class="list-disc list-inside text-sm">
-                                    <li><span class="highlight">发送消息</span>: 输入文本后点击发送按钮或按Enter键。</li>
-                                    <li><span class="highlight">等待回复</span>: 点击闪烁的星星图标，让AI角色对当前对话作出回应。此功能会消耗API额度。</li>
-                                    <li><span class="highlight">长按消息</span>: 长按任意消息气泡可以进行<span class="highlight">复制</span>、<span class="highlight">收藏</span>、<span class="highlight">引用</span>、<span class="highlight">多选</span>或<span class="highlight">删除</span>操作。</li>
-                                    <li><span class="highlight">拍一拍</span>: 双击对方或自己的头像，可以触发“拍一拍”互动。</li>
-                                    <li><span class="highlight">查看资料</span>: 点击右上角图标，可以进入角色资料页。</li>
-                                </ul>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold">底部功能栏按钮</h4>
-                                <ul class="list-disc list-inside text-sm">
-                                    <li><span class="highlight">表情</span>: 打开并发送您在“我” -> “表情”中添加的自定义表情。</li>
-                                    <li><span class="highlight">发送图片(描述)</span>: 发送关于图片的描述。</li>
-                                    <li><span class="highlight">发送图片(真实)</span>: 从<a href="#album-help" class="underline">相册</a>或本地上传真实图片。为了使用这项功能，需要在<a href="#settings-help" class="underline">设置</a>中使用支持视觉的模型，如Gemini 2.5 Pro等。</li>
-                                    <li><span class="highlight">转账/红包</span>: 在私聊中向对方发起模拟转账，或在群聊中发拼手气/专属红包。</li>
-                                    <li><span class="highlight">发送语音</span>: 模拟发送一条语音消息。</li>
-                                    <li><span class="highlight">外卖代付</span>: 向对方发起一个模拟的外卖代付请求，对方可以同意或拒绝。</li>
-                                    <li><span class="highlight">一起听</span>: 需要关联Spotify。选择一个歌单，与角色一起欣赏音乐。角色可以控制暂停，或者切歌。</li>
-                                    <li><span class="highlight">切换主题色</span>: 切换UI元素的主题高亮色来源（您的气泡颜色或对方的气泡颜色）。</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </details>
-                </div>
-            </details>
+                                        </details>
 
-            <details id="music-help">
-                <summary>音乐</summary>
-                <div class="details-content">
-                    <p>通过关联您的Spotify Premium账号，解锁“一起听歌”功能。首次使用需要登录授权。登录成功后，即可在聊天室中与AI角色分享歌单，共同聆听。</p>
-                </div>
-            </details>
+                                        <details id="music-help">
+                                                <summary>音乐</summary>
+                                                <div class="details-content">
+                                                        <p>通过关联您的Spotify
+                                                                Premium账号，解锁“一起听歌”功能。首次使用需要登录授权。登录成功后，即可在聊天室中与AI角色分享歌单，共同聆听。
+                                                        </p>
+                                                </div>
+                                        </details>
 
-            <details id="summary-help">
-                <summary>简报</summary>
-                <div class="details-content">
-                    <p>当您离线超过<a href="#settings-help" class="underline">设置</a>中指定的时间后，系统会模拟此期间所有分组的角色圈子中发生的故事（如关系变化、个人事件），并在此处生成一份简报供您阅读。简报内容也会被自动记录到此分组关联的<a href="#worldbook-help" class="underline">世界书（编年史）</a>中。</p>
-                    <p>在主页看到“简报生成中”提示时，表示系统正在为您生成简报，请在此界面稍等片刻。有时会因为api问题导致生成失败。</p>
-                    <p>角色必须要加入一个分组才会触发简报，单人分组会生成个人事件，不会有好感度变化。如多于一人会生成群组简报，内容包括角色之间的互动、关系变化等。</p>
-                </div>
-            </details>
+                                        <details id="summary-help">
+                                                <summary>简报</summary>
+                                                <div class="details-content">
+                                                        <p>当您离线超过<a href="#settings-help"
+                                                                        class="underline">设置</a>中指定的时间后，系统会模拟此期间所有分组的角色圈子中发生的故事（如关系变化、个人事件），并在此处生成一份简报供您阅读。简报内容也会被自动记录到此分组关联的<a
+                                                                        href="#worldbook-help"
+                                                                        class="underline">世界书（编年史）</a>中。</p>
+                                                        <p>在主页看到“简报生成中”提示时，表示系统正在为您生成简报，请在此界面稍等片刻。有时会因为api问题导致生成失败。</p>
+                                                        <p>角色必须要加入一个分组才会触发简报，单人分组会生成个人事件，不会有好感度变化。如多于一人会生成群组简报，内容包括角色之间的互动、关系变化等。
+                                                        </p>
+                                                </div>
+                                        </details>
 
-            <details id="album-help">
-                <summary>相册</summary>
-                <div class="details-content">
-                    <p>一个公共的图片存储空间。您可以通过URL或本地上传添加图片。如果添加了描述，角色有概率使用图片作为个人主页的背景。不填写描述则只有您可以用其作为聊天室或者主屏幕壁纸。
-                        可以在<a href="#personalization-help" class="underline">个性化</a>设置中用作壁纸，或在角色编辑中用作聊天背景。
-                        本地上传功能需要配置<a href="#cloudinary-setup" class="underline">Cloudinary服务</a>。</p>
-                </div>
-            </details>
+                                        <details id="album-help">
+                                                <summary>相册</summary>
+                                                <div class="details-content">
+                                                        <p>一个公共的图片存储空间。您可以通过URL或本地上传添加图片。如果添加了描述，角色有概率使用图片作为个人主页的背景。不填写描述则只有您可以用其作为聊天室或者主屏幕壁纸。
+                                                                可以在<a href="#personalization-help"
+                                                                        class="underline">个性化</a>设置中用作壁纸，或在角色编辑中用作聊天背景。
+                                                                本地上传功能需要配置<a href="#cloudinary-setup"
+                                                                        class="underline">Cloudinary服务</a>。</p>
+                                                </div>
+                                        </details>
 
-            <details id="settings-help">
-                <summary>设置</summary>
-                <div class="details-content space-y-4">
-                    <details>
-                        <summary>API 连接</summary>
-                        <div class="details-content">
-                            <p class="text-sm">配置连接AI模型所需的信息，包括API地址、密钥和模型名称。支持保存和切换多个不同的API方案（例如，一个用于GPT，一个用于Gemini）。
-                                直连则不需要填写反代地址，仅需填写API密匙和选择模型。
-                            </p>
-                        </div>
-                    </details>
-                    <details id="cloudinary-setup">
-                        <summary>图片上传 (Cloudinary)</summary>
-                        <div class="details-content">
-                             <p class="text-sm">为了能从本地上传图片，您需要注册一个免费的Cloudinary账号，并在其官网设置中创建一个<span class="highlight">无签名 (Unsigned)</span>的上传预设 (Upload Preset)，然后将您的<span class="highlight">Cloud Name</span>和<span class="highlight">Upload Preset</span>名称填写到此处。详细步骤请参考<a href="#cloudinary-guide" class="underline">Cloudinary 设置指南</a>。</p>
-                        </div>
-                    </details>
-                    <details>
-                        <summary>后台活动</summary>
-                        <div class="details-content">
-                            <p class="text-sm">开启后，AI角色们会在后台独立“生活”，可能会主动给您发消息、发布动态、或在群聊里主动发言。<strong>注意：此功能会显著增加API费用。</strong> 您可以调整活动检测的频率和概率来控制消耗。</p>
-                            <p class="text-xs text-gray-500 mt-2">
-                                <strong>它和“离线模拟/简报”有什么不同？</strong>
-                                <ul class="list-disc list-inside text-xs text-gray-500 ml-4">
-                                    <li><strong>后台活动</strong>: 是<span class="highlight">实时</span>的、<span class="highlight">持续性</span>的。只要您开着应用，角色们就会像真人一样独立生活，随时可能给您发消息或发布动态。</li>
-                                    <li><strong>离线模拟</strong>: 是<span class="highlight">一次性</span>的、<span class="highlight">回顾性</span>的。它只在您长时间未打开应用后，在下一次启动时运行，用于总结您“离开”期间世界上发生的大事。</li>
-                                </ul>
-                            </p>
-                        </div>
-                    </details>
-                    <details>
-                        <summary>数据管理</summary>
-                        <div class="details-content">
-                            <p class="text-sm"><span class="highlight">导出备份</span>: 将您的所有数据打包成一个JSON文件下载到本地。<br><span class="highlight">导入备份</span>: 从本地选择之前导出的JSON文件，恢复所有数据（会覆盖当前数据）。<br><span class="highlight">云同步</span>: 通过GitHub Gist实现多设备数据同步。详细步骤请参考<a href="#gist-guide" class="underline">GitHub Gist 设置指南</a>。</p>
-                        </div>
-                    </details>
-                </div>
-            </details>
-            
-            <details id="personalization-help">
-                <summary>个性化</summary>
-                <div class="details-content">
-                    <p>自定义应用的全局外观。您可以设置主屏幕的壁纸（可从<a href="#album-help" class="underline">相册</a>选择）、所有界面的主题高亮色，以及更换全局字体（需要提供字体文件的URL）。
-                    主题模式为“自动”时，应用会根据系统的深色模式设置自动切换。
-                    </p>
-                </div>
-            </details>
+                                        <details id="settings-help">
+                                                <summary>设置</summary>
+                                                <div class="details-content space-y-4">
+                                                        <details>
+                                                                <summary>API 连接</summary>
+                                                                <div class="details-content">
+                                                                        <p class="text-sm">
+                                                                                配置连接AI模型所需的信息，包括API地址、密钥和模型名称。支持保存和切换多个不同的API方案（例如，一个用于GPT，一个用于Gemini）。
+                                                                                直连则不需要填写反代地址，仅需填写API密匙和选择模型。
+                                                                        </p>
+                                                                </div>
+                                                        </details>
+                                                        <details id="cloudinary-setup">
+                                                                <summary>图片上传 (Cloudinary)</summary>
+                                                                <div class="details-content">
+                                                                        <p class="text-sm">
+                                                                                为了能从本地上传图片，您需要注册一个免费的Cloudinary账号，并在其官网设置中创建一个<span
+                                                                                        class="highlight">无签名
+                                                                                        (Unsigned)</span>的上传预设 (Upload
+                                                                                Preset)，然后将您的<span
+                                                                                        class="highlight">Cloud
+                                                                                        Name</span>和<span
+                                                                                        class="highlight">Upload
+                                                                                        Preset</span>名称填写到此处。详细步骤请参考<a
+                                                                                        href="#cloudinary-guide"
+                                                                                        class="underline">Cloudinary
+                                                                                        设置指南</a>。</p>
+                                                                </div>
+                                                        </details>
+                                                        <details>
+                                                                <summary>后台活动</summary>
+                                                                <div class="details-content">
+                                                                        <p class="text-sm">
+                                                                                开启后，AI角色们会在后台独立“生活”，可能会主动给您发消息、发布动态、或在群聊里主动发言。<strong>注意：此功能会显著增加API费用。</strong>
+                                                                                您可以调整活动检测的频率和概率来控制消耗。</p>
+                                                                        <p class="text-xs text-gray-500 mt-2">
+                                                                                <strong>它和“离线模拟/简报”有什么不同？</strong>
+                                                                        <ul
+                                                                                class="list-disc list-inside text-xs text-gray-500 ml-4">
+                                                                                <li><strong>后台活动</strong>: 是<span
+                                                                                                class="highlight">实时</span>的、<span
+                                                                                                class="highlight">持续性</span>的。只要您开着应用，角色们就会像真人一样独立生活，随时可能给您发消息或发布动态。
+                                                                                </li>
+                                                                                <li><strong>离线模拟</strong>: 是<span
+                                                                                                class="highlight">一次性</span>的、<span
+                                                                                                class="highlight">回顾性</span>的。它只在您长时间未打开应用后，在下一次启动时运行，用于总结您“离开”期间世界上发生的大事。
+                                                                                </li>
+                                                                        </ul>
+                                                                        </p>
+                                                                </div>
+                                                        </details>
+                                                        <details>
+                                                                <summary>数据管理</summary>
+                                                                <div class="details-content">
+                                                                        <p class="text-sm"><span
+                                                                                        class="highlight">导出备份</span>:
+                                                                                将您的所有数据打包成一个JSON文件下载到本地。<br><span
+                                                                                        class="highlight">导入备份</span>:
+                                                                                从本地选择之前导出的JSON文件，恢复所有数据（会覆盖当前数据）。<br><span
+                                                                                        class="highlight">云同步</span>:
+                                                                                通过GitHub Gist实现多设备数据同步。详细步骤请参考<a
+                                                                                        href="#gist-guide"
+                                                                                        class="underline">GitHub Gist
+                                                                                        设置指南</a>。</p>
+                                                                </div>
+                                                        </details>
+                                                </div>
+                                        </details>
 
-            <details id="worldbook-help">
-                <summary>世界书</summary>
-                <div class="details-content">
-                    <p>“世界书”是用于定义世界观、角色背景、共同记忆的知识库。AI在生成回复时会优先参考关联的世界书内容，确保对话符合您设定的宏大背景。
-                        您可以在 我 -> <span class="highlight">世界设定</span>页面将不同的世界书关联到不同的角色分组上，也可以在角色编辑页面直接关联到单个角色上。注意不要重复在分组和角色上关联同一世界书。
-                        特别地，名为“编年史”的世界书会自动记录由<a href="#summary-help" class="underline">离线模拟</a>生成的事件。</p>
-                </div>
-            </details>
-        </div>
-    </section>
+                                        <details id="personalization-help">
+                                                <summary>个性化</summary>
+                                                <div class="details-content">
+                                                        <p>
+                                                                自定义应用的全局外观。您可以设置主屏幕的壁纸、所有界面的主题高亮色，以及更换全局字体（需要提供字体文件的URL）。
+                                                                <span class="highlight">壁纸</span>现在支持三种模式：
+                                                        <ul class="list-disc list-inside text-sm mt-2 space-y-1">
+                                                                <li><strong>图片</strong>: 使用您提供的URL或从相册选择一张图片作为背景。</li>
+                                                                <li><strong>渐变</strong>: 从预设中选择或自定义两种颜色，生成动态的渐变背景。</li>
+                                                                <li><strong>拓扑</strong>: 生成动态的、具有科技感的拓扑网络动画作为背景。</li>
+                                                        </ul>
+                                                        主题模式为“自动”时，应用会根据系统的深色模式设置自动切换。
+                                                        </p>
+                                                </div>
+                                        </details>
 
+                                        <details id="worldbook-help">
+                                                <summary>世界书</summary>
+                                                <div class="details-content">
+                                                        <p>“世界书”是用于定义世界观、角色背景、共同记忆的知识库。AI在生成回复时会优先参考关联的世界书内容，确保对话符合您设定的宏大背景。
+                                                                您可以在 我 -> <span
+                                                                        class="highlight">世界设定</span>页面将不同的世界书关联到不同的角色分组上，也可以在角色编辑页面直接关联到单个角色上。注意不要重复在分组和角色上关联同一世界书。
+                                                                特别地，名为“编年史”的世界书会自动记录由<a href="#summary-help"
+                                                                        class="underline">离线模拟</a>生成的事件。</p>
+                                                </div>
+                                        </details>
+                                        <details id="char-profile-help">
+                                                <summary>角色主页</summary>
+                                                <div class="details-content space-y-4">
+                                                        <p>这里是角色的个人中心，展示了TA的核心信息和动态。</p>
+                                                        <ul class="list-disc list-inside text-sm space-y-2">
+                                                                <li><span class="highlight">核心信息</span>:
+                                                                        您可以看到角色的头像、昵称、名字，以及通过互动变化的好感度分数。</li>
+                                                                <li><span class="highlight">基本资料</span>:
+                                                                        包括根据生日自动计算的年龄和星座、性别以及所属分组。</li>
+                                                                <li><span class="highlight">动态入口</span>:
+                                                                        快速进入该角色的个人动态时间线，只看TA发布的内容。</li>
+                                                                <li><span class="highlight">日记入口</span>:
+                                                                        查看该角色在与您互动后，私下记录的带有深刻情感或思考的日记。
+                                                                        <ul class="list-circle list-inside ml-4">
+                                                                                <li>日记中的<span
+                                                                                                class="highlight">关键词</span>可能会在后续聊天中被触发，作为角色的“回忆”影响其对话。
+                                                                                </li>
+                                                                                <li>您可以在日记页面编辑日记的内容和关键词。</li>
+                                                                        </ul>
+                                                                </li>
+                                                                <li><span class="highlight">回忆入口</span>:
+                                                                        查看与该角色相关的回忆（包括倒计时约定）。</li>
+                                                        </ul>
+                                                </div>
+                                        </details>
 
-           <section id="services-guide" class="section-card">
-                <div class="section-card-header">
-                    <h2 class="text-lg font-semibold">第三方服务设置指南</h2>
-                    <p class="text-sm">为了使用图片上传和云同步功能，您需要配置两个免费的第三方服务。</p>
-                </div>
-                <div class="section-card-content">
-                    <details id="cloudinary-guide">
-                     <summary>Cloudinary 设置指南 (用于图片上传)</summary>
-                     <div class="details-content">
-                        <p class="mb-2">Cloudinary 是一个强大的图片和视频管理服务，其免费套餐足以满足本应用的需求。</p>
-                        <ol class="list-decimal list-inside space-y-2 text-sm">
-                            <li><strong>第1步：注册账户</strong>
-                                <br>访问 <a href="https://cloudinary.com/users/register/free" target="_blank" class="underline">Cloudinary 免费注册页面</a> 并创建一个新账户。
-                            </li>
-                            <li><strong>第2步：找到您的 Cloud Name</strong>
-                                <br>登录后，您会进入控制台 (Dashboard)。在 “Account Details” (账户详情) 部分，找到您的 <code>Cloud Name</code> (云名称)，并复制它。
-                            </li>
-                            <li><strong>第3步：创建上传预设 (Upload Preset)</strong>
-                                <br> a. 在顶部导航栏，点击齿轮图标进入 <strong>Settings</strong> (设置)。
-                                <br> b. 点击 <strong>Upload</strong> (上传) 标签页。
-                                <br> c. 滚动到底部，找到 <strong>Upload presets</strong> (上传预设) 部分。
-                                <br> d. 点击右侧的 <strong>Add upload preset</strong> (添加上传预设) 按钮。
-                            </li>
-                            <li><strong>第4步：配置上传预设</strong>
-                                <br> a. <strong>Signing Mode</strong> (签名模式) 这一项【必须】从默认的 “Signed” 修改为 <strong>Unsigned</strong> (未签名)。这是最关键的一步。
-                                <br> b. 您可以为这个预设起一个容易记住的名字（例如 `xphone-unsigned`），也可以使用系统生成的随机名。
-                                <br> c. 其他设置保持默认即可。点击页面底部的 <strong>Save</strong> (保存) 按钮。
-                            </li>
-                            <li><strong>第5步：复制预设名称</strong>
-                                <br>保存后，您会返回到上传预设列表。找到您刚刚创建的预设，并复制它的 <strong>Preset name</strong> (预设名称)。
-                            </li>
-                            <li><strong>第6步：填入 Xphone 设置</strong>
-                                <br>回到 Xphone 的“设置”页面，将第2步复制的 <code>Cloud Name</code> 和第5步复制的 <code>Upload Preset</code> 名称，分别粘贴到对应的输入框中，然后点击保存。</li>
-                        </ol>
-                     </div>
-                 </details>
-                 <details id="gist-guide">
-                     <summary>GitHub Gist 设置指南 (用于云同步)</summary>
-                     <div class="details-content">
-                         <p class="mb-2">我们使用 GitHub Gist 来存储您的备份数据，实现跨设备同步。您需要一个 GitHub 账户。</p>
-                        <ol class="list-decimal list-inside space-y-2 text-sm">
-                            <li><strong>第1步：创建 Secret Gist</strong>
-                                <br> a. 登录 <a href="https://github.com/" target="_blank" class="underline">GitHub</a>，然后访问 <a href="https://gist.github.com/" target="_blank" class="underline">Gist 网站</a>。
-                                <br> b. 在 “Filename including extension...” (文件名) 输入框中，填写 <code>xphone_backup.json</code>。
-                                <br> c. 在文件内容区域随便输入一些文字，例如 <code>{}</code>。
-                                <br> d. 点击右下角的 “Create secret gist” (创建私密 Gist) 按钮。<strong>请务必选择 Secret，不要选择 Public。</strong>
-                            </li>
-                            <li><strong>第2步：获取 Gist ID</strong>
-                                <br>创建成功后，浏览器地址栏的 URL 会变成类似 <code>https://gist.github.com/YourUsername/abcdef1234567890</code> 的格式。
-                                <br>地址栏最后那串由字母和数字组成的字符串 (例如 <code>abcdef1234567890</code>) 就是您的 <strong>Gist ID</strong>。请复制它。
-                            </li>
-                            <li><strong>第3步：创建 Personal Access Token (PAT)</strong>
-                                <br> a. 回到 <a href="https://github.com/" target="_blank" class="underline">GitHub 主站</a>，点击右上角您的头像，选择 <strong>Settings</strong> (设置)。
-                                <br> b. 在左侧菜单滚动到底部，选择 <strong>Developer settings</strong> (开发者设置)。
-                                <br> c. 依次选择 <strong>Personal access tokens</strong> -> <strong>Tokens (classic)</strong>。
-                                <br> d. 点击 <strong>Generate new token</strong>，然后选择 <strong>Generate new token (classic)</strong>。
-                            </li>
-                            <li><strong>第4步：配置 Token 权限</strong>
-                                <br> a. 在 <strong>Note</strong> (备注) 栏填写一个描述，例如 `Xphone Sync`。
-                                <br> b. 在 <strong>Expiration</strong> (有效期) 栏，建议选择 <strong>No expiration</strong> (无有效期)，否则 Token 过期后同步会失败。
-                                <br> c. 在 <strong>Select scopes</strong> (选择权限范围) 部分，只需勾选 <strong><code>gist</code></strong> 这一个权限即可。
-                                <br> d. 滚动到页面底部，点击 <strong>Generate token</strong> 按钮。
-                            </li>
-                            <li><strong>第5步：复制您的 Token</strong>
-                                <br>页面会显示您新生成的 Token，它以 <code>ghp_</code> 开头。<strong>这是您唯一一次看到这个 Token 的机会</strong>，请立即点击复制按钮，并将它保存在一个安全的地方。
-                            </li>
-                            <li><strong>第6步：填入 Xphone 设置</strong>
-                                <br>回到 Xphone 的“设置”页面，将第2步复制的 <code>Gist ID</code> 和第5步复制的 <code>Personal Access Token</code>，分别粘贴到云同步区域的对应输入框中，然后点击保存。</li>
-                        </ol>
-                     </div>
-                 </details>
-              </div>
-            </section>
-             <section id="Advance-guide" class="section-card">
-                <div class="section-card-header">
-                    <h2 class="text-lg font-semibold">进阶功能详解</h2>
-                </div>
-                <div class="section-card-content">
-                    <details id="world-settings-dynamic-help"> <summary>世界设定与动态</summary>
-                    <div class="details-content space-y-4">
-                        <div>
-                            <h4 class="font-semibold">世界设定 (World Setting)</h4>
-                            <p class="text-sm">此页面用于调整AI角色在后台的自主行为逻辑，核心功能是“离线模拟”与“情报网”。</p>
-                            <ul class="list-disc list-inside text-sm mt-2 space-y-1">
-                                <li><strong>离线模拟</strong>: 当您离线超过设定的时间后，AI会自动模拟这段时间内角色之间可能发生的互动、关系变化或个人事件，并生成一份<a href="#summary-help" class="underline">简报</a>。这会让角色的故事在您不在的时候也能延续。</li>
-                                <li><strong>情报网 (Intelligence Network)</strong>:
-                                    <ul class="list-circle list-inside ml-4">
-                                        <li><strong>工作原理</strong>: 当您进入与某个角色的私聊时，如果距离上次搜集情报超过了冷却时间，该角色会秘密地“打探”其社交圈（同分组的好友）最近和您的聊天记录以及他们发布的动态。</li>
-                                        <li><strong>目的</strong>: 这能让角色获取到您与其他人的互动信息，使对话更具深度和真实感。例如，如果角色A通过情报网得知您和角色B聊过某个话题，它可能会在和您的对话中主动提及：“我听说你和B最近在讨论...”。</li>
-                                        <li><strong>情报触发主动消息</strong>: 若开启此选项，当角色通过情报网发现“有趣”的信息时（例如您提到了TA的名字），TA可能会主动开启一段新的对话来询问或评论此事。</li>
-                                    </ul>
-                                </li>
-                                <li><strong>分组管理</strong>: 您可以将不同的“世界书”关联到不同的分组上。该分组下的所有角色在思考和回应时，都会将这些世界书的内容作为最高优先级的背景知识来参考。</li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 class="font-semibold">动态 (Moments) 互动规则</h4>
-                            <p class="text-sm">动态区模拟了一个真实的朋友圈环境，角色之间的互动遵循以下规则：</p>
-                            <ul class="list-disc list-inside text-sm mt-2 space-y-1">
-                                <li><strong>可见性规则</strong>: 角色只能看到并互动其<span class="highlight">同一分组内</span>其他角色以及您发布的动态（除非您设置了分组可见）。</li>
-                                <li><strong>提及 (@) 与后续互动</strong>: 当您或某个角色在动态中提到了另一个角色后，被提及的角色会收到一条系统通知。当您之后进入与该角色的聊天室时，TA会<span class="highlight">优先</span>对这条提及TA的动态做出回应（如评论、点赞或私下询问）。这创造了从公开社交到私密对话的自然过渡。</li>
-                                <li><strong>评论身份</strong>: 角色在动态下发表评论时，其身份和人设将基于其<span class="highlight">自身绑定的人格预设</span>（如果在“我”->“个人设置”中为其指定了特定人格），而不是您当前使用的全局默认人格。这保证了角色行为的一致性。</li>
-                            </ul>
-                        </div>
-                    </div>
-                </details>
-           
-                <details id="advanced-features-help">
-                    <summary>AI自主生活与人设</summary>
-                    <div class="details-content space-y-4">
-                        <p>AI角色拥有自己的“生活”，不仅会回应您的消息，还会在后台独立行动。一个详细的人设是驱动这些行为的关键。本节将详细介绍AI的自主行为，并提供一个工具来帮您构建更生动的角色。</p>
-
-                        <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                            <h4 class="font-semibold text-base mb-2">AI的自主生活 (AI's Independent Life)</h4>
-                            <p class="text-sm mb-3">角色的自主行为分为两种，均由其核心人设驱动：</p>
-                            <div class="space-y-3">
-                                <div>
-                                    <h5 class="font-semibold">1. 后台活动 (实时在线行为)</h5>
-                                    <p class="text-sm">当您在“设置”中开启<span class="highlight">后台活动</span>后，角色们会像真人一样实时地、独立地生活和社交。您可能会观察到他们：</p>
-                                    <ul class="list-disc list-inside text-sm mt-2 space-y-1 text-gray-600 dark:text-gray-400">
-                                        <li><strong>主动聊天:</strong> 根据人设和最近的事件，突然给您发来私信，开启一个新话题。</li>
-                                        <li><strong>发布动态:</strong> 在“动态”区发布新的文字或图片动态，分享自己的所见所闻或心情。</li>
-                                        <li><strong>社交互动:</strong> 浏览自己可见的动态，并可能进行<span class="highlight">点赞</span>或<span class="highlight">评论</span>。</li>
-                                        <li><strong>群聊活动:</strong> 在群聊中，角色可能会随机发起一个话题、发送表情包，甚至是<span class="highlight">发红包</span>或邀请大家<span class="highlight">点外卖</span>。</li>
-                                    </ul>
+                                        <details id="char-edit-profile-help">
+                                                <summary>角色/群聊编辑</summary>
+                                                <div class="details-content space-y-4">
+                                                        <p>在这里，您可以深度定制角色的方方面面，这些设定将直接影响AI的行为逻辑。</p>
+                                                        <ul class="list-disc list-inside text-sm space-y-3">
+                                                                <li><span class="highlight">基础设定</span>:
+                                                                        修改角色的头像、昵称、名字、生日、性别、人设和所属分组。</li>
+                                                                <li><span class="highlight">初始关系设定</span>:
+                                                                        设定该角色对“你”以及对“同分组其他角色”的初始好感度和关系类型（如朋友、恋人）。</li>
+                                                                <li><span class="highlight">聊天背景与气泡</span>:
+                                                                        为与该角色的聊天室设置独立的背景图和聊天气泡颜色主题。</li>
+                                                                <li>
+                                                                        <span class="highlight">AI生成气泡样式 (CSS)</span>:
+                                                                        <ul class="list-circle list-inside ml-4">
+                                                                                <li>输入一段自然语言描述（如“我想要一个带粉色描边的半透明玻璃质感气泡”），AI会为您生成对应的CSS代码来实现这个效果。
+                                                                                </li>
+                                                                                <li><strong
+                                                                                                class="text-gray-800 dark:text-gray-200">迭代与优化</strong>：AI生成代码后会填充到文本框中。您可以保留这些代码，然后在上方的输入框中继续提出修改建议（如“边框再粗一点”），AI会基于现有代码进行修改，实现逐步优化的效果。
+                                                                                </li>
+                                                                        </ul>
+                                                                </li>
+                                                        </ul>
+                                                </div>
+                                        </details>
                                 </div>
-                                <div>
-                                    <h5 class="font-semibold">2. 离线模拟 (离线回顾)</h5>
-                                    <p class="text-sm">当您离线超过设定时间后，此功能会一次性触发。它更侧重于故事推进，模拟并总结您离开期间发生的<strong>重大事件</strong>。其结果会：</p>
-                                    <ul class="list-disc list-inside text-sm mt-2 space-y-1 text-gray-600 dark:text-gray-400">
-                                        <li>在<a href="#summary-help" class="underline">简报</a>应用中生成一份总结报告。</li>
-                                        <li>将角色间的<span class="highlight">关系变化</span>、个人目标的<span class="highlight">重要进展</span>或挫折，自动记入关联世界书的“编年史”中。</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
+                        </section>
 
-                        <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 mt-4">
-                            <h4 class="font-semibold text-base mb-2">生成详细人设的辅助Prompt</h4>
-                            <p class="text-sm mb-3">为了让AI角色的自主行为更符合您的想象，一个详细的人设至关重要。您可以将以下模板和您的基础人设一起提供给一个强大的语言模型（如GPT-4, Claude 3, Gemini 1.5 Pro等），来生成更丰富、更适用于本应用的角色设定。之后，将生成的结果填入角色的“人设”字段即可。</p>
-                            <div>
-                                <details id="prompt-accordion" class="mt-2">
-                                    <summary>
-                                        <span>生成更适用于此网站人设的Prompt</span>
-                                        <button id="copy-prompt-btn" class="px-2 py-1 text-xs font-semibold rounded-md transition-colors">复制</button>
-                                    </summary>
-                                    <div class="details-content">
-                                        <pre id="json-prompt-code" class="w-full p-0 text-xs font-mono bg-transparent dark:bg-transparent whitespace-pre-wrap">
+
+                        <section id="services-guide" class="section-card">
+                                <div class="section-card-header">
+                                        <h2 class="text-lg font-semibold">第三方服务设置指南</h2>
+                                        <p class="text-sm">为了使用图片上传和云同步功能，您需要配置两个免费的第三方服务。</p>
+                                </div>
+                                <div class="section-card-content">
+                                        <details id="cloudinary-guide">
+                                                <summary>Cloudinary 设置指南 (用于图片上传)</summary>
+                                                <div class="details-content">
+                                                        <p class="mb-2">Cloudinary 是一个强大的图片和视频管理服务，其免费套餐足以满足本应用的需求。</p>
+                                                        <ol class="list-decimal list-inside space-y-2 text-sm">
+                                                                <li><strong>第1步：注册账户</strong>
+                                                                        <br>访问 <a
+                                                                                href="https://cloudinary.com/users/register/free"
+                                                                                target="_blank"
+                                                                                class="underline">Cloudinary 免费注册页面</a>
+                                                                        并创建一个新账户。
+                                                                </li>
+                                                                <li><strong>第2步：找到您的 Cloud Name</strong>
+                                                                        <br>登录后，您会进入控制台 (Dashboard)。在 “Account Details”
+                                                                        (账户详情) 部分，找到您的 <code>Cloud Name</code>
+                                                                        (云名称)，并复制它。
+                                                                </li>
+                                                                <li><strong>第3步：创建上传预设 (Upload Preset)</strong>
+                                                                        <br> a. 在顶部导航栏，点击齿轮图标进入
+                                                                        <strong>Settings</strong> (设置)。
+                                                                        <br> b. 点击 <strong>Upload</strong> (上传) 标签页。
+                                                                        <br> c. 滚动到底部，找到 <strong>Upload presets</strong>
+                                                                        (上传预设) 部分。
+                                                                        <br> d. 点击右侧的 <strong>Add upload preset</strong>
+                                                                        (添加上传预设) 按钮。
+                                                                </li>
+                                                                <li><strong>第4步：配置上传预设</strong>
+                                                                        <br> a. <strong>Signing Mode</strong> (签名模式)
+                                                                        这一项【必须】从默认的 “Signed” 修改为
+                                                                        <strong>Unsigned</strong> (未签名)。这是最关键的一步。
+                                                                        <br> b. 您可以为这个预设起一个容易记住的名字（例如
+                                                                        `xphone-unsigned`），也可以使用系统生成的随机名。
+                                                                        <br> c. 其他设置保持默认即可。点击页面底部的 <strong>Save</strong>
+                                                                        (保存) 按钮。
+                                                                </li>
+                                                                <li><strong>第5步：复制预设名称</strong>
+                                                                        <br>保存后，您会返回到上传预设列表。找到您刚刚创建的预设，并复制它的
+                                                                        <strong>Preset name</strong> (预设名称)。
+                                                                </li>
+                                                                <li><strong>第6步：填入 Xphone 设置</strong>
+                                                                        <br>回到 Xphone 的“设置”页面，将第2步复制的
+                                                                        <code>Cloud Name</code> 和第5步复制的
+                                                                        <code>Upload Preset</code>
+                                                                        名称，分别粘贴到对应的输入框中，然后点击保存。
+                                                                </li>
+                                                        </ol>
+                                                </div>
+                                        </details>
+                                        <details id="gist-guide">
+                                                <summary>GitHub Gist 设置指南 (用于云同步)</summary>
+                                                <div class="details-content">
+                                                        <p class="mb-2">我们使用 GitHub Gist 来存储您的备份数据，实现跨设备同步。您需要一个 GitHub
+                                                                账户。</p>
+                                                        <ol class="list-decimal list-inside space-y-2 text-sm">
+                                                                <li><strong>第1步：创建 Secret Gist</strong>
+                                                                        <br> a. 登录 <a href="https://github.com/"
+                                                                                target="_blank"
+                                                                                class="underline">GitHub</a>，然后访问 <a
+                                                                                href="https://gist.github.com/"
+                                                                                target="_blank" class="underline">Gist
+                                                                                网站</a>。
+                                                                        <br> b. 在 “Filename including extension...”
+                                                                        (文件名) 输入框中，填写 <code>xphone_backup.json</code>。
+                                                                        <br> c. 在文件内容区域随便输入一些文字，例如 <code>{}</code>。
+                                                                        <br> d. 点击右下角的 “Create secret gist” (创建私密 Gist)
+                                                                        按钮。<strong>请务必选择 Secret，不要选择 Public。</strong>
+                                                                </li>
+                                                                <li><strong>第2步：获取 Gist ID</strong>
+                                                                        <br>创建成功后，浏览器地址栏的 URL 会变成类似
+                                                                        <code>https://gist.github.com/YourUsername/abcdef1234567890</code>
+                                                                        的格式。
+                                                                        <br>地址栏最后那串由字母和数字组成的字符串 (例如
+                                                                        <code>abcdef1234567890</code>) 就是您的 <strong>Gist
+                                                                                ID</strong>。请复制它。
+                                                                </li>
+                                                                <li><strong>第3步：创建 Personal Access Token (PAT)</strong>
+                                                                        <br> a. 回到 <a href="https://github.com/"
+                                                                                target="_blank" class="underline">GitHub
+                                                                                主站</a>，点击右上角您的头像，选择
+                                                                        <strong>Settings</strong> (设置)。
+                                                                        <br> b. 在左侧菜单滚动到底部，选择 <strong>Developer
+                                                                                settings</strong> (开发者设置)。
+                                                                        <br> c. 依次选择 <strong>Personal access
+                                                                                tokens</strong> -> <strong>Tokens
+                                                                                (classic)</strong>。
+                                                                        <br> d. 点击 <strong>Generate new
+                                                                                token</strong>，然后选择 <strong>Generate new
+                                                                                token (classic)</strong>。
+                                                                </li>
+                                                                <li><strong>第4步：配置 Token 权限</strong>
+                                                                        <br> a. 在 <strong>Note</strong> (备注) 栏填写一个描述，例如
+                                                                        `Xphone Sync`。
+                                                                        <br> b. 在 <strong>Expiration</strong> (有效期)
+                                                                        栏，建议选择 <strong>No expiration</strong> (无有效期)，否则
+                                                                        Token 过期后同步会失败。
+                                                                        <br> c. 在 <strong>Select scopes</strong>
+                                                                        (选择权限范围) 部分，只需勾选
+                                                                        <strong><code>gist</code></strong> 这一个权限即可。
+                                                                        <br> d. 滚动到页面底部，点击 <strong>Generate
+                                                                                token</strong> 按钮。
+                                                                </li>
+                                                                <li><strong>第5步：复制您的 Token</strong>
+                                                                        <br>页面会显示您新生成的 Token，它以 <code>ghp_</code>
+                                                                        开头。<strong>这是您唯一一次看到这个 Token
+                                                                                的机会</strong>，请立即点击复制按钮，并将它保存在一个安全的地方。
+                                                                </li>
+                                                                <li><strong>第6步：填入 Xphone 设置</strong>
+                                                                        <br>回到 Xphone 的“设置”页面，将第2步复制的
+                                                                        <code>Gist ID</code> 和第5步复制的
+                                                                        <code>Personal Access Token</code>，分别粘贴到云同步区域的对应输入框中，然后点击保存。
+                                                                </li>
+                                                        </ol>
+                                                </div>
+                                        </details>
+                                </div>
+                        </section>
+                        <section id="Advance-guide" class="section-card">
+                                <div class="section-card-header">
+                                        <h2 class="text-lg font-semibold">进阶功能详解</h2>
+                                </div>
+                                <div class="section-card-content">
+                                        <details id="world-settings-dynamic-help">
+                                                <summary>世界设定与动态</summary>
+                                                <div class="details-content space-y-4">
+                                                        <div>
+                                                                <h4 class="font-semibold">世界设定 (World Setting)</h4>
+                                                                <p class="text-sm">
+                                                                        此页面用于调整AI角色在后台的自主行为逻辑，核心功能是“离线模拟”与“情报网”。</p>
+                                                                <ul
+                                                                        class="list-disc list-inside text-sm mt-2 space-y-1">
+                                                                        <li><strong>离线模拟</strong>:
+                                                                                当您离线超过设定的时间后，AI会自动模拟这段时间内角色之间可能发生的互动、关系变化或个人事件，并生成一份<a
+                                                                                        href="#summary-help"
+                                                                                        class="underline">简报</a>。这会让角色的故事在您不在的时候也能延续。
+                                                                        </li>
+                                                                        <li><strong>情报网 (Intelligence Network)</strong>:
+                                                                                <ul
+                                                                                        class="list-circle list-inside ml-4">
+                                                                                        <li><strong>工作原理</strong>:
+                                                                                                当您进入与某个角色的私聊时，如果距离上次搜集情报超过了冷却时间，该角色会秘密地“打探”其社交圈（同分组的好友）最近和您的聊天记录以及他们发布的动态。
+                                                                                        </li>
+                                                                                        <li><strong>目的</strong>:
+                                                                                                这能让角色获取到您与其他人的互动信息，使对话更具深度和真实感。例如，如果角色A通过情报网得知您和角色B聊过某个话题，它可能会在和您的对话中主动提及：“我听说你和B最近在讨论...”。
+                                                                                        </li>
+                                                                                        <li><strong>情报触发主动消息</strong>:
+                                                                                                若开启此选项，当角色通过情报网发现“有趣”的信息时（例如您提到了TA的名字），TA可能会主动开启一段新的对话来询问或评论此事。
+                                                                                        </li>
+                                                                                </ul>
+                                                                        </li>
+                                                                        <li><strong>分组管理</strong>:
+                                                                                您可以将不同的“世界书”关联到不同的分组上。该分组下的所有角色在思考和回应时，都会将这些世界书的内容作为最高优先级的背景知识来参考。
+                                                                        </li>
+                                                                </ul>
+                                                        </div>
+                                                        <div>
+                                                                <h4 class="font-semibold">动态 (Moments) 互动规则</h4>
+                                                                <p class="text-sm">动态区模拟了一个真实的朋友圈环境，角色之间的互动遵循以下规则：</p>
+                                                                <ul
+                                                                        class="list-disc list-inside text-sm mt-2 space-y-1">
+                                                                        <li><strong>可见性规则</strong>: 角色只能看到并互动其<span
+                                                                                        class="highlight">同一分组内</span>其他角色以及您发布的动态（除非您设置了分组可见）。
+                                                                        </li>
+                                                                        <li><strong>提及 (@) 与后续互动</strong>:
+                                                                                当您或某个角色在动态中提到了另一个角色后，被提及的角色会收到一条系统通知。当您之后进入与该角色的聊天室时，TA会<span
+                                                                                        class="highlight">优先</span>对这条提及TA的动态做出回应（如评论、点赞或私下询问）。这创造了从公开社交到私密对话的自然过渡。
+                                                                        </li>
+                                                                        <li><strong>评论身份</strong>:
+                                                                                角色在动态下发表评论时，其身份和人设将基于其<span
+                                                                                        class="highlight">自身绑定的人格预设</span>（如果在“我”->“个人设置”中为其指定了特定人格），而不是您当前使用的全局默认人格。这保证了角色行为的一致性。
+                                                                        </li>
+                                                                </ul>
+                                                        </div>
+                                                </div>
+                                        </details>
+
+                                        <details id="advanced-features-help">
+                                                <summary>AI自主生活与人设</summary>
+                                                <div class="details-content space-y-4">
+                                                        <p>AI角色拥有自己的“生活”，不仅会回应您的消息，还会在后台独立行动。一个详细的人设是驱动这些行为的关键。本节将详细介绍AI的自主行为，并提供一个工具来帮您构建更生动的角色。
+                                                        </p>
+
+                                                        <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                                                                <h4 class="font-semibold text-base mb-2">AI的自主生活 (AI's
+                                                                        Independent Life)</h4>
+                                                                <p class="text-sm mb-3">角色的自主行为分为两种，均由其核心人设驱动：</p>
+                                                                <div class="space-y-3">
+                                                                        <div>
+                                                                                <h5 class="font-semibold">1. 后台活动
+                                                                                        (实时在线行为)</h5>
+                                                                                <p class="text-sm">当您在“设置”中开启<span
+                                                                                                class="highlight">后台活动</span>后，角色们会像真人一样实时地、独立地生活和社交。您可能会观察到他们：
+                                                                                </p>
+                                                                                <ul
+                                                                                        class="list-disc list-inside text-sm mt-2 space-y-1 text-gray-600 dark:text-gray-400">
+                                                                                        <li><strong>主动聊天:</strong>
+                                                                                                根据人设和最近的事件，突然给您发来私信，开启一个新话题。
+                                                                                        </li>
+                                                                                        <li><strong>发布动态:</strong>
+                                                                                                在“动态”区发布新的文字或图片动态，分享自己的所见所闻或心情。
+                                                                                        </li>
+                                                                                        <li><strong>社交互动:</strong>
+                                                                                                浏览自己可见的动态，并可能进行<span
+                                                                                                        class="highlight">点赞</span>或<span
+                                                                                                        class="highlight">评论</span>。
+                                                                                        </li>
+                                                                                        <li><strong>群聊活动:</strong>
+                                                                                                在群聊中，角色可能会随机发起一个话题、发送表情包，甚至是<span
+                                                                                                        class="highlight">发红包</span>或邀请大家<span
+                                                                                                        class="highlight">点外卖</span>。
+                                                                                        </li>
+                                                                                </ul>
+                                                                        </div>
+                                                                        <div>
+                                                                                <h5 class="font-semibold">2. 离线模拟 (离线回顾)
+                                                                                </h5>
+                                                                                <p class="text-sm">
+                                                                                        当您离线超过设定时间后，此功能会一次性触发。它更侧重于故事推进，模拟并总结您离开期间发生的<strong>重大事件</strong>。其结果会：
+                                                                                </p>
+                                                                                <ul
+                                                                                        class="list-disc list-inside text-sm mt-2 space-y-1 text-gray-600 dark:text-gray-400">
+                                                                                        <li>在<a href="#summary-help"
+                                                                                                        class="underline">简报</a>应用中生成一份总结报告。
+                                                                                        </li>
+                                                                                        <li>将角色间的<span
+                                                                                                        class="highlight">关系变化</span>、个人目标的<span
+                                                                                                        class="highlight">重要进展</span>或挫折，自动记入关联世界书的“编年史”中。
+                                                                                        </li>
+                                                                                </ul>
+                                                                        </div>
+                                                                </div>
+                                                        </div>
+
+                                                        <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50 mt-4">
+                                                                <h4 class="font-semibold text-base mb-2">生成详细人设的辅助Prompt
+                                                                </h4>
+                                                                <p class="text-sm mb-3">
+                                                                        为了让AI角色的自主行为更符合您的想象，一个详细的人设至关重要。您可以将以下模板和您的基础人设一起提供给一个强大的语言模型（如GPT-4,
+                                                                        Claude 3, Gemini 1.5
+                                                                        Pro等），来生成更丰富、更适用于本应用的角色设定。之后，将生成的结果填入角色的“人设”字段即可。
+                                                                </p>
+                                                                <div>
+                                                                        <details id="prompt-accordion" class="mt-2">
+                                                                                <summary>
+                                                                                        <span>生成更适用于此网站人设的Prompt</span>
+                                                                                        <button id="copy-prompt-btn"
+                                                                                                class="px-2 py-1 text-xs font-semibold rounded-md transition-colors">复制</button>
+                                                                                </summary>
+                                                                                <div class="details-content">
+                                                                                        <pre id="json-prompt-code"
+                                                                                                class="w-full p-0 text-xs font-mono bg-transparent dark:bg-transparent whitespace-pre-wrap">
 # 角色
 你是一个世界级的角色设定扩展器，专注于为一个名为“Xphone”的超真实模拟聊天应用创建角色档案。
 
@@ -802,116 +1248,186 @@ html.dark #quick-start-guide .section-card-content p {
 
 [在这里粘贴您自己角色的基础人设，例如：“一个傲娇的猫系少年，表面冷漠毒舌，内心却很善良，渴望被理解。喜欢打游戏和看书。”]
                                         </pre>
-                                    </div>
-                                </details>
-                            </div>
-                        </div>
+                                                                                </div>
+                                                                        </details>
+                                                                </div>
+                                                        </div>
 
-                    </div>
-                </details>
-                </div>
-            </section>
-            <details class="mt-2">
-    <summary>常见问题与故障排查 (FAQ & Troubleshooting)</summary>
-    <div class="details-content space-y-4">
-        <p>遇到问题时，可以先尝试刷新页面。如果问题仍然存在，请参考以下常见情况的解释：</p>
-        
-        <div>
-            <h4 class="font-semibold">问题：提示“系统正忙，请稍后再试”</h4>
-            <p class="text-sm">
-                <strong>原因:</strong> 这通常意味着一个AI角色正在后台执行操作（例如，另一个角色正在独立思考、准备给你发消息或发布动态），暂时占用了API通道。您的操作需要排队。
-                <br>
-                <strong>解决方法:</strong>
-            </p>
-            <ul class="list-disc list-inside text-sm mt-1 space-y-1">
-                <li>稍等片刻（通常几秒钟），然后重试。后台任务通常很快就会完成。</li>
-                <li>切换到手机上的其他应用（或浏览器其他标签页），再切回来。这通常会中断正在进行的后台任务，为您让出API通道。</li>
-            </ul>
+                                                </div>
+                                        </details>
+                                </div>
+
+                        </section>
+
+                        <section id="advanced-and-faq-section" class="section-card">
+                                <div class="section-card-header">
+                                        <h2 class="text-lg font-semibold">高级功能与排错</h2>
+                                        <p class="text-sm">用于数据管理、问题修复和解答常见疑问。</p>
+                                </div>
+                                <div class="section-card-content">
+                                        <details>
+                                                <summary>高级工具</summary>
+                                                <div class="details-content space-y-4">
+                                                        <details>
+                                                                <summary class="text-sm font-medium">导入/导出角色卡</summary>
+                                                                <div class="details-content space-y-2 text-sm">
+                                                                        <p>此功能允许您分享或备份单个角色。导出的 <span
+                                                                                        class="highlight">.json</span>
+                                                                                文件包含了角色的核心设定，如：<span
+                                                                                        class="highlight">人设、头像库、备注名、分组、聊天背景、气泡主题</span>
+                                                                                等。</p>
+                                                                        <p class="text-red-500 dark:text-red-400">
+                                                                                请注意：导出的角色卡<strong>不会</strong>
+                                                                                包含角色的聊天记录、动态、日记、好感度关系等由AI在后续交互中生成的具体内容。
+                                                                        </p>
+                                                                </div>
+                                                        </details>
+                                                        <details>
+                                                                <summary class="text-sm font-medium">修复聊天记录</summary>
+                                                                <div class="details-content space-y-2 text-sm">
+                                                                        <p>此工具会扫描并删除所选角色聊天记录中所有用户不可见的 <span
+                                                                                        class="highlight">系统消息 (System
+                                                                                        Message)</span>。</p>
+                                                                        <p>主要用于修复一些疑难杂症，例如：</p>
+                                                                        <ul class="list-disc list-inside ml-2">
+                                                                                <li>发起通话时长时间无响应或失败。</li>
+                                                                                <li>AI在对话中行为异常，可能受到了损坏的隐藏指令影响。</li>
+                                                                        </ul>
+                                                                </div>
+                                                        </details>
+                                                        <details>
+                                                                <summary class="text-sm font-medium">清空聊天记录</summary>
+                                                                <div class="details-content space-y-2 text-sm">
+                                                                        <p>此工具会永久删除您与所选角色的 <strong>全部</strong>
+                                                                                聊天记录，但会完整保留角色的所有设定（人设、头像、好感度等）。</p>
+                                                                </div>
+                                                        </details>
+                                                        <details>
+                                                                <summary class="text-sm font-medium">重置角色内容</summary>
+                                                                <div class="details-content space-y-2 text-sm">
+                                                                        <p>这是一个更彻底的清理工具。它会保留角色的核心设定（人设、头像等），但会删除该角色
+                                                                                <strong>所有</strong>   后续生成的AI内容，包括：聊天记录、发布的动态、撰写的日记与回忆、通话记录等。
+                                                                        </p>
+                                                                </div>
+                                                        </details>
+                                                </div>
+                                        </details>
+                                        <details>
+                                                <summary>常见问题与故障排查</summary>
+                                                <div class="details-content space-y-4">
+                                                        <p>遇到问题时，可以先尝试刷新页面。如果问题仍然存在，请参考以下常见情况的解释：</p>
+
+                                                        <div>
+                                                                <h4 class="font-semibold">问题：提示“系统正忙，请稍后再试”</h4>
+                                                                <p class="text-sm">
+                                                                        <strong>原因:</strong>
+                                                                        这通常意味着一个AI角色正在后台执行操作（例如，另一个角色正在独立思考、准备给你发消息或发布动态），暂时占用了API通道。您的操作需要排队。
+                                                                        <br>
+                                                                        <strong>解决方法:</strong>
+                                                                </p>
+                                                                <ul
+                                                                        class="list-disc list-inside text-sm mt-1 space-y-1">
+                                                                        <li>稍等片刻（通常几秒钟），然后重试。后台任务通常很快就会完成。</li>
+                                                                        <li>切换到手机上的其他应用（或浏览器其他标签页），再切回来。这通常会中断正在进行的后台任务，为您让出API通道。
+                                                                        </li>
+                                                                </ul>
+                                                        </div>
+
+                                                        <hr class="border-gray-300 dark:border-gray-600">
+
+                                                        <div>
+                                                                <h4 class="font-semibold">
+                                                                        问题：聊天界面显示“对方正在输入...”，但长时间没有收到回复</h4>
+                                                                <p class="text-sm">
+                                                                        <strong>原因:</strong>
+                                                                        应用已经成功向AI发送了您的消息，但未能收到有效的回复。这几乎总是由API端的问题导致的。例如：
+                                                                </p>
+                                                                <ul
+                                                                        class="list-disc list-inside text-sm mt-1 space-y-1">
+                                                                        <li>网络连接不稳定或中断。</li>
+                                                                        <li>您在“设置”中填写的API密钥不正确或已失效。</li>
+                                                                        <li>API服务提供商（如OpenAI, Google等）的服务器暂时出现问题或过载。
+                                                                        </li>
+                                                                        <li>您的账户余额不足。</li>
+                                                                </ul>
+                                                                <p class="text-sm mt-2">
+                                                                        <strong>解决方法:</strong>
+                                                                </p>
+                                                                <ul
+                                                                        class="list-disc list-inside text-sm mt-1 space-y-1">
+                                                                        <li>检查您的网络连接。</li>
+                                                                        <li>前往“设置” -> “API连接”，确认您的API密钥和配置无误。</li>
+                                                                        <li>如果多次尝试仍然失败，可以稍后再试，或检查API服务商的官方状态页面。</li>
+                                                                </ul>
+                                                        </div>
+
+                                                        <hr class="border-gray-300 dark:border-gray-600">
+
+                                                        <div>
+                                                                <h4 class="font-semibold">问题：弹出“AI响应格式错误，无法解析JSON”的警告
+                                                                </h4>
+                                                                <p class="text-sm">
+                                                                        <strong>原因:</strong>
+                                                                        这是因为AI模型没有严格遵守输出JSON对象的格式要求，返回了包含额外文本或格式错误的内容。尽管应用的Prompt已经尽力引导，但这种情况仍可能偶尔发生，尤其是在模型负载较高时。
+                                                                        <br>
+                                                                        <strong>解决方法:</strong>
+                                                                </p>
+                                                                <ul
+                                                                        class="list-disc list-inside text-sm mt-1 space-y-1">
+                                                                        <li>这是最直接有效的办法：点击“等待回复”按钮，重新请求一次。模型第二次通常能给出正确格式的回复。
+                                                                        </li>
+                                                                        <li>如果连续多次出现此错误，可以尝试编辑您发送的最后一条消息，稍微改变一下措辞，然后重新发送。
+                                                                        </li>
+                                                                </ul>
+                                                        </div>
+                                                </div>
+                                        </details>
+                                </div>
+                        </section>
+
+                </main>
         </div>
-        
-        <hr class="border-gray-300 dark:border-gray-600">
+        <script type="module">
+                import { showToast } from './ui-helpers.js';
 
-        <div>
-            <h4 class="font-semibold">问题：聊天界面显示“对方正在输入...”，但长时间没有收到回复</h4>
-            <p class="text-sm">
-                <strong>原因:</strong> 应用已经成功向AI发送了您的消息，但未能收到有效的回复。这几乎总是由API端的问题导致的。例如：
-            </p>
-            <ul class="list-disc list-inside text-sm mt-1 space-y-1">
-                <li>网络连接不稳定或中断。</li>
-                <li>您在“设置”中填写的API密钥不正确或已失效。</li>
-                <li>API服务提供商（如OpenAI, Google等）的服务器暂时出现问题或过载。</li>
-                <li>您的账户余额不足。</li>
-            </ul>
-             <p class="text-sm mt-2">
-                <strong>解决方法:</strong>
-            </p>
-            <ul class="list-disc list-inside text-sm mt-1 space-y-1">
-                <li>检查您的网络连接。</li>
-                <li>前往“设置” -> “API连接”，确认您的API密钥和配置无误。</li>
-                <li>如果多次尝试仍然失败，可以稍后再试，或检查API服务商的官方状态页面。</li>
-            </ul>
-        </div>
+                document.addEventListener('DOMContentLoaded', () => {
+                        const copyButton = document.getElementById('copy-prompt-btn');
+                        const codeBlock = document.getElementById('json-prompt-code');
 
-        <hr class="border-gray-300 dark:border-gray-600">
-        
-        <div>
-            <h4 class="font-semibold">问题：弹出“AI响应格式错误，无法解析JSON”的警告</h4>
-            <p class="text-sm">
-                <strong>原因:</strong> 这是因为AI模型没有严格遵守输出JSON对象的格式要求，返回了包含额外文本或格式错误的内容。尽管应用的Prompt已经尽力引导，但这种情况仍可能偶尔发生，尤其是在模型负载较高时。
-                <br>
-                <strong>解决方法:</strong>
-            </p>
-            <ul class="list-disc list-inside text-sm mt-1 space-y-1">
-                <li>这是最直接有效的办法：点击“等待回复”按钮，重新请求一次。模型第二次通常能给出正确格式的回复。</li>
-                <li>如果连续多次出现此错误，可以尝试编辑您发送的最后一条消息，稍微改变一下措辞，然后重新发送。</li>
-            </ul>
-        </div>
-    </div>
-</details>
-
-        </main>
-    </div>
-    <script>
-        import { showToast } from './ui-helpers.js';
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const copyButton = document.getElementById('copy-prompt-btn');
-            const codeBlock = document.getElementById('json-prompt-code');
-
-            if (copyButton && codeBlock) {
-                copyButton.addEventListener('click', () => {
-                    navigator.clipboard.writeText(codeBlock.textContent.trim()).then(() => {
-                        copyButton.textContent = '已复制!';
-                        setTimeout(() => {
-                            copyButton.textContent = '复制';
-                        }, 2000);
-                    }).catch(err => {
-                        console.error('无法复制文本: ', err);
-                        showToast('复制失败', 'error');
-                    });
+                        if (copyButton && codeBlock) {
+                                copyButton.addEventListener('click', () => {
+                                        navigator.clipboard.writeText(codeBlock.textContent.trim()).then(() => {
+                                                copyButton.textContent = '已复制!';
+                                                setTimeout(() => {
+                                                        copyButton.textContent = '复制';
+                                                }, 2000);
+                                        }).catch(err => {
+                                                console.error('无法复制文本: ', err);
+                                                showToast('复制失败', 'error');
+                                        });
+                                });
+                        }
                 });
-            }
-        });
-        document.addEventListener('DOMContentLoaded', () => {
-        const toggleBtn = document.getElementById('toggle-all-btn');
-        const allDetails = document.querySelectorAll('main.main-content details');
+                document.addEventListener('DOMContentLoaded', () => {
+                        const toggleBtn = document.getElementById('toggle-all-btn');
+                        const allDetails = document.querySelectorAll('main.main-content details');
 
-        if (toggleBtn && allDetails.length > 0) {
-            toggleBtn.addEventListener('click', () => {
-                // 检查当前是否应执行“展开”操作
-                // 我们通过检查第一个details元素是否关闭来判断整体状态
-                const shouldOpen = !allDetails[0].hasAttribute('open');
+                        if (toggleBtn && allDetails.length > 0) {
+                                toggleBtn.addEventListener('click', () => {
+                                        // 检查当前是否应执行“展开”操作
+                                        // 我们通过检查第一个details元素是否关闭来判断整体状态
+                                        const shouldOpen = !allDetails[0].hasAttribute('open');
 
-                allDetails.forEach(detail => {
-                    detail.open = shouldOpen;
+                                        allDetails.forEach(detail => {
+                                                detail.open = shouldOpen;
+                                        });
+
+                                        // 更新按钮文本以反映下一次点击的动作
+                                        toggleBtn.textContent = shouldOpen ? '全部折叠' : '全部展开';
+                                });
+                        }
                 });
-
-                // 更新按钮文本以反映下一次点击的动作
-                toggleBtn.textContent = shouldOpen ? '全部折叠' : '全部展开';
-            });
-        }
-    });
-    </script>
+        </script>
 </body>
-</html>
 
+</html>
