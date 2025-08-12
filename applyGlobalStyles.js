@@ -4,106 +4,144 @@ import { db } from './db.js';
 import { runActiveSimulationTick } from './simulationEngine.js';
 import { displayToastFromSession } from './ui-helpers.js';
 
+// 在模块作用域内声明一个变量来持有 Vanta.js 实例
+let vantaEffect = null;
+
 /**
  * 将十六进制颜色转换为RGB值，用于设置带透明度的背景。
  * @param {string} hex - The hex color string.
  * @returns {string} - 'r, g, b' string.
  */
 function hexToRgb(hex) {
-    let c;
-    if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
-        c = hex.substring(1).split('');
-        if (c.length === 3) {
-            c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+        let c;
+        if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
+                c = hex.substring(1).split('');
+                if (c.length === 3) {
+                        c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+                }
+                c = '0x' + c.join('');
+                return [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',');
         }
-        c = '0x' + c.join('');
-        return [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',');
-    }
-    return '255, 255, 255'; // Fallback for invalid hex
+        return '255, 255, 255'; // 无效 hex 的回退
 }
 
 /**
  * 应用主题模式（浅色/深色/自动）
  */
 export async function applyThemeMode() {
-    const settings = await db.globalSettings.get('main');
-    const mode = settings?.themeMode || 'auto'; // 默认为 'auto'
+        const settings = await db.globalSettings.get('main');
+        const mode = settings?.themeMode || 'auto'; // 默认为 'auto'
 
-    const apply = (theme) => {
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark');
+        const apply = (theme) => {
+                if (theme === 'dark') {
+                        document.documentElement.classList.add('dark');
+                } else {
+                        document.documentElement.classList.remove('dark');
+                }
+        };
+
+        if (mode === 'auto') {
+                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                apply(systemPrefersDark ? 'dark' : 'light');
+
+                // 监听系统颜色模式变化
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+                        // 确保只有在自动模式下才切换
+                        db.globalSettings.get('main').then(currentSettings => {
+                                if (currentSettings?.themeMode === 'auto') {
+                                        apply(event.matches ? 'dark' : 'light');
+                                }
+                        });
+                });
+
         } else {
-            document.documentElement.classList.remove('dark');
+                apply(mode);
         }
-    };
-
-    if (mode === 'auto') {
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        apply(systemPrefersDark ? 'dark' : 'light');
-
-        // 监听系统颜色模式变化
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-            if (state.globalSettings.themeMode === 'auto') { // 确保只有在自动模式下才切换
-                 apply(event.matches ? 'dark' : 'light');
-            }
-        });
-
-    } else {
-        apply(mode);
-    }
 }
 
 
 /**
  * 全局样式应用函数
- * 该函数会连接到ChatDB，读取并应用壁纸、主题色和字体。
+ * 该函数会连接到数据库，读取并应用壁纸、主题色和字体。
  */
 async function applyGlobalStyles() {
-    try {
-        await applyThemeMode(); // 应用浅色/深色主题
+        try {
+                await applyThemeMode(); // 应用浅色/深色主题
 
-        const settings = await db.globalSettings.get('main');
+                const settings = await db.globalSettings.get('main');
 
-        // 如果没有设置，则不执行任何操作
-        if (!settings) {
-            console.log("未找到全局设置，使用默认样式。");
-            return;
-        }
+                if (!settings) {
+                        console.log("未找到全局设置，使用默认样式。");
+                        return;
+                }
 
-        const contentBgColor = getComputedStyle(document.documentElement).getPropertyValue('--content-bg-color').trim();
-        document.documentElement.style.setProperty('--content-bg-color-rgb', hexToRgb(contentBgColor));
+                const contentBgColor = getComputedStyle(document.documentElement).getPropertyValue('--content-bg-color').trim();
+                document.documentElement.style.setProperty('--content-bg-color-rgb', hexToRgb(contentBgColor));
 
-        // --- 1. 应用壁纸 ---
-        const wallpaperValue = settings.wallpaper;
-        const wallpaperTarget = document.querySelector('.wallpaper-bg');
-        if (wallpaperTarget && wallpaperValue) {
-            if (wallpaperValue.startsWith('url(') || wallpaperValue.startsWith('linear-gradient')) {
-                wallpaperTarget.style.backgroundImage = wallpaperValue;
-                wallpaperTarget.style.backgroundColor = 'transparent';
-            } else {
-                wallpaperTarget.style.backgroundImage = 'none';
-                wallpaperTarget.style.backgroundColor = wallpaperValue;
-            }
-        }
+                // --- 1. 应用壁纸 ---
+                const wallpaperValue = settings.wallpaper;
+                const wallpaperTarget = document.querySelector('.wallpaper-bg');
 
-        // --- 2. 应用主题色 ---
-        const themeColor = settings.themeColor || '#3b82f6';
-        const root = document.documentElement;
-        root.style.setProperty('--theme-color', themeColor);
-        root.style.setProperty('--theme-color-hover', shadeColor(themeColor, -15));
+                // 停止并清理任何正在运行的 Vanta 动画，清理旧样式
+                if (vantaEffect) {
+                        vantaEffect.destroy();
+                        vantaEffect = null;
+                }
+                if (wallpaperTarget) {
+                        wallpaperTarget.style.backgroundImage = 'none';
+                        wallpaperTarget.style.backgroundColor = 'transparent';
+                }
 
-        // --- 3. 应用字体 ---
-        const fontUrl = settings.fontUrl;
-        const existingStyleTag = document.getElementById('global-styles-tag');
-        if (fontUrl && fontUrl.trim() !== '') {
-            const fontName = 'global-user-font';
-            let styleTag = existingStyleTag;
-            if (!styleTag) {
-                styleTag = document.createElement('style');
-                styleTag.id = 'global-styles-tag';
-                document.head.appendChild(styleTag);
-            }
-            styleTag.textContent = `
+                if (wallpaperTarget && wallpaperValue) {
+                        // 检查是否是新的拓扑壁纸
+                        if (wallpaperValue.startsWith('topology(')) {
+                                if (typeof VANTA !== 'undefined') {
+                                        const colors = wallpaperValue.match(/#([0-9a-f]{6}|[0-9a-f]{3})/gi);
+                                        if (colors && colors.length === 2) {
+                                                // 在背景元素上初始化 Vanta Topology
+                                                vantaEffect = VANTA.TOPOLOGY({
+                                                        el: '.wallpaper-bg', // 或者更具体的选择器如 '#phone-screen'
+                                                        mouseControls: false, // 主屏幕上通常禁用鼠标交互
+                                                        touchControls: false,
+                                                        gyroControls: false,
+                                                        minHeight: 200.00,
+                                                        minWidth: 200.00,
+                                                        scale: 1.00,
+                                                        scaleMobile: 1.00,
+                                                        backgroundColor: colors[0],
+                                                        color: colors[1]
+                                                });
+                                        }
+                                } else {
+                                        console.error("Vanta.js 未加载，无法应用拓扑壁纸。");
+                                }
+                        } else if (wallpaperValue.startsWith('url(') || wallpaperValue.startsWith('linear-gradient')) {
+                                // 处理图片或渐变壁纸
+                                wallpaperTarget.style.backgroundImage = wallpaperValue;
+                        } else {
+                                // 处理纯色背景
+                                wallpaperTarget.style.backgroundColor = wallpaperValue;
+                        }
+                }
+
+                // --- 2. 应用主题色 ---
+                const themeColor = settings.themeColor || '#3b82f6';
+                const root = document.documentElement;
+                root.style.setProperty('--theme-color', themeColor);
+                root.style.setProperty('--theme-color-hover', shadeColor(themeColor, -15));
+
+                // --- 3. 应用字体 ---
+                const fontUrl = settings.fontUrl;
+                const existingStyleTag = document.getElementById('global-styles-tag');
+                if (fontUrl && fontUrl.trim() !== '') {
+                        const fontName = 'global-user-font';
+                        let styleTag = existingStyleTag;
+                        if (!styleTag) {
+                                styleTag = document.createElement('style');
+                                styleTag.id = 'global-styles-tag';
+                                document.head.appendChild(styleTag);
+                        }
+                        styleTag.textContent = `
                 @font-face {
                     font-family: '${fontName}';
                     src: url('${fontUrl}');
@@ -113,34 +151,33 @@ async function applyGlobalStyles() {
                     font-family: '${fontName}', 'Inter', sans-serif !important;
                 }
             `;
-        } else if (existingStyleTag) {
-            // 如果字体URL为空，则移除样式
-            existingStyleTag.remove();
-        }
+                } else if (existingStyleTag) {
+                        // 如果字体URL为空，则移除样式
+                        existingStyleTag.remove();
+                }
 
-    } catch (error) {
-        console.error("应用全局样式失败:", error);
-    }
+        } catch (error) {
+                console.error("应用全局样式失败:", error);
+        }
 }
 
 
 function shadeColor(color, percent) {
-    if (!color.startsWith('#')) return color;
-    let R = parseInt(color.substring(1, 3), 16);
-    let G = parseInt(color.substring(3, 5), 16);
-    let B = parseInt(color.substring(5, 7), 16);
-    R = parseInt(R * (100 + percent) / 100);
-    G = parseInt(G * (100 + percent) / 100);
-    B = parseInt(B * (100 + percent) / 100);
-    R = (R < 255) ? R : 255;
-    G = (G < 255) ? G : 255;
-    B = (B < 255) ? B : 255;
-    const RR = ((R.toString(16).length === 1) ? "0" + R.toString(16) : R.toString(16));
-    const GG = ((G.toString(16).length === 1) ? "0" + G.toString(16) : G.toString(16));
-    const BB = ((B.toString(16).length === 1) ? "0" + B.toString(16) : B.toString(16));
-    return "#" + RR + GG + BB;
+        if (!color || !color.startsWith('#')) return color;
+        let R = parseInt(color.substring(1, 3), 16);
+        let G = parseInt(color.substring(3, 5), 16);
+        let B = parseInt(color.substring(5, 7), 16);
+        R = parseInt(R * (100 + percent) / 100);
+        G = parseInt(G * (100 + percent) / 100);
+        B = parseInt(B * (100 + percent) / 100);
+        R = (R < 255) ? R : 255;
+        G = (G < 255) ? G : 255;
+        B = (B < 255) ? B : 255;
+        const RR = ((R.toString(16).length === 1) ? "0" + R.toString(16) : R.toString(16));
+        const GG = ((G.toString(16).length === 1) ? "0" + G.toString(16) : G.toString(16));
+        const BB = ((B.toString(16).length === 1) ? "0" + B.toString(16) : B.toString(16));
+        return "#" + RR + GG + BB;
 }
-
 
 async function checkAndRunBackgroundSimulation() {
     try {
@@ -216,11 +253,11 @@ async function checkFooterNotifications() {
 
 
 // 在页面加载时，同时执行样式应用和后台模拟启动
-document.addEventListener('DOMContentLoaded', async() => {
-    applyGlobalStyles();
-    checkFooterNotifications();
-    displayToastFromSession();
-    await checkAndRunBackgroundSimulation();
+document.addEventListener('DOMContentLoaded', async () => {
+        await applyGlobalStyles();
+        checkFooterNotifications();
+        displayToastFromSession();
+        await checkAndRunBackgroundSimulation();
 });
 
 // 2. 当标签页从后台恢复时检查一次

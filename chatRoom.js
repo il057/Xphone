@@ -2750,6 +2750,29 @@ ${injectedInstructions.join('\n\n')}
                                 }
                         }
 
+                        // 检查我们是否正在等待AI回应通话
+                        if (outgoingCallState?.pending) {
+                                // 检查AI的回复中是否包含正确的通话回应指令
+                                const hasCallResponse = messagesArray.some(action => action.type === 'respond_to_call');
+
+                                // 如果没有，说明AI没有正确回应，我们将其视为无应答
+                                if (!hasCallResponse) {
+                                        console.warn("AI did not respond to the call request correctly. Treating as implicit rejection.");
+                                        outgoingCallState = null; // 重置呼叫状态
+                                        callScreenModal.classList.add('hidden'); // 关闭“正在呼叫”界面
+
+                                        // 在聊天界面显示一个“对方无应答”的系统提示
+                                        const systemMessage = {
+                                                role: 'system',
+                                                type: 'system_message',
+                                                content: `对方无应答`,
+                                                timestamp: Date.now()
+                                        };
+                                        currentChat.history.push(systemMessage);
+                                        appendMessage(systemMessage); // 更新UI
+                                }
+                        }
+
                         let messageTimestamp = Date.now();
                         for (const action of messagesArray) {
                                 if (!action.type) {
