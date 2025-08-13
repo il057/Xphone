@@ -262,6 +262,17 @@
                     </a>
                 </div>
                 <div>
+                        <label class="block text-sm font-medium text-gray-700">语音设定</label>
+                        <div class="mt-1 grid grid-cols-2 gap-2">
+                                <select id="tts-profile-select" class="form-input w-full rounded-md border-gray-300 p-2">
+                                        <option value="">不使用语音</option>
+                                </select>
+                                <select id="tts-voice-select" class="form-input w-full rounded-md border-gray-300 p-2" disabled>
+                                        <option value="">请先选择方案</option>
+                                </select>
+                        </div>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700">单人世界书</label>
                     <select id="world-book-select" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2">
                         <option value="">不使用</option>

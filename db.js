@@ -143,9 +143,10 @@ db.version(35).stores({
     });
 });
 
-db.version(36).stores({
+db.version(37).stores({
         chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp',
         apiProfiles: '++id, &profileName',
+        ttsProfiles: '++id, &profileName',
         globalSettings: '&id, activeApiProfileId',
         userStickers: '++id, &url, name, order',
         worldBooks: '&id, name',

@@ -734,6 +734,18 @@ function createBubble(msg) {
                     </div>
                 `;
                                 break;
+                        case 'audio_message':
+                                // 这是新的、带播放器的语音消息样式
+                                bubble.classList.add('is-audio-message'); // 可以为此类型定义新样式
+                                contentDiv.innerHTML = `
+                <audio controls src="${msg.content}" class="w-full"></audio>
+                <div class="border-t border-black border-opacity-10 px-3 py-2 text-sm mt-2">
+                    ${msg.transcript}
+                </div>
+            `;
+                                // 阻止长按菜单，避免误操作
+                                bubble.addEventListener('contextmenu', e => e.preventDefault());
+                                break;
                         case 'waimai_request':
                                 bubble.classList.add('is-waimai-request');
                                 const isPending = msg.status === 'pending';
@@ -2198,7 +2210,33 @@ ${injectedInstructions.join('\n\n')}
 - **关键词**: 你必须为日记提炼出3-5个核心关键词，这将帮助你在未来回想起这件事。
 
 - **\`create_memory\`**: 这个工具只用于记录客观、简短的事实，例如“用户的生日是5月10日”。
+
+# PART 9:语音表演指南 (Voice Acting Guide)
+在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
+
+1.  **用文字表演**: 当你需要表达笑声、咳嗽、叹气等非语言声音时。你应该【用文字将它表演出来】，让它成为对话的一部分。
+    * **错误示范**: \`[laughs] 你太逗了！\`
+    * **正确示范**: \`“哈哈...你太逗了！”\`
+    * **错误示范**: \`[sighs] 真拿你没办法。\`
+    * **正确示范**: \`“唉...真拿你没办法。”\`
+
+2.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述与对话无关的背景或动作。
+    * **错误示范**: \`(他笑了起来) 你很有趣。\`
+    * **正确做法**: 你的所有动作都应该通过其他指令（如发动态、换头像等）来完成，而不是在语音内容中描述。
 `;
+/*
+# PART 9:语音表演指南 (Voice Acting Guide)
+你现在拥有了通过音频标签直接表达情感和音效的能力。在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
+
+1.  **使用中文标签**: 当需要表达非语言声音时，直接在文本中使用中文方括号标签。例如：\`"[轻笑] 你真的这么觉得吗？"\` 或 \`"[叹气]……好吧。"\`
+2.  **可用标签建议 (可自行扩展)**:
+    * **情感/人声**: \`[笑]\`, \`[大笑]\`, \`[轻笑]\`, \`[叹气]\`, \`[耳语]\`, \`[哭泣]\`, \`[兴奋地]\`, \`[好奇地]\`, \`[讽刺地]\`
+    * **动作/音效**: \`[喝水声]\`, \`[鼓掌]\`, \`[脚步声]\`, \`[打哈欠]\`
+3.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述背景或动作。所有非语言信息都应通过标签完成。
+    * **错误示范**: \`(他笑了起来) 你很有趣。\`
+    * **正确示范**: \`"[笑] 你很有趣。"\`
+4.  **自然融合**: 将标签自然地融入对话中，就像剧本中的舞台提示一样，以增强真实感和沉浸感。
+*/
                         } else {
                                 let groupChatsContextForPrompt = "";
                                 // 找到当前AI角色所在的分组ID
@@ -2478,7 +2516,35 @@ ${injectedInstructions.join('\n\n')}
 - **关键词**: 你必须为日记提炼出3-5个核心关键词，这将帮助你在未来回想起这件事。
 
 - **\`create_memory\`**: 这个工具只用于记录客观、简短的事实，例如“用户的生日是5月10日”。
+
+# PART 9:语音表演指南 (Voice Acting Guide)
+在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
+
+1.  **用文字表演**: 当你需要表达笑声、咳嗽、叹气等非语言声音时。你应该【用文字将它表演出来】，让它成为对话的一部分。
+    * **错误示范**: \`[laughs] 你太逗了！\`
+    * **正确示范**: \`“哈哈...你太逗了！”\`
+    * **错误示范**: \`[sighs] 真拿你没办法。\`
+    * **正确示范**: \`“唉...真拿你没办法。”\`
+
+2.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述与对话无关的背景或动作。
+    * **错误示范**: \`(他笑了起来) 你很有趣。\`
+    * **正确做法**: 你的所有动作都应该通过其他指令（如发动态、换头像等）来完成，而不是在语音内容中描述。
 `;
+
+/*
+# PART 9:语音表演指南 (Voice Acting Guide)
+你现在拥有了通过音频标签直接表达情感和音效的能力。在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
+
+1.  **使用中文标签**: 当需要表达非语言声音时，直接在文本中使用中文方括号标签。例如：\`"[轻笑] 你真的这么觉得吗？"\` 或 \`"[叹气]……好吧。"\`
+2.  **可用标签建议 (可自行扩展)**:
+    * **情感/人声**: \`[笑]\`, \`[大笑]\`, \`[轻笑]\`, \`[叹气]\`, \`[耳语]\`, \`[哭泣]\`, \`[兴奋地]\`, \`[好奇地]\`, \`[讽刺地]\`
+    * **动作/音效**: \`[喝水声]\`, \`[鼓掌]\`, \`[脚步声]\`, \`[打哈欠]\`
+3.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述背景或动作。所有非语言信息都应通过标签完成。
+    * **错误示范**: \`(他笑了起来) 你很有趣。\`
+    * **正确示范**: \`"[笑] 你很有趣。"\`
+4.  **自然融合**: 将标签自然地融入对话中，就像剧本中的舞台提示一样，以增强真实感和沉浸感。
+
+*/
 
                         }
                 }
@@ -3218,18 +3284,61 @@ ${injectedInstructions.join('\n\n')}
                                                 break;
                                         }
                                         case 'voice_message': {
-                                                const voiceMessage = {
-                                                        role: 'assistant',
-                                                        senderName: actorName,
-                                                        senderId: actorId,
-                                                        type: 'voice_message',
-                                                        content: action.content, // The text content of the voice message
-                                                        timestamp: new Date(messageTimestamp++)
-                                                };
-                                                currentChat.history.push(voiceMessage);
-                                                currentChat.lastMessageTimestamp = voiceMessage.timestamp;
-                                                currentChat.lastMessageContent = voiceMessage;
-                                                appendMessage(voiceMessage);
+                                                const actorChat = await getActorChat();
+                                                const voiceConfig = actorChat.settings.voiceConfig;
+
+                                                // 检查是否配置了TTS并且内容不为空
+                                                if (voiceConfig && voiceConfig.profileId && voiceConfig.voiceId && action.content) {
+                                                        try {
+                                                                const ttsProfile = await db.ttsProfiles.get(voiceConfig.profileId);
+                                                                const audioUrl = await generateAudioFromText(action.content, voiceConfig.voiceId, ttsProfile);
+
+                                                                // 创建 audio_message
+                                                                const audioMessage = {
+                                                                        role: 'assistant',
+                                                                        senderName: actorName,
+                                                                        senderId: actorId,
+                                                                        type: 'audio_message', // 新类型
+                                                                        content: audioUrl,     // 音频链接
+                                                                        transcript: action.content, // 原始文本
+                                                                        timestamp: new Date(messageTimestamp++)
+                                                                };
+                                                                currentChat.history.push(audioMessage);
+                                                                currentChat.lastMessageTimestamp = audioMessage.timestamp;
+                                                                currentChat.lastMessageContent = audioMessage;
+                                                                appendMessage(audioMessage);
+
+                                                        } catch (error) {
+                                                                console.error("TTS generation failed, falling back to text.", error);
+                                                                // TTS 失败，回退到文字版语音
+                                                                const fallbackMessage = {
+                                                                        role: 'assistant',
+                                                                        senderName: actorName,
+                                                                        senderId: actorId,
+                                                                        type: 'voice_message',
+                                                                        content: action.content,
+                                                                        timestamp: new Date(messageTimestamp++)
+                                                                };
+                                                                currentChat.history.push(fallbackMessage);
+                                                                currentChat.lastMessageTimestamp = fallbackMessage.timestamp;
+                                                                currentChat.lastMessageContent = fallbackMessage;
+                                                                appendMessage(fallbackMessage);
+                                                        }
+                                                } else {
+                                                        // 未配置 TTS，直接使用文字版语音
+                                                        const voiceMessage = {
+                                                                role: 'assistant',
+                                                                senderName: actorName,
+                                                                senderId: actorId,
+                                                                type: 'voice_message',
+                                                                content: action.content,
+                                                                timestamp: new Date(messageTimestamp++)
+                                                        };
+                                                        currentChat.history.push(voiceMessage);
+                                                        currentChat.lastMessageTimestamp = voiceMessage.timestamp;
+                                                        currentChat.lastMessageContent = voiceMessage;
+                                                        appendMessage(voiceMessage);
+                                                }
                                                 break;
                                         }
 
@@ -5145,4 +5254,87 @@ async function syncCallStateToSessionStorage() {
                 transcript: currentCallTranscript // 使用内存中最新的完整通话记录
         };
         sessionStorage.setItem('activeCallState', JSON.stringify(callState));
+}
+/*
+async function generateAudioFromText(text, voiceId, ttsProfile) {
+        if (!text || !voiceId || !ttsProfile || !ttsProfile.apiKey) {
+                throw new Error("Missing required parameters for TTS generation.");
+        }
+
+        // 更新的清理逻辑：只移除圆括号 () 和 （），保留方括号 []
+        const cleanedText = text.replace(/（[^）]*）|\([^)]*\)/g, '').trim();
+        if (!cleanedText) {
+                throw new Error("Text content is empty after cleaning.");
+        }
+
+        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+                method: 'POST',
+                headers: {
+                        'Content-Type': 'application/json',
+                        'xi-api-key': ttsProfile.apiKey
+                },
+                body: JSON.stringify({
+                        text: cleanedText, // 使用清理后的文本
+                        // --- 指定使用 v3 模型 ---
+                        model_id: "eleven_v3",
+                        voice_settings: {
+                                stability: 0.5,
+                                similarity_boost: 0.75,
+                                // v3 模型推荐开启 style exaggeration 以更好地响应标签
+                                style: 0.25,
+                                use_speaker_boost: true
+                        }
+                })        
+        });
+
+        if (!response.ok) {
+                const errorData = await response.json();
+                const errorMessage = errorData?.detail?.message || `API Error ${response.status}`;
+                // 检查是否是因为模型不支持 v3
+                if (errorMessage.includes("is not allowed for model")) {
+                        throw new Error("您的 ElevenLabs 账户可能尚未开通 v3 模型权限。");
+                }
+                throw new Error(`ElevenLabs API Error: ${errorMessage}`);
+        }
+
+        const audioBlob = await response.blob();
+        return URL.createObjectURL(audioBlob);
+}
+*/
+
+
+async function generateAudioFromText(text, voiceId, ttsProfile) {
+        if (!text || !voiceId || !ttsProfile || !ttsProfile.apiKey) {
+                throw new Error("Missing required parameters for TTS generation.");
+        }
+
+        // v2 兼容模式：移除所有方括号和圆括号内的描述性文本
+        const cleanedText = text.replace(/（[^）]*）|\([^)]*\)|\[[^\]]*\]/g, '').trim();
+        if (!cleanedText) {
+                throw new Error("Text content is empty after cleaning.");
+        }
+
+        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+                method: 'POST',
+                headers: {
+                        'Content-Type': 'application/json',
+                        'xi-api-key': ttsProfile.apiKey
+                },
+                body: JSON.stringify({
+                        text: cleanedText, // 使用清理后的文本
+                        model_id: "eleven_multilingual_v2",
+                        voice_settings: {
+                                stability: 0.5,
+                                similarity_boost: 0.75
+                        }
+                })
+        });
+
+        if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`ElevenLabs API Error: ${errorData?.detail?.message || response.statusText}`);
+        }
+
+        const audioBlob = await response.blob();
+        return URL.createObjectURL(audioBlob);
 }

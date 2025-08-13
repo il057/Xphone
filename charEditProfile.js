@@ -58,6 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const saveCssPresetBtn = document.getElementById('save-css-preset-btn');
     const cssPresetsContainer = document.getElementById('css-presets-container');
 
+        const ttsProfileSelect = document.getElementById('tts-profile-select'); 
+        const ttsVoiceSelect = document.getElementById('tts-voice-select');
 
     const bubbleThemes = [
         { name: '默认', value: 'default', colors: { userBg: '#dcf8c6', userText: '#000000', aiBg: '#e9e9e9', aiText: '#000000' } },
@@ -107,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await applyPageTheme(chatData);
         await loadWorldBooks();
         await loadAndRenderCssPresets();
+        await loadVoiceSettings();
     }
 
     async function loadData() {
@@ -191,6 +194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 将CSS作为参数传入，确保初始加载时预览正确
             renderThemePreview(chatData.settings.theme, loadedCss); 
             renderRelationshipEditor(chatData.groupId);
+            await loadVoiceSettings(chatData.settings.voiceConfig);
         }
         await applyPageTheme(chatData); 
         await loadWorldBooks(chatData.settings.worldBookId);
@@ -601,7 +605,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             maxMemory: parseInt(document.getElementById('max-memory-input').value) || 10,
             worldBookIds: selectedWorldBookIds, // 保存新的ID数组
             worldBookId: worldBookSelect.value,
-            customBubbleCss: customBubbleCssInput.value.trim()
+            customBubbleCss: customBubbleCssInput.value.trim(),
+                voiceConfig: { 
+                        profileId: parseInt(ttsProfileSelect.value) || null,
+                        voiceId: ttsVoiceSelect.value || null
+                }
         };
 
         const finalCharId = charId || (crypto.randomUUID ? crypto.randomUUID() : `fallback-${Date.now()}-${Math.random().toString(16).substr(2, 8)}`);
@@ -724,6 +732,373 @@ document.addEventListener('DOMContentLoaded', async () => {
             groupSelect.value = currentValue;
         }
     }
+        async function loadAndRenderCssPresets() {
+                customCssPresets = await db.bubbleCssPresets.toArray();
+                renderCssPresets(chatData?.settings?.customBubbleCss);
+        }
+
+        async function renderRelationshipEditor(groupId) {
+                const relationsList = document.getElementById('relations-list');
+                const userRelationContainer = document.getElementById('relation-with-user');
+
+                // --- 第 1 步: 渲染与 User 的关系 (这部分逻辑永远执行) ---
+                relationsList.innerHTML = ''; // 只清空一次，准备重建
+                relationsList.appendChild(userRelationContainer); // 把 User 容器先放回去
+
+                const userRelation = charId ? await db.relationships.where({ sourceCharId: charId, targetCharId: 'user' }).first() : null;
+                const displayUserRelation = userRelation || { type: 'stranger', score: 0 };
+
+                userRelationContainer.innerHTML = `
+            <div class="flex items-center justify-between">
+                <label class="font-medium text-sm" for="relation-type-user" style=" color: var(--theme-text-color)">与 User (你) 的关系</label>
+                <select id="relation-type-user" class="form-input w-2/5 text-sm p-1 rounded-md">
+                    <option value="stranger" ${displayUserRelation.type === 'stranger' ? 'selected' : ''}>陌生人</option>
+                    <option value="friend" ${displayUserRelation.type === 'friend' ? 'selected' : ''}>朋友</option>
+                    <option value="family" ${displayUserRelation.type === 'family' ? 'selected' : ''}>家人</option>
+                    <option value="lover" ${displayUserRelation.type === 'lover' ? 'selected' : ''}>恋人</option>
+                    <option value="rival" ${displayUserRelation.type === 'rival' ? 'selected' : ''}>对手</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="text-sm text-gray-600" for="relation-score-user" style=" color: var(--theme-text-color)">好感度</label>
+                <input type="range" id="relation-score-user" min="-1000" max="1000" value="${displayUserRelation.score}" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                <span id="score-value-user" class="text-sm font-mono w-12 text-center" style=" color: var(--theme-text-color)">${displayUserRelation.score}</span>
+            </div>
+        `;
+
+                const userScoreSlider = document.getElementById('relation-score-user');
+                const userScoreDisplay = document.getElementById('score-value-user');
+                userScoreSlider.addEventListener('input', () => {
+                        userScoreDisplay.textContent = userScoreSlider.value;
+                });
+
+                // --- 第 2 步: 独立处理与同组角色的关系 ---
+
+                // 创建一个专门用于放置分组关系的容器
+                const groupRelationsContainer = document.createElement('div');
+                groupRelationsContainer.className = "space-y-3 mt-4 pt-4 border-t"; // 添加样式与上方分隔
+                relationsList.appendChild(groupRelationsContainer);
+
+                if (!groupId) {
+                        groupRelationsContainer.innerHTML = '<p class="text-sm text-gray-500">请先为该角色选择一个分组，才能设定与同组角色的初始关系。</p>';
+                        return; // 结束函数
+                }
+
+                const allChats = await db.chats.toArray();
+                const groupMembers = allChats.filter(c => c.groupId === groupId && c.id !== charId && !c.isGroup);
+
+                if (groupMembers.length === 0) {
+                        groupRelationsContainer.innerHTML = '<p class="text-sm text-gray-500">该分组内还没有其他角色可供设定关系。</p>';
+                        return; // 结束函数
+                }
+
+                const existingRelations = charId ? await db.relationships.where('sourceCharId').equals(charId).toArray() : [];
+                const relationsMap = new Map(existingRelations.map(r => [r.targetCharId, r]));
+
+                groupMembers.forEach(member => {
+                        const relation = relationsMap.get(member.id) || { type: 'stranger', score: 0 };
+                        const relationEl = document.createElement('div');
+                        relationEl.className = 'p-3 border rounded-md space-y-2 bg-gray-50';
+
+                        relationEl.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <label class="font-medium text-sm" for="relation-type-${member.id}">与 ${member.name} 的关系</label>
+                    <select id="relation-type-${member.id}" data-target-id="${member.id}" class="form-input w-2/5 text-sm p-1 rounded-md">
+                        <option value="stranger" ${relation.type === 'stranger' ? 'selected' : ''}>陌生人</option>
+                        <option value="friend" ${relation.type === 'friend' ? 'selected' : ''}>朋友</option>
+                        <option value="family" ${relation.type === 'family' ? 'selected' : ''}>家人</option>
+                        <option value="lover" ${relation.type === 'lover' ? 'selected' : ''}>恋人</option>
+                        <option value="rival" ${relation.type === 'rival' ? 'selected' : ''}>对手</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="text-sm text-gray-600" for="relation-score-${member.id}">好感度</label>
+                    <input type="range" id="relation-score-${member.id}" data-target-id="${member.id}" min="-1000" max="1000" value="${relation.score}" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">                    
+                    <span id="score-value-${member.id}" class="text-sm font-mono w-12 text-center">${relation.score}</span>
+                </div>
+            `;
+                        groupRelationsContainer.appendChild(relationEl);
+
+                        const scoreSlider = relationEl.querySelector(`#relation-score-${member.id}`);
+                        const scoreValueDisplay = relationEl.querySelector(`#score-value-${member.id}`);
+                        scoreSlider.addEventListener('input', () => {
+                                scoreValueDisplay.textContent = scoreSlider.value;
+                        });
+                });
+        }
+        // 新建一个函数来渲染已保存的CSS预设按钮
+        function renderCssPresets(activeCss) {
+                cssPresetsContainer.innerHTML = '';
+                if (customCssPresets.length > 0) {
+                        const title = document.createElement('label');
+                        title.className = 'block text-sm font-medium text-gray-700';
+                        title.textContent = '应用样式预设';
+                        cssPresetsContainer.appendChild(title);
+
+                        const buttonGroup = document.createElement('div');
+                        buttonGroup.className = 'flex flex-wrap gap-2';
+
+                        customCssPresets.forEach(preset => {
+                                const btnWrapper = document.createElement('div');
+                                btnWrapper.className = 'relative group';
+
+                                const btn = document.createElement('button');
+                                btn.textContent = preset.name;
+                                btn.className = 'text-xs secondary-btn px-2 py-1 rounded-md transition-colors';
+
+                                // 检查当前应用的CSS是否与预设的CSS完全相同
+                                if (activeCss && activeCss.trim() === preset.cssCode.trim()) {
+                                        btn.style.backgroundColor = 'var(--theme-color)';
+                                        btn.style.color = 'white';
+                                        btn.style.borderColor = 'var(--theme-color)';
+                                }
+
+                                btn.addEventListener('click', () => {
+                                        customBubbleCssInput.value = preset.cssCode;
+                                        customBubbleCssInput.dispatchEvent(new Event('input'));
+                                        renderCssPresets(preset.cssCode);
+                                });
+
+                                const deleteBtn = document.createElement('button');
+                                deleteBtn.innerHTML = '&times;';
+                                deleteBtn.className = 'absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center';
+                                deleteBtn.title = '删除此预设';
+                                deleteBtn.addEventListener('click', async () => {
+                                        const confirmed = await showConfirmModal(
+                                                '删除样式预设',
+                                                `确定要删除样式预设 "${preset.name}" 吗？`,
+                                                '删除',
+                                                '取消'
+                                        );
+                                        if (confirmed) {
+                                                await db.bubbleCssPresets.delete(preset.name);
+                                                await loadAndRenderCssPresets();
+                                        }
+                                });
+
+                                btnWrapper.appendChild(btn);
+                                btnWrapper.appendChild(deleteBtn);
+                                buttonGroup.appendChild(btnWrapper);
+                        });
+                        cssPresetsContainer.appendChild(buttonGroup);
+                }
+        }
+
+
+        // 新建一个函数来处理AI生成CSS的逻辑
+        async function handleGenerateCss() {
+                const promptText = aiBubblePromptInput.value.trim();
+                if (!promptText) {
+                        showToast('请输入您想要的样式描述！', 'error');
+                        return;
+                }
+
+                generateCssBtn.textContent = '生成中...';
+                generateCssBtn.disabled = true;
+
+                const currentCss = customBubbleCssInput.value.trim();
+
+
+                // 从数据库获取当前激活的API配置
+                const apiConfig = await getActiveApiProfile();
+                if (!apiConfig) {
+                        showToast('请先在设置中配置API！', 'error');
+                        generateCssBtn.textContent = '生成';
+                        generateCssBtn.disabled = false;
+                        return;
+                }
+
+                const systemPrompt = `
+You are an expert CSS code generator for a chat application. Your task is to generate or modify CSS code to style message elements based on a user's request.
+
+Here is the HTML structure of a message. You can target any of these classes:
+
+<div class="message-wrapper user"> <img class="avatar" src="...">
+    <div class="message-content-column">
+        <div class="chat-bubble user-bubble"> <div class="quoted-message">...</div>
+            </div>
+    </div>
+    <span class="timestamp">12:34</span>
+</div>
+
+**Available Selectors:**
+- \`.message-wrapper\`: The container for the entire message line.
+- \`.avatar\`: The avatar's container (the frame), NOT the image content itself. You can style its border, padding, box-shadow, border-radius, etc.
+- \`.chat-bubble\`: Styles both user and AI bubbles.
+- \`.user-bubble\`: Targets ONLY the user's bubble.
+- \`.ai-bubble\`: Targets ONLY the AI's bubble.
+- \`.timestamp\`: The small text showing the time.
+- \`.quoted-message\`: The container for a replied-to message.
+- \`.message-content-column .text-xs.text-gray-500\`: The sender's name in group chats.
+
+**Available Theme CSS Variables (Highly Recommended):**
+- \`var(--user-bubble-bg)\`, \`var(--user-bubble-text)\`
+- \`var(--ai-bubble-bg)\`, \`var(--ai-bubble-text)\`
+- \`var(--accent-color)\`
+
+${currentCss ? `
+**Current CSS Code (for modification):**
+\`\`\`css
+${currentCss}
+\`\`\`
+` : ''}
+
+**User's Request:** "${promptText}"
+
+**IMPORTANT RULES:**
+1.  Your response MUST be **raw CSS code ONLY**.
+2.  If modifying, provide the **complete, updated stylesheet**.
+3.  Do NOT include any explanations, comments, or markdown like \`\`\`css.
+    `;
+
+                try {
+                        let response, rawContent;
+                        if (apiConfig.apiProvider === 'gemini') {
+                                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
+                                response = await fetch(geminiUrl, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                                contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+                                                generationConfig: { temperature: 0.5 }
+                                        })
+                                });
+                                const data = await response.json();
+                                if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+                                        throw new Error("Invalid response structure from Gemini API. Check console for details.");
+                                }
+                                rawContent = data.candidates[0].content.parts[0].text;
+                        } else {
+                                response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                                        body: JSON.stringify({
+                                                model: apiConfig.model,
+                                                messages: [{ role: 'system', content: systemPrompt }],
+                                                temperature: 0.5
+                                        })
+                                });
+                                if (!response.ok) {
+                                        const errorText = await response.text();
+                                        throw new Error(` API Error ${response.status}:\n\n${errorText}`);
+                                }
+                                const data = await response.json();
+                                if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+                                        console.error("Invalid API Response:", data);
+                                        throw new Error("API返回了无效的数据结构，请检查API配置或服务状态。");
+                                }
+                                rawContent = data.choices[0].message.content;
+                        }
+
+                        if (!response.ok) throw new Error(rawContent);
+
+                        const cleanedCss = rawContent.replace(/```css/g, '').replace(/```/g, '').trim();
+                        customBubbleCssInput.value = cleanedCss;
+                        customBubbleCssInput.dispatchEvent(new Event('input'));
+                        renderCssPresets(cleanedCss); // 更新预设按钮高亮
+
+                } catch (error) {
+                        console.error("AI生成CSS失败:", error);
+                        showToast(`生成失败: ${error.message}`, 'error');
+                } finally {
+                        generateCssBtn.textContent = '生成';
+                        generateCssBtn.disabled = false;
+                }
+        }
+
+        // 保存CSS预设的逻辑
+        async function handleSaveCssPreset() {
+                const cssCode = customBubbleCssInput.value.trim();
+                if (!cssCode) {
+                        showToast('没有可保存的CSS样式。', 'error');
+                        return;
+                }
+
+                const presetName = await promptForInput("为这个样式预设起个名字：", "例如：可爱，简约", false, false);
+                if (!presetName || !presetName.trim()) {
+                        if (presetName !== null) showToast("名字不能为空！", 'error');
+                        return;
+                }
+
+                try {
+                        await db.bubbleCssPresets.add({ name: presetName.trim(), cssCode });
+                        showToast('样式预设已保存！', 'success');
+                        // 重新加载并渲染预设列表
+                        await loadAndRenderCssPresets();
+                } catch (error) {
+                        if (error.name === 'ConstraintError') {
+                                showToast(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`, 'error');
+                        } else {
+                                console.error("保存CSS预设失败:", error);
+                                showToast("保存失败，详情请看控制台。", 'error');
+                        }
+                }
+        }
+
+        async function loadVoiceSettings(voiceConfig) {
+                const profiles = await db.ttsProfiles.toArray();
+                ttsProfileSelect.innerHTML = '<option value="">不使用语音</option>';
+                if (profiles.length === 0) {
+                        ttsProfileSelect.disabled = true;
+                        return;
+                }
+
+                profiles.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.id;
+                        option.textContent = p.profileName;
+                        if (voiceConfig && p.id === voiceConfig.profileId) {
+                                option.selected = true;
+                        }
+                        ttsProfileSelect.appendChild(option);
+                });
+
+                if (voiceConfig && voiceConfig.profileId) {
+                        await fetchAndPopulateVoices(voiceConfig.profileId, voiceConfig.voiceId);
+                }
+        }
+
+        // --- 获取并填充声音列表 ---
+        async function fetchAndPopulateVoices(profileId, selectedVoiceId = null) {
+                ttsVoiceSelect.innerHTML = '<option value="">加载中...</option>';
+                ttsVoiceSelect.disabled = true;
+
+                if (!profileId) {
+                        ttsVoiceSelect.innerHTML = '<option value="">请先选择方案</option>';
+                        return;
+                }
+
+                try {
+                        const profile = await db.ttsProfiles.get(parseInt(profileId));
+                        if (!profile || !profile.apiKey) throw new Error("API Key not found");
+
+                        // 使用代理URL来避免CORS问题
+                        const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+                                headers: { 'xi-api-key': profile.apiKey }
+                        });
+
+                        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+
+                        const data = await response.json();
+                        ttsVoiceSelect.innerHTML = '<option value="">请选择声音</option>';
+                        data.voices.forEach(voice => {
+                                const option = document.createElement('option');
+                                option.value = voice.voice_id;
+                                option.textContent = `${voice.name} (${voice.labels.gender}, ${voice.labels.age})`;
+                                if (voice.voice_id === selectedVoiceId) {
+                                        option.selected = true;
+                                }
+                                ttsVoiceSelect.appendChild(option);
+                        });
+                        ttsVoiceSelect.disabled = false;
+
+                } catch (error) {
+                        console.error("Failed to fetch voices:", error);
+                        showToast("获取声音列表失败，请检查API Key和网络。", 'error');
+                        ttsVoiceSelect.innerHTML = '<option value="">获取失败</option>';
+                }
+        }
+
 
     // --- Event Listeners ---
     customBubbleCssInput.addEventListener('input', () => applyLiveCssPreview(customBubbleCssInput.value));
@@ -896,95 +1271,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    async function renderRelationshipEditor(groupId) {
-        const relationsList = document.getElementById('relations-list');
-        const userRelationContainer = document.getElementById('relation-with-user');
-        
-        // --- 第 1 步: 渲染与 User 的关系 (这部分逻辑永远执行) ---
-        relationsList.innerHTML = ''; // 只清空一次，准备重建
-        relationsList.appendChild(userRelationContainer); // 把 User 容器先放回去
-
-        const userRelation = charId ? await db.relationships.where({ sourceCharId: charId, targetCharId: 'user' }).first() : null;
-        const displayUserRelation = userRelation || { type: 'stranger', score: 0 };
-        
-        userRelationContainer.innerHTML = `
-            <div class="flex items-center justify-between">
-                <label class="font-medium text-sm" for="relation-type-user" style=" color: var(--theme-text-color)">与 User (你) 的关系</label>
-                <select id="relation-type-user" class="form-input w-2/5 text-sm p-1 rounded-md">
-                    <option value="stranger" ${displayUserRelation.type === 'stranger' ? 'selected' : ''}>陌生人</option>
-                    <option value="friend" ${displayUserRelation.type === 'friend' ? 'selected' : ''}>朋友</option>
-                    <option value="family" ${displayUserRelation.type === 'family' ? 'selected' : ''}>家人</option>
-                    <option value="lover" ${displayUserRelation.type === 'lover' ? 'selected' : ''}>恋人</option>
-                    <option value="rival" ${displayUserRelation.type === 'rival' ? 'selected' : ''}>对手</option>
-                </select>
-            </div>
-            <div class="flex items-center gap-3">
-                <label class="text-sm text-gray-600" for="relation-score-user" style=" color: var(--theme-text-color)">好感度</label>
-                <input type="range" id="relation-score-user" min="-1000" max="1000" value="${displayUserRelation.score}" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                <span id="score-value-user" class="text-sm font-mono w-12 text-center" style=" color: var(--theme-text-color)">${displayUserRelation.score}</span>
-            </div>
-        `;
-        
-        const userScoreSlider = document.getElementById('relation-score-user');
-        const userScoreDisplay = document.getElementById('score-value-user');
-        userScoreSlider.addEventListener('input', () => {
-            userScoreDisplay.textContent = userScoreSlider.value;
+        ttsProfileSelect.addEventListener('change', (e) => { 
+                fetchAndPopulateVoices(e.target.value);
         });
 
-        // --- 第 2 步: 独立处理与同组角色的关系 ---
-
-        // 创建一个专门用于放置分组关系的容器
-        const groupRelationsContainer = document.createElement('div');
-        groupRelationsContainer.className = "space-y-3 mt-4 pt-4 border-t"; // 添加样式与上方分隔
-        relationsList.appendChild(groupRelationsContainer);
-
-        if (!groupId) {
-            groupRelationsContainer.innerHTML = '<p class="text-sm text-gray-500">请先为该角色选择一个分组，才能设定与同组角色的初始关系。</p>';
-            return; // 结束函数
-        }
-
-        const allChats = await db.chats.toArray();
-        const groupMembers = allChats.filter(c => c.groupId === groupId && c.id !== charId && !c.isGroup);
-
-        if (groupMembers.length === 0) {
-            groupRelationsContainer.innerHTML = '<p class="text-sm text-gray-500">该分组内还没有其他角色可供设定关系。</p>';
-            return; // 结束函数
-        }
-
-        const existingRelations = charId ? await db.relationships.where('sourceCharId').equals(charId).toArray() : [];
-        const relationsMap = new Map(existingRelations.map(r => [r.targetCharId, r]));
-
-        groupMembers.forEach(member => {
-            const relation = relationsMap.get(member.id) || { type: 'stranger', score: 0 };
-            const relationEl = document.createElement('div');
-            relationEl.className = 'p-3 border rounded-md space-y-2 bg-gray-50';
-            
-            relationEl.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <label class="font-medium text-sm" for="relation-type-${member.id}">与 ${member.name} 的关系</label>
-                    <select id="relation-type-${member.id}" data-target-id="${member.id}" class="form-input w-2/5 text-sm p-1 rounded-md">
-                        <option value="stranger" ${relation.type === 'stranger' ? 'selected' : ''}>陌生人</option>
-                        <option value="friend" ${relation.type === 'friend' ? 'selected' : ''}>朋友</option>
-                        <option value="family" ${relation.type === 'family' ? 'selected' : ''}>家人</option>
-                        <option value="lover" ${relation.type === 'lover' ? 'selected' : ''}>恋人</option>
-                        <option value="rival" ${relation.type === 'rival' ? 'selected' : ''}>对手</option>
-                    </select>
-                </div>
-                <div class="flex items-center gap-3">
-                    <label class="text-sm text-gray-600" for="relation-score-${member.id}">好感度</label>
-                    <input type="range" id="relation-score-${member.id}" data-target-id="${member.id}" min="-1000" max="1000" value="${relation.score}" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">                    
-                    <span id="score-value-${member.id}" class="text-sm font-mono w-12 text-center">${relation.score}</span>
-                </div>
-            `;
-            groupRelationsContainer.appendChild(relationEl);
-
-            const scoreSlider = relationEl.querySelector(`#relation-score-${member.id}`);
-            const scoreValueDisplay = relationEl.querySelector(`#score-value-${member.id}`);
-            scoreSlider.addEventListener('input', () => {
-                scoreValueDisplay.textContent = scoreSlider.value;
-            });
-        });
-    }
+        // 选择背景图片
 
     document.getElementById('select-bg-from-album-btn').addEventListener('click', async () => {
         const selectedUrl = await showAlbumPickerModal();
@@ -994,220 +1285,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
-    async function loadAndRenderCssPresets() {
-        customCssPresets = await db.bubbleCssPresets.toArray();
-        renderCssPresets(chatData?.settings?.customBubbleCss);
-    }
-
-    // 新建一个函数来渲染已保存的CSS预设按钮
-   function renderCssPresets(activeCss) {
-        cssPresetsContainer.innerHTML = '';
-        if (customCssPresets.length > 0) {
-            const title = document.createElement('label');
-            title.className = 'block text-sm font-medium text-gray-700';
-            title.textContent = '应用样式预设';
-            cssPresetsContainer.appendChild(title);
-
-            const buttonGroup = document.createElement('div');
-            buttonGroup.className = 'flex flex-wrap gap-2';
-
-            customCssPresets.forEach(preset => {
-                const btnWrapper = document.createElement('div');
-                btnWrapper.className = 'relative group';
-
-                const btn = document.createElement('button');
-                btn.textContent = preset.name;
-                btn.className = 'text-xs secondary-btn px-2 py-1 rounded-md transition-colors';
-                
-                // 检查当前应用的CSS是否与预设的CSS完全相同
-                if (activeCss && activeCss.trim() === preset.cssCode.trim()) {
-                    btn.style.backgroundColor = 'var(--theme-color)';
-                    btn.style.color = 'white';
-                    btn.style.borderColor = 'var(--theme-color)';
-                }
-
-                btn.addEventListener('click', () => {
-                    customBubbleCssInput.value = preset.cssCode;
-                    customBubbleCssInput.dispatchEvent(new Event('input'));
-                    renderCssPresets(preset.cssCode);
-                });
-
-                const deleteBtn = document.createElement('button');
-                deleteBtn.innerHTML = '&times;';
-                deleteBtn.className = 'absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center';
-                deleteBtn.title = '删除此预设';
-                deleteBtn.addEventListener('click', async () => {
-                    const confirmed = await showConfirmModal(
-                        '删除样式预设',
-                        `确定要删除样式预设 "${preset.name}" 吗？`,
-                        '删除',
-                        '取消'
-                    );
-                    if (confirmed) {
-                        await db.bubbleCssPresets.delete(preset.name);
-                        await loadAndRenderCssPresets();
-                    }
-                });
-
-                btnWrapper.appendChild(btn);
-                btnWrapper.appendChild(deleteBtn);
-                buttonGroup.appendChild(btnWrapper);
-            });
-            cssPresetsContainer.appendChild(buttonGroup);
-        }
-    }
-
-
-    // 新建一个函数来处理AI生成CSS的逻辑
-    async function handleGenerateCss() {
-        const promptText = aiBubblePromptInput.value.trim();
-        if (!promptText) {
-            showToast('请输入您想要的样式描述！', 'error');
-            return;
-        }
-
-        generateCssBtn.textContent = '生成中...';
-        generateCssBtn.disabled = true;
-
-        const currentCss = customBubbleCssInput.value.trim();
-
-
-        // 从数据库获取当前激活的API配置
-        const apiConfig = await getActiveApiProfile();
-        if (!apiConfig) {
-            showToast('请先在设置中配置API！', 'error');
-            generateCssBtn.textContent = '生成';
-            generateCssBtn.disabled = false;
-            return;
-        }
-
-        const systemPrompt = `
-You are an expert CSS code generator for a chat application. Your task is to generate or modify CSS code to style message elements based on a user's request.
-
-Here is the HTML structure of a message. You can target any of these classes:
-
-<div class="message-wrapper user"> <img class="avatar" src="...">
-    <div class="message-content-column">
-        <div class="chat-bubble user-bubble"> <div class="quoted-message">...</div>
-            </div>
-    </div>
-    <span class="timestamp">12:34</span>
-</div>
-
-**Available Selectors:**
-- \`.message-wrapper\`: The container for the entire message line.
-- \`.avatar\`: The avatar's container (the frame), NOT the image content itself. You can style its border, padding, box-shadow, border-radius, etc.
-- \`.chat-bubble\`: Styles both user and AI bubbles.
-- \`.user-bubble\`: Targets ONLY the user's bubble.
-- \`.ai-bubble\`: Targets ONLY the AI's bubble.
-- \`.timestamp\`: The small text showing the time.
-- \`.quoted-message\`: The container for a replied-to message.
-- \`.message-content-column .text-xs.text-gray-500\`: The sender's name in group chats.
-
-**Available Theme CSS Variables (Highly Recommended):**
-- \`var(--user-bubble-bg)\`, \`var(--user-bubble-text)\`
-- \`var(--ai-bubble-bg)\`, \`var(--ai-bubble-text)\`
-- \`var(--accent-color)\`
-
-${currentCss ? `
-**Current CSS Code (for modification):**
-\`\`\`css
-${currentCss}
-\`\`\`
-` : ''}
-
-**User's Request:** "${promptText}"
-
-**IMPORTANT RULES:**
-1.  Your response MUST be **raw CSS code ONLY**.
-2.  If modifying, provide the **complete, updated stylesheet**.
-3.  Do NOT include any explanations, comments, or markdown like \`\`\`css.
-    `;
-
-        try {
-            let response, rawContent;
-            if (apiConfig.apiProvider === 'gemini') {
-                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-                response = await fetch(geminiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-                        generationConfig: { temperature: 0.5 }
-                    })
-                });
-                const data = await response.json();
-                if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-                    throw new Error("Invalid response structure from Gemini API. Check console for details.");
-                }
-                rawContent = data.candidates[0].content.parts[0].text;
-            } else {
-                response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                    body: JSON.stringify({
-                        model: apiConfig.model,
-                        messages: [{ role: 'system', content: systemPrompt }],
-                        temperature: 0.5
-                    })
-                });
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(` API Error ${response.status}:\n\n${errorText}`);
-                }
-                const data = await response.json();
-                if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                    console.error("Invalid API Response:", data);
-                    throw new Error("API返回了无效的数据结构，请检查API配置或服务状态。");
-                }
-                rawContent = data.choices[0].message.content;
-            }
-
-            if (!response.ok) throw new Error(rawContent);
-
-            const cleanedCss = rawContent.replace(/```css/g, '').replace(/```/g, '').trim();
-            customBubbleCssInput.value = cleanedCss;
-            customBubbleCssInput.dispatchEvent(new Event('input'));
-            renderCssPresets(cleanedCss); // 更新预设按钮高亮
-
-        } catch (error) {
-            console.error("AI生成CSS失败:", error);
-            showToast(`生成失败: ${error.message}`, 'error');
-        } finally {
-            generateCssBtn.textContent = '生成';
-            generateCssBtn.disabled = false;
-        }
-    }
-
-    // 新建一个函数来处理保存CSS预设的逻辑
-    async function handleSaveCssPreset() {
-        const cssCode = customBubbleCssInput.value.trim();
-        if (!cssCode) {
-            showToast('没有可保存的CSS样式。', 'error');
-            return;
-        }
-
-        const presetName = await promptForInput("为这个样式预设起个名字：", "例如：可爱，简约", false, false);
-        if (!presetName || !presetName.trim()) {
-            if (presetName !== null) showToast("名字不能为空！", 'error');
-            return;
-        }
-
-        try {
-            await db.bubbleCssPresets.add({ name: presetName.trim(), cssCode });
-            showToast('样式预设已保存！', 'success');
-            // 重新加载并渲染预设列表
-            await loadAndRenderCssPresets();
-        } catch (error) {
-            if (error.name === 'ConstraintError') {
-                showToast(`这个名字 “${presetName.trim()}” 已经被占用了，换一个吧！`, 'error');
-            } else {
-                console.error("保存CSS预设失败:", error);
-                showToast("保存失败，详情请看控制台。", 'error');
-            }
-        }
-    }
-
 
     // --- Init ---
  
