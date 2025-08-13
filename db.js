@@ -311,3 +311,46 @@ export async function uploadImage(file) {
         document.body.removeChild(loadingIndicator);
     }
 }
+
+/**
+ * 将音频 Blob 数据上传到 Cloudinary 并返回直接链接。
+ * @param {Blob} audioBlob 要上传的音频 Blob 数据。
+ * @param {string} fileName 上传时使用的文件名。
+ * @returns {Promise<string>} 一个解析为音频直接链接的 Promise。
+ */
+export async function uploadAudioBlob(audioBlob, fileName = 'voice_message.mp3') {
+        // 1. 从数据库获取API配置
+        const settings = await db.globalSettings.get('main');
+        const cloudName = settings?.cloudinaryCloudName;
+        const uploadPreset = settings?.cloudinaryUploadPreset;
+
+        // 2. 检查配置是否存在
+        if (!cloudName || !uploadPreset) {
+                throw new Error("请先在“设置”页面中填写你的 Cloudinary Cloud Name 和 Upload Preset。");
+        }
+
+        // 3. 构建上传请求
+        const formData = new FormData();
+        // 注意：我们将 Blob 作为一个文件添加进去
+        formData.append('file', audioBlob, fileName);
+        formData.append('upload_preset', uploadPreset);
+        // 指定资源类型为 video，Cloudinary 会自动处理音频
+        formData.append('resource_type', 'video');
+
+        const apiUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+
+        try {
+                const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        body: formData,
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                        throw new Error(result.error?.message || `上传失败，状态码 ${response.status}`);
+                }
+                return result.secure_url;
+        } catch (error) {
+                console.error('Cloudinary 音频上传失败:', error);
+                throw error;
+        }
+}

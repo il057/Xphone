@@ -1,4 +1,4 @@
-import { db, apiLock, getActiveApiProfile, uploadImage } from './db.js';
+import { db, apiLock, getActiveApiProfile, uploadImage, uploadAudioBlob } from './db.js';
 import * as spotifyManager from './spotifyManager.js';
 import { runOfflineSimulation } from './simulationEngine.js';
 import { updateRelationshipScore } from './simulationEngine.js';
@@ -735,16 +735,95 @@ function createBubble(msg) {
                 `;
                                 break;
                         case 'audio_message':
-                                // 这是新的、带播放器的语音消息样式
-                                bubble.classList.add('is-audio-message'); // 可以为此类型定义新样式
+                                bubble.classList.add('is-audio-message');
+
+                                const waveformId = `waveform-${toMillis(msg.timestamp)}`;
+
                                 contentDiv.innerHTML = `
-                <audio controls src="${msg.content}" class="w-full"></audio>
+                <div class="flex items-center gap-2 w-full">
+                    <button class="play-pause-btn w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full" style="background-color: var(--accent-color);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16" class="play-icon">
+                            <path d="M10.804 8 5 4.633v6.734L10.804 8zm.792-.696a.802.802 0 0 1 0 1.392l-6.363 3.692C4.713 12.69 4 12.345 4 11.692V4.308c0-.653.713-.998 1.233-.696l6.363 3.692z"/>
+                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16" class="pause-icon hidden">
+                            <path d="M6 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5m4 0a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5"/>
+                        </svg>
+                    </button>
+                    <div id="${waveformId}" class="w-full h-10 cursor-pointer"></div>
+                </div>
                 <div class="border-t border-black border-opacity-10 px-3 py-2 text-sm mt-2">
                     ${msg.transcript}
                 </div>
             `;
-                                // 阻止长按菜单，避免误操作
-                                bubble.addEventListener('contextmenu', e => e.preventDefault());
+                                bubble.appendChild(contentDiv);
+                                contentAndNameContainer.appendChild(bubble);
+
+                                // --- 关键修改：在这里异步加载音频数据 ---
+                                setTimeout(async () => { // <--- 将函数标记为 async
+                                        const waveformContainer = document.getElementById(waveformId);
+                                        const playBtn = wrapper.querySelector('.play-pause-btn');
+                                        const playIcon = wrapper.querySelector('.play-icon');
+                                        const pauseIcon = wrapper.querySelector('.pause-icon');
+
+                                        if (waveformContainer) {
+                                                const wavesurfer = WaveSurfer.create({
+                                                        container: `#${waveformId}`,
+                                                        waveColor: getComputedStyle(document.documentElement).getPropertyValue('--ai-bubble-bg'),
+                                                        progressColor: getComputedStyle(document.documentElement).getPropertyValue('--accent-color'),
+                                                        height: 40,
+                                                        barWidth: 2,
+                                                        barRadius: 2,
+                                                        cursorWidth: 0,
+                                                        // 注意：我们在这里不再提供 url
+                                                });
+
+                                                // --- 新增的加载逻辑 ---
+                                                try {
+                                                        // 1. 我们自己 fetch 音频 URL
+                                                        const response = await fetch(msg.content);
+                                                        // 2. 将响应转换为 Blob 对象
+                                                        const audioBlob = await response.blob();
+                                                        // 3. 使用 loadBlob 方法加载音频数据
+                                                        await wavesurfer.loadBlob(audioBlob);
+
+                                                        // 只有在加载成功后才绑定事件
+                                                        playBtn.onclick = () => wavesurfer.playPause();
+                                                        wavesurfer.on('play', () => {
+                                                                playIcon.classList.add('hidden');
+                                                                pauseIcon.classList.remove('hidden');
+                                                        });
+                                                        wavesurfer.on('pause', () => {
+                                                                pauseIcon.classList.add('hidden');
+                                                                playIcon.classList.remove('hidden');
+                                                        });
+                                                        wavesurfer.on('finish', () => {
+                                                                pauseIcon.classList.add('hidden');
+                                                                playIcon.classList.remove('hidden');
+                                                        });
+
+                                                } catch (error) {
+                                                        console.error('加载或渲染波形图失败:', error);
+                                                        // 可以在这里显示一个错误状态
+                                                        waveformContainer.textContent = '波形加载失败';
+                                                }
+                                                // --- 加载逻辑结束 ---
+
+                                                const observer = new MutationObserver((mutationsList, obs) => {
+                                                        for (const mutation of mutationsList) {
+                                                                if (mutation.removedNodes) {
+                                                                        for (const node of mutation.removedNodes) {
+                                                                                if (node === wrapper) {
+                                                                                        wavesurfer.destroy();
+                                                                                        obs.disconnect();
+                                                                                        return;
+                                                                                }
+                                                                        }
+                                                                }
+                                                        }
+                                                });
+                                                observer.observe(wrapper.parentNode, { childList: true });
+                                        }
+                                }, 0);
                                 break;
                         case 'waimai_request':
                                 bubble.classList.add('is-waimai-request');
@@ -5336,5 +5415,13 @@ async function generateAudioFromText(text, voiceId, ttsProfile) {
         }
 
         const audioBlob = await response.blob();
-        return URL.createObjectURL(audioBlob);
+        try {
+                // 调用我们新的上传函数
+                const permanentUrl = await uploadAudioBlob(audioBlob);
+                return permanentUrl; // 返回 Cloudinary 的永久链接
+        } catch (uploadError) {
+                console.error("Failed to upload audio to Cloudinary, using temporary blob URL as fallback.", uploadError);
+                // 如果上传失败，我们仍然可以创建一个临时 URL 作为后备方案，保证功能可用
+                return URL.createObjectURL(audioBlob);
+        }
 }
