@@ -857,9 +857,8 @@ ${stickerListForPrompt}
         }
 
         const responseArray = parsedObject.actions;
-
+        const actorName = chat.name; 
         for (const action of responseArray) {
-            const actorName = action.name || chat.name;
              switch (action.type) {
                 case 'do_nothing':
                     console.log(`后台活动: 角色 "${actorName}" 决定保持沉默。`);

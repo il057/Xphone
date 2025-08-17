@@ -758,8 +758,7 @@ function createBubble(msg) {
                                 bubble.appendChild(contentDiv);
                                 contentAndNameContainer.appendChild(bubble);
 
-                                // --- 关键修改：在这里异步加载音频数据 ---
-                                setTimeout(async () => { // <--- 将函数标记为 async
+                                setTimeout(async () => { 
                                         const waveformContainer = document.getElementById(waveformId);
                                         const playBtn = wrapper.querySelector('.play-pause-btn');
                                         const playIcon = wrapper.querySelector('.play-icon');
@@ -774,10 +773,8 @@ function createBubble(msg) {
                                                         barWidth: 2,
                                                         barRadius: 2,
                                                         cursorWidth: 0,
-                                                        // 注意：我们在这里不再提供 url
                                                 });
 
-                                                // --- 新增的加载逻辑 ---
                                                 try {
                                                         // 1. 我们自己 fetch 音频 URL
                                                         const response = await fetch(msg.content);
@@ -806,7 +803,6 @@ function createBubble(msg) {
                                                         // 可以在这里显示一个错误状态
                                                         waveformContainer.textContent = '波形加载失败';
                                                 }
-                                                // --- 加载逻辑结束 ---
 
                                                 const observer = new MutationObserver((mutationsList, obs) => {
                                                         for (const mutation of mutationsList) {
