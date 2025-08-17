@@ -281,12 +281,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         await db.chats.bulkUpdate(historyUpdates);
 
                         for (const id of selectedIds) {
+
+                                // 删除该角色发布的所有动态
                                 await db.xzonePosts.where('authorId').equals(id).delete();
+
+                                // 删除该角色的所有回忆
                                 await db.memories.where('chatId').equals(id).delete();
                                 await db.diaries.where('authorId').equals(id).delete();
-                                await db.callLogs.where('charId').equals(id).delete();
+
+                                // 删除与该角色聊天相关的收藏
                                 await db.favorites.where('chatId').equals(id).delete();
-                                await db.diaries.where('authorId').equals(id).delete();
+
+                                // 删除与该角色的所有通话记录
+                                await db.callLogs.where('charId').equals(id).delete();
+
+                                
                         }
                 });
                 showToast(`已成功重置 ${selectedIds.length} 个角色的内容。`, 'success');
@@ -309,6 +318,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 await db.favorites.where('chatId').equals(id).delete();
                                 await db.relationships.where('sourceCharId').equals(id).delete();
                                 await db.relationships.where('targetCharId').equals(id).delete();
+                                // 从群聊中移除该角色
+                                await db.chats.where('isGroup').equals(1).modify(group => {
+                                        if (group.members && group.members.includes(id)) {
+                                                group.members = group.members.filter(memberId => memberId !== id);
+                                        }
+                                });
                         }
                 });
                 showToast(`已成功删除 ${selectedIds.length} 个角色。`, 'success');

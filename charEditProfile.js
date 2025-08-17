@@ -129,7 +129,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         customPresets = await db.bubbleThemePresets.toArray();
         if (!chatData.settings) chatData.settings = {};
-    
+            let inheritedBookIds = [];
+            // 如果角色属于某个分组，则获取该分组的世界书
+            if (chatData.groupId) {
+                    const group = await db.xzoneGroups.get(chatData.groupId);
+                    if (group && group.worldBookIds) {
+                            inheritedBookIds = group.worldBookIds;
+                    }
+            }
+            // 获取角色自己绑定的世界书ID（确保它是一个数组）
+            const individualBookIds = chatData.settings.worldBookIds || [];
+
         const maxMemoryInput = document.getElementById('max-memory-input');
         
         if (chatData.isGroup) {
@@ -197,25 +207,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             await loadVoiceSettings(chatData.settings.voiceConfig);
         }
         await applyPageTheme(chatData); 
-        await loadWorldBooks(chatData.settings.worldBookId);
+            await loadWorldBooks(individualBookIds, inheritedBookIds);
         await loadAndRenderCssPresets();
         customBubbleCssInput.value = chatData.settings.customBubbleCss || '';
        
     }
 
-    async function loadWorldBooks(selectedBookId) {
-        const books = await db.worldBooks.toArray();
-        worldBookSelect.innerHTML = '<option value="">不使用</option>'; // 重置
-        books.forEach(book => {
-            const option = document.createElement('option');
-            option.value = book.id;
-            option.textContent = book.name;
-            if (book.id === selectedBookId) {
-                option.selected = true;
-            }
-            worldBookSelect.appendChild(option);
-        });
-    }
+        async function loadWorldBooks(individualBookIds = [], inheritedBookIds = []) {
+                const container = document.getElementById('world-book-select-container');
+                if (!container) return;
+
+                const books = await db.worldBooks.toArray();
+                container.innerHTML = '';
+
+                if (books.length === 0) {
+                        container.innerHTML = '<p class="text-xs text-gray-500">还没有创建任何世界书。</p>';
+                        return;
+                }
+
+                const individualSet = new Set(individualBookIds);
+                const inheritedSet = new Set(inheritedBookIds);
+
+                books.forEach(book => {
+                        const isIndividuallyChecked = individualSet.has(book.id);
+                        const isInherited = inheritedSet.has(book.id);
+                        const isChecked = isIndividuallyChecked || isInherited;
+                        const isDisabled = isInherited;
+
+                        const checkboxWrapper = document.createElement('div');
+                        checkboxWrapper.className = `flex items-center ${isDisabled ? 'opacity-60' : ''}`;
+                        checkboxWrapper.innerHTML = `
+            <input type="checkbox" id="book-check-${book.id}" value="${book.id}" class="h-4 w-4 rounded world-book-checkbox" 
+                ${isChecked ? 'checked' : ''} 
+                ${isDisabled ? 'disabled' : ''}>
+            <label for="book-check-${book.id}" class="ml-2 text-sm">${book.name} ${isDisabled ? '(由分组继承)' : ''}</label>
+        `;
+                        container.appendChild(checkboxWrapper);
+                });
+        }
 
     function renderThemeSwatches(activeTheme) {
         themeSwatchesContainer.innerHTML = '';
@@ -596,15 +625,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             themeSetting = chatData.settings.theme;
         }
     
-        const checkedBooks = document.querySelectorAll('#world-book-dropdown input[type="checkbox"]:checked');
+        const checkedBooks = document.querySelectorAll('.world-book-checkbox:checked:not(:disabled)');
         const selectedWorldBookIds = Array.from(checkedBooks).map(cb => cb.value);
 
         const sharedSettings = {
             background: backgroundUrlInput.value.trim(),
             theme: themeSetting,
             maxMemory: parseInt(document.getElementById('max-memory-input').value) || 10,
-            worldBookIds: selectedWorldBookIds, // 保存新的ID数组
-            worldBookId: worldBookSelect.value,
+            worldBookIds: selectedWorldBookIds,
             customBubbleCss: customBubbleCssInput.value.trim(),
                 voiceConfig: { 
                         profileId: parseInt(ttsProfileSelect.value) || null,
@@ -1098,6 +1126,28 @@ ${currentCss}
                         ttsVoiceSelect.innerHTML = '<option value="">获取失败</option>';
                 }
         }
+        function setupCollapsibleSection(headerId, contentId, defaultOpen = false) {
+                const header = document.getElementById(headerId);
+                const content = document.getElementById(contentId);
+                const icon = header.querySelector('svg');
+
+                if (!header || !content || !icon) return;
+
+                // 设置初始状态
+                if (defaultOpen) {
+                        content.classList.remove('hidden');
+                        icon.classList.add('rotate-180');
+                } else {
+                        content.classList.add('hidden');
+                        icon.classList.remove('rotate-180');
+                }
+
+                // 添加点击事件
+                header.addEventListener('click', () => {
+                        content.classList.toggle('hidden');
+                        icon.classList.toggle('rotate-180');
+                });
+        }
 
 
     // --- Event Listeners ---
@@ -1255,6 +1305,13 @@ ${currentCss}
 
                         // 删除与该角色的所有通话记录
                         await db.callLogs.where('charId').equals(idToDelete).delete();
+
+                        // 从群聊中移除该角色
+                        await db.chats.where('isGroup').equals(1).modify(group => {
+                                if (group.members && group.members.includes(idToDelete)) {
+                                        group.members = group.members.filter(memberId => memberId !== idToDelete);
+                                }
+                        });
                     }
                     // 对于群聊，目前我们只删除群聊本身，成员角色保留。
                 });
@@ -1284,6 +1341,8 @@ ${currentCss}
             // 你也可以在这里添加一个预览效果，但这步是可选的
         }
     });
+        setupCollapsibleSection('world-book-header', 'world-book-content');
+        setupCollapsibleSection('relationship-header', 'relationship-content');
     
 
     // --- Init ---
