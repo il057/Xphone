@@ -1,5 +1,5 @@
 // phone/stickers.js (使用共享UI组件的新版本)
-import { db, uploadImage, getActiveApiProfile } from './db.js';
+import { db, uploadImage, getActiveApiProfile, callApi } from './db.js';
 import { showUploadChoiceModal, promptForInput, showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -255,46 +255,14 @@ ${text}
     `;
 
     try {
-        let response, data, rawContent;
-        if (apiConfig.apiProvider === 'gemini') {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-            response = await fetch(geminiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-                    generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
-                })
-            });
-            if (!response.ok) throw new Error(`Gemini API Error ${response.status}: ${await response.text()}`);
-            data = await response.json();
-            rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        } else {
-            const defaultUrl = `${apiConfig.proxyUrl}/v1/chat/completions`;
-            response = await fetch(defaultUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                body: JSON.stringify({
-                    model: apiConfig.model,
-                    messages: [{ role: 'system', content: systemPrompt }],
-                    temperature: 0.1,
-                    response_format: { type: "json_object" }
-                })
-            });
-            if (!response.ok) throw new Error(`API Error ${response.status}: ${await response.text()}`);
-            data = await response.json();
-            rawContent = data.choices?.[0]?.message?.content;
-        }
+            const rawJsonString = await callApi(systemPrompt, [], { temperature: 0.1 }, 'text');
 
-        if (!rawContent) {
-            console.error("API did not return valid content.", data);
-            throw new Error("API返回内容为空或格式无效。");
-        }
-        
-        // AI有时仍然会不听话地包裹在markdown里，这里做最后的清理
-        const cleanedJsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(cleanedJsonString);
+            if (!rawJsonString) {
+                    throw new Error("API返回内容为空或格式无效。");
+            }
 
+            // 在这里自己解析，更灵活
+            return JSON.parse(rawJsonString);
     } catch (error) {
         console.error("AI aPI call or parsing failed:", error);
         // 将具体的错误信息抛出，以便上层函数可以捕获并显示给用户

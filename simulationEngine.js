@@ -1,4 +1,4 @@
-import { db, apiLock, getActiveApiProfile } from './db.js';
+import { db, apiLock, getActiveApiProfile, callApi } from './db.js';
 const notificationChannel = new BroadcastChannel('xphone_notifications');
 
 
@@ -86,46 +86,8 @@ export async function runOfflineSimulation() {
             `;
 
             try {
-                let response;
-                if (apiConfig.apiProvider === 'gemini') {
-                    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-                    const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
-                    response = await fetch(geminiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: geminiContents,
-                            generationConfig: { temperature: 0.8, responseMimeType: "application/json" }
-                        })
-                    });
-                } else {
-                    response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                        body: JSON.stringify({
-                            model: apiConfig.model,
-                            messages: [{ role: 'system', content: systemPrompt }],
-                            temperature: 0.8,
-                            response_format: { type: "json_object" }
-                        })
-                    });
-                }
+                    const simulationData = await callApi(systemPrompt, [], { temperature: 0.8 });
 
-                if (!response.ok) throw new Error(`API for single member ${member.name} failed.`);
-
-                const result = await response.json();
-                let rawContent;
-
-                if (apiConfig.apiProvider === 'gemini') {
-                     if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
-                        rawContent = result.candidates[0].content.parts[0].text;
-                    } else {
-                        throw new Error("Invalid Gemini API response structure.");
-                    }
-                } else {
-                    rawContent = result.choices[0].message.content;
-                }
-                const simulationData = JSON.parse(rawContent);
 
                 if (simulationData.new_events_summary && simulationData.new_events_summary.length > 0) {
                     await db.offlineSummary.put({
@@ -216,47 +178,8 @@ ${personas}
         `;
 
         try {
-            let response;
-            if (apiConfig.apiProvider === 'gemini') {
-                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-                const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
-                response = await fetch(geminiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: geminiContents,
-                        generationConfig: { temperature: 0.8, responseMimeType: "application/json" }
-                    })
-                });
-            } else {
-                response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                    body: JSON.stringify({
-                        model: apiConfig.model,
-                        messages: [{ role: 'system', content: systemPrompt }],
-                        temperature: 0.8,
-                        response_format: { type: "json_object" }
-                    })
-                });
-            }
+                const simulationData = await callApi(systemPrompt, [], { temperature: 0.8 });
 
-            if (!response.ok) throw new Error(`API for group ${groupName} failed.`);
-            
-            const result = await response.json();
-            let rawContent;
-
-            if (apiConfig.apiProvider === 'gemini') {
-                 if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
-                    rawContent = result.candidates[0].content.parts[0].text;
-                } else {
-                    throw new Error("Invalid Gemini API response structure.");
-                }
-            } else {
-                rawContent = result.choices[0].message.content;
-            }
-
-            const simulationData = extractAndParseJson(rawContent);
             
             if (!simulationData) {
                 throw new Error("Failed to parse simulation data from AI response.");
@@ -796,56 +719,9 @@ ${stickerListForPrompt}
 \`\`\`
         `;
     try {
-        let response;
-
-        if (apiConfig.apiProvider === 'gemini') {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-            // Gemini 的 system prompt 通常作为第一个 user turn 的一部分
-            const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
-            response = await fetch(geminiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: geminiContents,
-                    generationConfig: {
-                        temperature: 0.9,
-                        // Gemini 需要通过MIME Type指定JSON输出
-                        responseMimeType: "application/json",
-                    }
-                })
-            });
-        } else {
-            // 原有的默认/反代 API 逻辑
-            response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                body: JSON.stringify({
-                    model: apiConfig.model,
-                    messages: [{ role: 'system', content: systemPrompt }],
-                    temperature: 0.9,
-                    response_format: { type: "json_object" }
-                })
-            });
-        }
-
-
-        if (!response.ok) throw new Error(await response.text());
         
-        const data = await response.json();
-        let rawContent;
 
-        if (apiConfig.apiProvider === 'gemini') {
-            if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-                rawContent = data.candidates[0].content.parts[0].text;
-            } else {
-                console.error("Invalid Gemini API response for triggerInactiveAiAction:", data);
-                throw new Error("Invalid Gemini API response structure.");
-            }
-        } else {
-            rawContent = data.choices[0].message.content;
-        }
-
-        const parsedObject = extractAndParseJson(rawContent);
+        const parsedObject = await callApi(systemPrompt, [], { temperature: 0.9 });
 
         // 检查解析结果是否为包含 "actions" 数组的对象
         if (!parsedObject || !Array.isArray(parsedObject.actions)) {
@@ -1008,53 +884,8 @@ ${contextSummary || "（没有找到相关的对话记录）"}
 `;
 
     try {
-        let response;
-
-        if (apiConfig.apiProvider === 'gemini') {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-            const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }]; // Gemini 没有 system 角色
-            response = await fetch(geminiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: geminiContents,
-                    generationConfig: {
-                        temperature: 0.9,
-                        responseMimeType: "application/json",
-                    }
-                })
-            });
-        } else {
-            // 原有的默认/反代 API 逻辑
-            response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                body: JSON.stringify({
-                    model: apiConfig.model,
-                    messages: [{ role: 'user', content: systemPrompt }], // 这个 prompt 本身就是 user 角色
-                    temperature: 0.9,
-                    response_format: { type: "json_object" }
-                })
-            });
-        }
-
-        if (!response.ok) throw new Error(await response.text());
-        
-        const data = await response.json();
-        let rawContent;
-
-        if (apiConfig.apiProvider === 'gemini') {
-            if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-                rawContent = data.candidates[0].content.parts[0].text;
-            } else {
-                console.error("Invalid Gemini API response for triggerAiFriendApplication:", data);
-                throw new Error("Invalid Gemini API response structure.");
-            }
-        } else {
-            rawContent = data.choices[0].message.content;
-        }
-
-        const responseObj = extractAndParseJson(rawContent);
+       
+        const responseObj = await callApi(systemPrompt, [], { temperature: 0.9 });
         if (responseObj.decision === 'apply' && responseObj.reason) {
             chat.blockStatus = { status: 'pending_user_approval', applicationReason: responseObj.reason };
             console.log(`角色 "${chat.name}" 已成功生成好友申请: "${responseObj.reason}"`);
@@ -1157,57 +988,7 @@ ${stickerListForPrompt}
     `;
 
         try {
-                let response;
-
-                if (apiConfig.apiProvider === 'gemini') {
-                        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-                        const geminiContents = [{ role: 'user', parts: [{ text: systemPrompt }] }];
-                        response = await fetch(geminiUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                        contents: geminiContents,
-                                        generationConfig: {
-                                                temperature: 0.9,
-                                                // Gemini API 需要通过MIME type来确保返回的是JSON
-                                                responseMimeType: "application/json",
-                                        }
-                                })
-                        });
-
-                } else {
-                        // 原有的默认/反代 API 逻辑
-                        response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                                body: JSON.stringify({
-                                        model: apiConfig.model,
-                                        messages: [{ role: 'system', content: systemPrompt }],
-                                        temperature: 0.9,
-                                        // 旧API通过 response_format 参数要求JSON
-                                        response_format: { type: "json_object" }
-                                })
-                        });
-                }
-
-
-                if (!response.ok) throw new Error(await response.text());
-
-                const data = await response.json();
-                let rawContent;
-
-                if (apiConfig.apiProvider === 'gemini') {
-                        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-                                rawContent = data.candidates[0].content.parts[0].text;
-                        } else {
-                                console.error("Invalid Gemini API response for triggerInactiveGroupAiAction:", data);
-                                throw new Error("Invalid Gemini API response structure.");
-                        }
-                } else {
-                        rawContent = data.choices[0].message.content;
-                }
-
-                const parsedObject = extractAndParseJson(rawContent);
+                const parsedObject = await callApi(systemPrompt, [], { temperature: 0.9 });
 
                 // Check if parsing was successful and if the object contains the "actions" array.
                 if (!parsedObject || !Array.isArray(parsedObject.actions)) {

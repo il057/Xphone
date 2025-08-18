@@ -1,6 +1,5 @@
-import { db, apiLock, getActiveApiProfile, uploadImage, uploadAudioBlob } from './db.js';
+import { db, apiLock, getActiveApiProfile, uploadImage, uploadAudioBlob, callApi } from './db.js';
 import * as spotifyManager from './spotifyManager.js';
-import { runOfflineSimulation } from './simulationEngine.js';
 import { updateRelationshipScore } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
 import { showToast, showToastOnNextPage, showRawContentModal, showConfirmModal } from './ui-helpers.js';
@@ -1489,6 +1488,7 @@ function extractAndParseJson(raw) {
                 return null;
         }
 }
+
 async function sendUserTransfer() {
         const amount = parseFloat(document.getElementById('transfer-amount').value);
         const note = document.getElementById('transfer-note').value.trim();
@@ -2678,99 +2678,7 @@ ${injectedInstructions.join('\n\n')}
                         content: '【最终指令】请严格遵从你的核心输出格式要求，你的整个回复必须是一个完整的、可被解析的JSON对象。绝对禁止在JSON代码块之外包含任何解释、注释或Markdown标记。'
                 });
 
-                let response;
-                if (apiConfig.apiProvider === 'gemini') {
-                        // --- Gemini API 请求逻辑 ---
-                        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-
-                        const geminiContents = [];
-                        let currentParts = [];
-
-                        // 1. 系统提示总是第一个
-                        currentParts.push({ text: systemPrompt });
-
-                        // 2. 遍历处理过的消息负载
-                        for (const msg of messagesPayload) {
-                                if (msg.role === 'user') {
-                                        if (msg.type === 'image_url') {
-                                                // 如果是图片，它自己成为一个part
-                                                try {
-                                                        const { mimeType, base64Data } = await urlToGenerativePart(msg.content);
-                                                        currentParts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
-                                                } catch (e) { console.error("无法转换图片为Base64", e); }
-                                        } else {
-                                                // 文本内容也成为一个part
-                                                currentParts.push({ text: msg.content || "" });
-                                        }
-                                } else { // assistant or system
-                                        // 遇到AI/系统消息，先把用户的所有parts提交
-                                        if (currentParts.length > 0) {
-                                                geminiContents.push({ role: 'user', parts: currentParts });
-                                        }
-                                        // 然后把AI消息作为model的parts提交
-                                        geminiContents.push({ role: 'model', parts: [{ text: msg.content || "" }] });
-                                        // 重置用户的parts
-                                        currentParts = [];
-                                }
-                        }
-
-                        // 3. 提交最后一轮的用户parts
-                        if (currentParts.length > 0) {
-                                geminiContents.push({ role: 'user', parts: currentParts });
-                        }
-
-                        response = await fetch(geminiUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                        contents: geminiContents,
-                                        generationConfig: {
-                                                temperature: 0.7,
-                                                responseMimeType: "application/json" // 添加这一行
-                                        }
-                                })
-                        });
-
-
-                } else {
-                        // --- 默认/其他反代 API 请求逻辑 ---
-                        const defaultUrl = `${apiConfig.proxyUrl}/v1/chat/completions`;
-                        response = await fetch(defaultUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                                body: JSON.stringify({
-                                        model: apiConfig.model,
-                                        messages: [{ role: 'system', content: systemPrompt }, ...messagesPayload],
-                                        temperature: 0.7,
-                                        response_format: { type: "json_object" }
-                                })
-                        });
-                }
-
-                if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`API Error ${response.status}: ${errorText}`);
-                }
-
-                const data = await response.json();
-                let rawContent;
-
-                if (apiConfig.apiProvider === 'gemini') {
-                        // 解析 Gemini 的响应
-                        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts[0]) {
-                                rawContent = data.candidates[0].content.parts[0].text;
-                        } else {
-                                throw new Error("Invalid Gemini API response structure.");
-                        }
-                } else {
-                        // 解析默认 API 的响应
-                        if (!data.choices || data.choices.length === 0) {
-                                throw new Error("API返回了无效的回复。");
-                        }
-                        rawContent = data.choices[0].message.content;
-                }
-
-                const aiResponseContent = extractAndParseJson(rawContent);
+                const aiResponseContent = await callApi(systemPrompt, messagesPayload);
 
                 // 如果解析失败，aiResponseContent 会是 null，此时弹出警告并停止执行
                 if (!aiResponseContent) {

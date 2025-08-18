@@ -1,6 +1,6 @@
 // settings.js
 // Import the shared database instance from db.js
-import { db, uploadImage, getActiveApiProfile } from './db.js'; 
+import { db, uploadImage, getActiveApiProfile, callApi } from './db.js'; 
 import { showUploadChoiceModal, showImagePickerModal, showAlbumPickerModal, promptForInput } from './ui-helpers.js'; // 导入三个助手
 import { showToast, showToastOnNextPage, showConfirmModal } from './ui-helpers.js';
 
@@ -980,50 +980,12 @@ ${currentCss}
     `;
 
                 try {
-                        let response, rawContent;
-                        if (apiConfig.apiProvider === 'gemini') {
-                                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${apiConfig.model}:generateContent?key=${apiConfig.apiKey}`;
-                                response = await fetch(geminiUrl, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                                contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-                                                generationConfig: { temperature: 0.5 }
-                                        })
-                                });
-                                const data = await response.json();
-                                if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-                                        throw new Error("Invalid response structure from Gemini API. Check console for details.");
-                                }
-                                rawContent = data.candidates[0].content.parts[0].text;
-                        } else {
-                                response = await fetch(`${apiConfig.proxyUrl}/v1/chat/completions`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
-                                        body: JSON.stringify({
-                                                model: apiConfig.model,
-                                                messages: [{ role: 'system', content: systemPrompt }],
-                                                temperature: 0.5
-                                        })
-                                });
-                                if (!response.ok) {
-                                        const errorText = await response.text();
-                                        throw new Error(` API Error ${response.status}:\n\n${errorText}`);
-                                }
-                                const data = await response.json();
-                                if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-                                        console.error("Invalid API Response:", data);
-                                        throw new Error("API返回了无效的数据结构，请检查API配置或服务状态。");
-                                }
-                                rawContent = data.choices[0].message.content;
-                        }
+                        const generatedCss = await callApi(systemPrompt, [], { temperature: 0.5 }, 'text');
 
-                        if (!response.ok) throw new Error(rawContent);
-
-                        const cleanedCss = rawContent.replace(/```css/g, '').replace(/```/g, '').trim();
-                        customBubbleCssInput.value = cleanedCss;
+                        customBubbleCssInput.value = generatedCss;
+                        // 手动触发 input 事件来更新实时预览
                         customBubbleCssInput.dispatchEvent(new Event('input'));
-                        renderCssPresets(cleanedCss); // 更新预设按钮高亮
+                        renderCssPresets(generatedCss);
 
                 } catch (error) {
                         console.error("AI生成CSS失败:", error);
