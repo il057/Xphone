@@ -323,7 +323,78 @@ function shadeColor(color, percent) {
         return "#" + RR + GG + BB;
 }
 
+/**
+ * 将十六进制颜色转换为 HSL (色相, 饱和度, 亮度) 格式。
+ * @param {string} hex - #RRGGBB格式的十六进制颜色。
+ * @returns {number[]} - 返回一个包含 [h, s, l] 值的数组。
+ */
+function hexToHsl(hex) {
+        if (!hex) return [0, 0, 0];
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        if (max === min) {
+                h = s = 0;
+        } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                        case g: h = (b - r) / d + 2; break;
+                        case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+        }
+        return [h * 360, s * 100, l * 100];
+}
 
+/**
+ * 根据背景色和 accentColor，生成一个既保持色调又易于阅读的颜色。
+ * @param {string} accentColorHex - 主题色 (十六进制)。
+ * @param {string} backgroundColorHex - 背景色 (十六进制)。
+ * @returns {string} - 返回一个调整后、可读性高的十六进制颜色。
+ */
+function getReadableAccentColor(accentColorHex, backgroundColorHex) {
+        const [h, s, l] = hexToHsl(accentColorHex);
+        const bgLuminance = hexToHsl(backgroundColorHex)[2];
+
+        // 计算原始对比度 (简化版，仅基于亮度)
+        const originalContrast = Math.abs(l - bgLuminance);
+
+        // 如果对比度已经足够 (例如差值大于40)，直接使用原始 accent color
+        if (originalContrast > 40) {
+                return accentColorHex;
+        }
+
+        // 如果对比度不足，决定是调亮还是调暗
+        // 如果背景很亮，我们就需要一个更暗的颜色；反之亦然。
+        if (bgLuminance > 50) {
+                // 背景是浅色，我们需要一个暗色调的 accent color
+                // 将亮度降低到 30% 以确保足够暗，同时保留色相和饱和度
+                return `hsl(${h}, ${s}%, 30%)`;
+        } else {
+                // 背景是深色，我们需要一个亮色调的 accent color
+                // 将亮度提高到 75% 以确保足够亮
+                return `hsl(${h}, ${s}%, 75%)`;
+        }
+}
+/**
+ * 根据背景色的亮度，返回高对比度的前景色（深灰或白色）。
+ * @param {string} hexColor - 十六进制背景色 (例如 '#FFFFFF')。
+ * @returns {string} - 返回 '#1f2937' (深灰) 或 '#FFFFFF' (白色)。
+ */
+function getContrastColor(hexColor) {
+        if (!hexColor || !hexColor.startsWith('#') || hexColor.length < 7) return '#1f2937';
+
+        const hex = hexColor.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        return (yiq >= 128) ? '#1f2937' : '#FFFFFF';
+}
 async function setupUI() {
         charNameHeader.textContent = currentChat.name || currentChat.realName;
         charProfileLink.href = `charProfile.html?id=${charId}`;
@@ -436,21 +507,30 @@ function setAccentColor() {
 
         root.style.setProperty('--accent-color', accentColor);
 
-        // 1. 使用新的智能 shadeColor 计算出用于图标的颜色
-        const themedIconColor = shadeColor(accentColor, -40);
+        /// 1. 获取 header 的背景颜色
+        const headerEl = document.querySelector('.app-header');
+        const headerBgColor = window.getComputedStyle(headerEl).backgroundColor;
 
-        // 2. 将颜色应用到 Header 的元素上
+        // 这是一个将 'rgb(r, g, b)' 转换为 '#RRGGBB' 的小工具
+        const rgbToHex = (rgb) => '#' + (rgb.match(/\d+/g) || []).map((n, i) =>
+                (i < 3) ? ('0' + parseInt(n, 10).toString(16)).slice(-2) : ''
+        ).join('');
+
+        // 2. 使用新函数计算出可读的颜色
+        const readableColor = getReadableAccentColor(accentColor, rgbToHex(headerBgColor));
+
+        // 3. 将这个可读颜色应用到所有需要的地方
         const backBtnHeader = document.querySelector('header a.header-btn');
         const profileBtnHeader = document.getElementById('char-profile-link');
-        if (backBtnHeader) backBtnHeader.style.color = themedIconColor;
-        if (profileBtnHeader) profileBtnHeader.style.color = themedIconColor;
-        charNameHeader.style.color = themedIconColor;
+        if (backBtnHeader) backBtnHeader.style.color = readableColor;
+        if (profileBtnHeader) profileBtnHeader.style.color = readableColor;
+        charNameHeader.style.color = readableColor;
 
         // 3. 将颜色应用到底部所有操作图标上
-        sendBtn.style.color = themedIconColor;
+        sendBtn.style.color = readableColor;
         const actionButtons = document.querySelectorAll('#chat-input-actions-top .action-btn, #wait-reply-btn');
         actionButtons.forEach(btn => {
-                btn.style.color = themedIconColor;
+                btn.style.color = readableColor;
         });
 
         // 4. 更新之前创建的动态样式，以确保悬停(hover)时颜色正确
@@ -461,12 +541,19 @@ function setAccentColor() {
                 document.head.appendChild(hoverStyleElement);
         }
         hoverStyleElement.innerHTML = `
-        .action-btn:hover { color: ${themedIconColor} !important; }
-        .action-btn:hover svg { color: ${themedIconColor} !important; }
-    `;
+    .action-btn:hover { 
+        background-color: ${accentColor} !important; 
+        color: ${getContrastColor(accentColor)} !important; 
+    }
+    .action-btn:hover svg { 
+        color: ${getContrastColor(accentColor)} !important; 
+    }
+`;
         const replyBar = document.getElementById('reply-preview-bar');
         if (replyBar) replyBar.style.borderLeftColor = accentColor;
 
+        const sendBtnIconColor = getContrastColor(accentColor);
+        sendBtn.style.color = sendBtnIconColor;
 }
 
 function renderMessages() {

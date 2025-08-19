@@ -46,6 +46,10 @@
             --ai-bubble-text: #000000;
             --border-color: #e5e7eb;
             --accent-color: #3b82f6; /* Default accent color, will be updated by JS */
+            --action-btn-bg-light: #f3f4f6; /* gray-100 */
+            --action-btn-text-light: #374151; /* gray-700 */
+            --action-btn-bg-dark: #252525;   /* gray-700, 深色模式下的背景 */
+            --action-btn-text-dark: #dcdcdc;  /* gray-300, 深色模式下的文字 */
         }
         body {
             font-family: 'Inter', sans-serif;
@@ -77,8 +81,8 @@
             width: 40px;
             height: 40px;
             border-radius: 9999px; /* full */
-            background-color: #f3f4f6; /* gray-100 */
-            color: #374151; /* gray-700 */
+            background-color: var(--action-btn-bg-light); 
+            color: var(--action-btn-text-light);
             transition: all 0.2s ease-in-out;
             
         }
@@ -91,6 +95,16 @@
         }
         .action-btn:hover svg, .action-btn:hover span {
              color: white;
+        }
+
+        html.dark .action-btn { 
+                background-color: var(--action-btn-bg-dark);
+                color: var(--action-btn-text-dark);
+        }
+
+        html.dark .action-btn:hover {
+                background-color: var(--theme-color);
+                color: white; /* 悬浮时文字变白 */
         }
 
 
