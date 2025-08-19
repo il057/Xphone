@@ -112,7 +112,7 @@ export async function runOfflineSimulation() {
                         }
                     }
                 }
-                simulationSuccess = true; // **修正点**: 标记成功
+                simulationSuccess = true; 
             } catch (error) {
                 console.error(`模拟单人分组【${groupName}】时出错:`, error);
                 // 失败时不需要设置 simulationSuccess = false，因为它默认为false
@@ -1177,4 +1177,264 @@ async function processAndNotify(chat, message, allChatsMap) {
                 new Notification(`${message.senderName}给你发来一条新消息`, notificationOptions);
         }
         console.log(`后台活动: 角色 "${message.senderName}" 主动发送了 ${message.type || 'text'} 消息。`);
+}
+
+/**
+ * 获取或生成一个角色的简短人设摘要。
+ * @param {string} charId - 要获取摘要的角色ID。
+ * @returns {Promise<string>} - 返回角色的摘要。
+ */
+export async function getPersonaAbstract(charId) {
+        const character = await db.chats.get(charId);
+        if (!character) return "";
+
+        // 如果已有摘要，直接返回
+        if (character.personaAbstract) {
+                return character.personaAbstract;
+        }
+
+        const persona = character.settings?.aiPersona;
+        if (!persona || !persona.trim()) {
+                return "一个信息很少的人。";
+        }
+
+        // 调用AI生成摘要
+        const systemPrompt = `
+        You are an expert character analyst. Your task is to read the detailed character persona below and create a concise, 1-3 sentence summary that captures the character's core personality, motivations, and key traits.
+
+        **Detailed Persona to Summarize:**
+        ---
+        ${persona}
+        ---
+
+        **Output Requirements:**
+        - Your response MUST be the summary text ONLY.
+        - Do NOT include any explanations, comments, or markdown.
+        - The summary should be in Chinese.
+    `;
+
+        try {
+                const abstract = await callApi(systemPrompt, [], { temperature: 0.5 }, 'text');
+
+                if (abstract && abstract.trim()) {
+                        // 保存摘要到数据库以备后用
+                        await db.chats.update(charId, { personaAbstract: abstract });
+                        return abstract;
+                }
+        } catch (error) {
+                console.error(`Failed to generate persona abstract for ${charId}:`, error);
+                // Fallback logic: 如果AI调用失败，返回人设的前50个字符
+                return persona.substring(0, 50) + '...';
+        }
+
+        // 如果AI调用成功但返回空，也执行Fallback
+        return persona.substring(0, 50) + '...';
+}
+
+
+// simulationEngine.js
+
+//... (imports, getPersonaAbstract 保持不变) ...
+
+/**
+ * [已终极升级] 使用 AI 生成新角色人设及其双向人际关系。
+ * @param {object} options - 创建角色的选项。
+ * @param {number} options.groupId - 新角色所属的分组ID。
+ * @param {string} [options.name] - 新角色的可选名字。
+ * @param {string} [options.gender] - 新角色的可选性别。
+ * @param {string} [options.birthday] - 新角色的可选生日。
+ * @param {Array<{charId: string, relationship: string}>} [options.relations] - 用户预设的关系 (新角色 -> 老角色)。
+ * @param {string} [options.recommendationContext] - 推荐该角色的上下文理由。
+ * @returns {Promise<object|null>} - 成功则返回包含角色数据和双向关系数组的对象，失败则返回 null。
+ */
+export async function generateNewCharacterPersona(options) {
+        // [已修复] 从 options 安全地解构 relations
+        const { groupId, name, gender, birthday, relations, recommendationContext } = options;
+
+        if (!groupId) {
+                throw new Error("必须提供一个分组ID来生成角色。");
+        }
+
+        // 1. 获取上下文信息
+        const [group, allCharsInGroup] = await Promise.all([
+                db.xzoneGroups.get(groupId),
+                db.chats.where({ groupId: groupId, isGroup: 0 }).toArray()
+        ]);
+
+        let contextPrompt = "这个分组里目前还没有其他人。";
+        let existingNames = [];
+        if (allCharsInGroup.length > 0) {
+                existingNames = allCharsInGroup.map(c => c.name).concat(allCharsInGroup.map(c => c.realName));
+                const memberAbstracts = await Promise.all(
+                        allCharsInGroup.map(async (member) => {
+                                const abstract = await getPersonaAbstract(member.id);
+                                const birthDate = member.birthday ? `(生日: ${member.birthday})` : '';
+                                return `- ${member.realName} (昵称: ${member.name}, ID: ${member.id}, 性别: ${member.gender || '未知'}) ${birthDate}：${abstract}`;
+                        })
+                );
+                contextPrompt = `这个分组（名为 “${group.name}”）里已经有以下角色：\n${memberAbstracts.join('\n')}`;
+        }
+
+        let worldBookPrompt = "该分组没有关联特定的世界书背景，请基于常识创作。";
+        if (group?.worldBookIds?.length > 0) {
+                const worldBooks = await db.worldBooks.bulkGet(group.worldBookIds);
+                const relevantBooksContent = worldBooks
+                        .filter(book => book && !book.name.includes('编年史'))
+                        .map(book => `\n### ${book.name}\n${book.content}`)
+                        .join('\n');
+
+                if (relevantBooksContent) {
+                        worldBookPrompt = `请严格参考以下世界观设定来构建新角色：${relevantBooksContent}`;
+                }
+        }
+
+        let recommendationPrompt = "";
+        if (recommendationContext) {
+                recommendationPrompt = `
+        # 创作的核心依据 (Crucial Context)
+        这个新角色是在对话中被推荐的，理由是：“${recommendationContext}”。你设计的角色【必须】与这个理由高度相关。
+        `;
+        }
+
+        const userDefinedRelationTargets = new Set((relations || []).map(r => r.charId));
+        const membersForAiRelation = allCharsInGroup.filter(m => !userDefinedRelationTargets.has(m.id));
+
+        let userRelationsPrompt = "用户没有为新角色预设任何特殊关系。";
+        if (relations && relations.length > 0) {
+                const relationDescriptions = await Promise.all(
+                        relations.map(async (rel) => {
+                                const relatedChar = await db.chats.get(rel.charId);
+                                if (relatedChar) return `- 新角色与 ${relatedChar.name} 的关系已被用户设定为【${rel.relationship}】。`;
+                                return '';
+                        })
+                );
+                userRelationsPrompt = `用户已为新角色预设了以下关系：\n${relationDescriptions.filter(Boolean).join('\n')}`;
+        }
+
+        const systemPrompt = `
+        You are a world-class character creator and sociologist for a simulated chat application.
+        # App Features Background
+        Characters can:
+        - Send text, images, voice messages.
+        - Send and receive stickers
+        - Pat each other (a form of virtual affection).
+        - Post on a social feed called "Moments".
+        - Engage in voice and video calls.
+        - Have distinct typing styles (e.g., use of emojis, punctuation, sentence length).
+
+        # World Context & Setting
+        ${worldBookPrompt}
+
+        # Social Group Context
+        ${contextPrompt}
+
+        # New Character's Pre-defined Information
+        - Name: ${name || '由你决定一个合适的名字'}
+        - Gender: ${gender || '由你决定'}
+       - Birthday: ${birthday || '由你决定一个合适的生日，使其年龄与组内其他成员大致相仿或符合逻辑。'}
+        - User-Defined Relationships: ${userRelationsPrompt}
+        ${recommendationPrompt}
+
+        # Your Task (Three Parts)
+
+        ## Part 1: Create the Character Persona
+       Based on all information, create a detailed persona.
+        **CRITICAL CREATION RULES:**
+        1.  The new character's name MUST NOT be any of these existing names: [${existingNames.join(', ')}]. You MUST create a completely NEW character.
+        2.  The recommendation reason is the recommender's **subjective opinion**, not objective fact. Create a persona that could be perceived this way, but might have a different self-perception. For example, if recommended as "theatrical," they might see themselves as "passionate and expressive," not a literal actor.
+        3.  Generate a new name that fits the group's cultural context. 
+        4.  The character's persona MUST be detailed, including their personality traits, interests, quirks, and any relevant background information.
+        5.  The character's persona must be in Chinese.
+
+        ## Part 2: Generate Outgoing Relationships (New Character -> Existing Members)
+        Determine the new character's initial relationship type and favorability score towards **all** existing members.
+        - For relationships **already defined by the user**, you must respect that definition. Your only job is to assign a logical favorability score (from -1000 to 1000) and provide a reason.
+        - For relationships **not defined by the user**, you must generate both the relationship type AND a logical score and reason.
+
+        ## Part 3: Generate Reciprocal Relationships (Existing Members -> New Character)
+        Now, simulate how **each existing member** would initially perceive the new character you just created. For each existing member, provide their relationship type and favorability score towards the new character, along with a reason based on their own persona.
+
+        # Output Format
+        Your response MUST be a single, valid JSON object.
+        **CRITICAL RULE: Inside the JSON string values (like "persona" or "reason"), you MUST NOT use double quotes ("). Use single quotes ('') or Chinese quotes (「」) instead to avoid parsing errors.**
+
+        {
+          "name": "新角色的昵称",
+          "realName": "新角色的真实姓名",
+          "gender": "male | female | unspecified",
+          "persona": {
+                "corePersonality": "详细的核心性格、背景故事、动机和价值观。这是角色的灵魂。",
+                "appearance": "角色的外貌描述。这对于视频通话功能的沉浸感很重要。",
+                "appUsageHabits": {
+                "typingStyle": "描述角色的打字习惯。例如：'喜欢用很多颜文字，说话结尾总是带着波浪号～', '消息简洁，很少用标点符号'。",
+                "featurePreference": "描述角色对App内特定功能的使用偏好。例如：'热衷于发动态分享生活，但几乎从不使用语音通话功能。', '是点赞狂魔，但很少评论。'"
+                }
+        },
+          "relationships": [
+            {
+              "targetCharName": "组内一个现有角色的昵称",
+              "type": "friend | family | lover | rival | stranger",
+              "score": "一个在-1000到1000之间的整数",
+              "reason": "新角色对TA的看法"
+            }
+          ],
+          "reciprocal_relationships": [
+            {
+              "sourceCharName": "组内一个现有角色的昵称",
+              "type": "friend | family | lover | rival | stranger",
+              "score": "一个在-1000到1000之间的整数",
+              "reason": "TA对新角色的第一印象"
+            }
+          ]
+        }
+    `;
+
+        try {
+                const newCharData = await callApi(systemPrompt, [], { temperature: 0.9 }, 'json');
+
+                if (newCharData && newCharData.persona && Array.isArray(newCharData.relationships)) {
+                        const p = newCharData.persona;
+                        const habits = p.appUsageHabits;
+
+                        const formattedPersona = `
+[核心性格]
+${p.corePersonality}
+
+[外貌]
+${p.appearance}
+
+[应用使用习惯]
+- 打字风格: ${habits.typingStyle}
+- 功能偏好: ${habits.featurePreference}
+        `.trim().replace(/^ +/gm, ''); // 移除前导空格
+
+                        // 用格式化后的单一字符串替换掉原来的对象
+                        newCharData.persona = formattedPersona;
+                        // 融合用户定义的关系到最终结果中
+                        if (relations && relations.length > 0) {
+                                for (const userRel of relations) {
+                                        const targetChar = await db.chats.get(userRel.charId);
+                                        if (!targetChar) continue;
+
+                                        const existingAiRelIndex = newCharData.relationships.findIndex(aiRel => aiRel.targetCharName === targetChar.name);
+
+                                        if (existingAiRelIndex !== -1) {
+                                                newCharData.relationships[existingAiRelIndex].type = userRel.relationship;
+                                        } else {
+                                                newCharData.relationships.push({
+                                                        targetCharName: targetChar.name,
+                                                        type: userRel.relationship,
+                                                        score: 500,
+                                                        reason: `由用户预设为${userRel.relationship}关系。`
+                                                });
+                                        }
+                                }
+                        }
+                        return newCharData;
+                }
+                return null;
+        } catch (error) {
+                console.error("AI character generation failed:", error);
+                return null;
+        }
 }

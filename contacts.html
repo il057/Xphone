@@ -52,6 +52,7 @@
                 <div id="add-menu" class="dropdown-menu hidden">
                         <a href="#" id="add-friend-btn" class="dropdown-menu-item">添加好友</a>
                         <a href="#" id="create-group-chat-btn" class="dropdown-menu-item">发起群聊</a>
+                        <a href="#" id="ai-generate-friend-btn" class="dropdown-menu-item">查找可能认识的人</a>
                         <a href="#" id="manage-groups-btn" class="dropdown-menu-item">管理分组</a>
                 </div>
                 </div>
@@ -99,6 +100,7 @@
     <script type="module">
         import { db } from './db.js';
         import { showToast, promptForInput, showConfirmModal } from './ui-helpers.js';
+        import { showCharacterGeneratorModal } from './characterGenerator.js';
 
         const friendsList = document.getElementById('friends-list');
         const groupsList = document.getElementById('groups-list');
@@ -266,6 +268,11 @@
                         e.preventDefault();
                         showGroupManagementModal();
                         addMenu.classList.add('hidden'); // 关闭下拉菜单
+                });
+                document.getElementById('ai-generate-friend-btn').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        showCharacterGeneratorModal();
+                        addMenu.classList.add('hidden');
                 });
         }
 

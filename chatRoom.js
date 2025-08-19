@@ -1,8 +1,9 @@
 import { db, apiLock, getActiveApiProfile, uploadImage, uploadAudioBlob, callApi } from './db.js';
 import * as spotifyManager from './spotifyManager.js';
-import { updateRelationshipScore } from './simulationEngine.js';
+import { updateRelationshipScore, generateNewCharacterPersona } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
 import { showToast, showToastOnNextPage, showRawContentModal, showConfirmModal } from './ui-helpers.js';
+import { showCharacterGeneratorModal } from './characterGenerator.js';
 
 // --- State and Constants ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -853,6 +854,64 @@ function createBubble(msg) {
                 </div>
                 `;
                                 break;
+                        case 'recommend_friend_card': { 
+                                // 应用AI气泡背景和文字颜色
+                                bubble.style.backgroundColor = 'var(--ai-bubble-bg)';
+                                bubble.style.color = 'var(--ai-bubble-text)';
+                                bubble.style.padding = '0.75rem'; // 12px
+                                bubble.style.width = '16rem'; // w-64
+                                bubble.style.borderRadius = '0.75rem'; // rounded-xl
+
+                                const newChar = msg.newCharInfo;
+                                const cardState = msg.generationState || 'idle';
+                                let stateText = '点击添加好友';
+                                let stateStyle = 'opacity-75';
+                                let isClickable = true;
+
+                                switch (cardState) {
+                                        case 'pending':
+                                                stateText = '正在添加...';
+                                                isClickable = false;
+                                                stateStyle = 'opacity-50 cursor-not-allowed';
+                                                break;
+                                        case 'success':
+                                                stateText = '已添加 (点击查看)';
+                                                stateStyle = 'opacity-50 cursor-not-allowed';
+                                                break;
+                                        case 'failed':
+                                                stateText = '添加失败, 点击重试';
+                                                stateStyle = 'font-semibold'; //
+                                                break;
+                                }
+
+                                // 整个气泡现在是可点击的
+                                bubble.dataset.cardId = msg.cardId;
+                                bubble.classList.add('transition-transform', 'active:scale-95');
+                                if (isClickable) {
+                                        bubble.classList.add('cursor-pointer');
+                                        bubble.classList.remove('pointer-events-none');
+                                } else {
+                                        bubble.classList.remove('cursor-pointer');
+                                        bubble.classList.add('pointer-events-none');
+                                }
+
+                                contentDiv.innerHTML = `
+                <div class="flex flex-col h-full">
+                    <p class="text-sm" style="opacity: 0.8;">"${msg.content}"</p>
+                    <div class="flex items-center gap-3 border-t mt-2 pt-2" style="border-color: rgba(128, 128, 128, 0.2);">
+                        <div class="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-xl text-gray-500 flex-shrink-0">?</div>
+                        <div class="flex-grow">
+                            <p class="font-semibold">${newChar.name}</p>
+                            <p class="text-xs" style="opacity: 0.6;">${newChar.gender === 'male' ? '男' : (newChar.gender === 'female' ? '女' : '性别未知')}</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center text-sm ${stateStyle}">
+                        ${stateText}
+                    </div>
+                </div>
+            `;
+                                break;
+                        }
 
 
                 }
@@ -1275,7 +1334,137 @@ async function setupEventListeners() {
                         return; // 结束执行，避免与其他点击事件冲突
                 }
 
+                // ---5. 推荐好友逻辑 ---
+                const recommendCard = e.target.closest('.chat-bubble[data-card-id]');
+                if (recommendCard) {
+                        e.preventDefault();
 
+                        const cardId = recommendCard.dataset.cardId;
+                        const currentChatState = await db.chats.get(charId);
+                        const msgIndex = currentChatState.history.findIndex(m => m.cardId === cardId);
+                        if (msgIndex === -1) return;
+
+                        const msg = currentChatState.history[msgIndex];
+                        if (msg.generationState === 'success' && msg.generatedCharId) {
+                                window.location.href = `charProfile.html?id=${msg.generatedCharId}`;
+                                return;
+                        }
+
+                        
+                        if (msg.generationState === 'pending' || msg.generationState === 'success') {
+                                return; // 防止重复点击
+                        }
+
+                        // 1. 更新UI为“生成中”
+                        msg.generationState = 'pending';
+                        await db.chats.put(currentChatState);
+                        currentChat = currentChatState;
+                        renderMessages(); // 重绘以更新卡片状态
+
+                        try {
+                                // 2. 准备生成所需的数据
+                                const recommender = await db.chats.get(msg.senderId);
+                                const options = {
+                                        groupId: recommender.groupId,
+                                        name: msg.newCharInfo.name,
+                                        gender: msg.newCharInfo.gender,
+                                        relations: [{
+                                                charId: msg.senderId,
+                                                relationship: msg.newCharInfo.relationship_with_recommender
+                                        }],
+                                        recommendationContext: msg.content
+                                };
+
+                                // 3. 直接调用AI生成函数
+                                const newCharData = await generateNewCharacterPersona(options);
+
+                                if (!newCharData) {
+                                        throw new Error("AI未能生成有效的角色数据。");
+                                }
+
+                                // 4. 创建新角色并保存到数据库
+                                const newCharacter = {
+                                        id: crypto.randomUUID(),
+                                        name: newCharData.name,
+                                        realName: newCharData.realName,
+                                        gender: newCharData.gender,
+                                        birthday: newCharData.birthday,
+                                        settings: {
+                                                aiPersona: newCharData.persona,
+                                                aiAvatar: 'https://files.catbox.moe/kkll8p.svg',
+                                                aiAvatarLibrary: [],
+                                        },
+                                        groupId: options.groupId,
+                                        isGroup: 0,
+                                        history: [],
+                                        lastMessageTimestamp: Date.now(),
+                                        lastMessageContent: null, // 将在下面填充
+                                        unreadCount: 1,
+                                };
+
+                                const firstMessage = {
+                                        role: 'assistant',
+                                        senderName: newCharacter.name,
+                                        senderId: newCharacter.id,
+                                        type: 'text',
+                                        content: `我是${recommender.name}的朋友，${newCharData.name}。`,
+                                        timestamp: newCharacter.lastMessageTimestamp
+                                };
+                                newCharacter.history.push(firstMessage);
+                                newCharacter.lastMessageContent = firstMessage;
+                                newCharacter.lastMessageTimestamp = firstMessage.timestamp;
+
+                                const hiddenContextMessage = {
+                                        role: 'system',
+                                        content: `[系统提示：你是通过 ${recommender.name} 的推荐认识了用户。${recommender.name} 的推荐理由是：“${msg.content}”。你可以基于这个信息开启对话。]`,
+                                        timestamp: new Date(Date.now() + 1),
+                                        isHidden: true
+                                };
+                                newCharacter.history.push(hiddenContextMessage);
+
+                                await db.chats.add(newCharacter);
+
+                                // 5. 保存双向关系
+                                const groupMembers = await db.chats.where({ groupId: options.groupId, isGroup: 0 }).toArray();
+                                const membersMap = new Map(groupMembers.map(m => [m.name, m.id]));
+
+                                if (newCharData.relationships) {
+                                        for (const rel of newCharData.relationships) {
+                                                const targetId = membersMap.get(rel.targetCharName);
+                                                if (targetId) await db.relationships.add({ sourceCharId: newCharacter.id, targetCharId: targetId, type: rel.type, score: parseInt(rel.score) || 0 });
+                                        }
+                                }
+                                if (newCharData.reciprocal_relationships) {
+                                        for (const rel of newCharData.reciprocal_relationships) {
+                                                const sourceId = membersMap.get(rel.sourceCharName);
+                                                if (sourceId) await db.relationships.add({ sourceCharId: sourceId, targetCharId: newCharacter.id, type: rel.type, score: parseInt(rel.score) || 0 });
+                                        }
+                                }
+                                const visibleSystemMessage = {
+                                        role: 'system',
+                                        type: 'system_message',
+                                        content: `你通过 ${msg.senderName} 的推荐添加了 ${newCharacter.name}`,
+                                        timestamp: Date.now()
+                                };
+                                currentChat.history.push(visibleSystemMessage);
+                                
+                                // 6. 更新UI为“成功”
+                                msg.generationState = 'success';
+                                msg.generatedCharId = newCharacter.id;
+                                await db.chats.put(currentChat);
+
+                                renderMessages(); // 最终重绘，显示“已添加”和新的系统消息
+                                showToast(`已成功添加新朋友：${newCharacter.name}！`, 'success');
+
+                        } catch (error) {
+                                console.error("直接生成角色失败:", error);
+                                // 7. 更新UI为“失败”
+                                msg.generationState = 'failed';
+                                await db.chats.put(currentChat);
+                                renderMessages();
+                                showToast("生成失败，请重试。", "error");
+                        }
+                }
         });
 
         lockOverlay.addEventListener('click', async (e) => {
@@ -2365,6 +2554,7 @@ ${injectedInstructions.join('\n\n')}
 - **发布图片动态**: {"type": "create_post", "postType": "image", "publicText": "(可选)配文", "imageDescription": "图片描述", "mentionIds": ["(可选)要@的角色ID"]}
 - **点赞动态**: {"type": "like_post", "postId": 12345} (postId 必须是你看到的某条动态的ID)
 - **评论动态**: {"type": "comment_on_post", "postId": 12345, "commentText": "你的评论内容"}
+- **推荐好友**: {"type": "recommend_friend", "name": "一个全新的、不存在于当前分组的角色名", "gender": "male|female", "relationship": "与你(推荐人)的关系", "recommendation_reason": "用你自己的、主观的口气说出推荐TA的理由"}
 
 ## 5.4 个人状态与记忆
 - **更新状态**: {"type": "update_status", "text": "正在做的事...", "color": "#FF69B4"}
@@ -2398,6 +2588,7 @@ ${injectedInstructions.join('\n\n')}
 -发布图片动态: create_post(image, publicText, imageDescription, mentionIds)
 -点赞动态: like_post(postId)
 -评论动态: comment_on_post(postId, commentText)
+-推荐好友: recommend_friend(name, gender, relationship, recommendation_reason)
 -更新状态: update_status(text, color)
 -更新签名: update_signature(signature)
 -更换头像: change_avatar(name)
@@ -2450,6 +2641,9 @@ ${injectedInstructions.join('\n\n')}
     * **正式/严肃/陌生场合**: 只有在这些特殊情况下，才使用【全名】 (例如: "Alex Vanderbilt")。
 
 这会让你的角色更加真实和有人情味。
+
+- **【名字多样性铁律】**: 当你需要生成一个新角色的名字时（例如使用 recommend_friend 指令），请观察当前分组内已有的中英文名分布，并生成一个在语言风格上和谐融入的名字。
+可选关系为：friend | family | lover | rival | stranger
 
 ## 1.2 核心输出格式 (Mandatory Output Format)
 - 【【【最高优先级铁律】】】 你的每一次、每一个回复都【绝对必须】是一个符合JSON格式的、完整的字符串。这是本程序唯一能够解析的格式。任何非JSON的纯文本回复都会导致程序错误。
@@ -2830,7 +3024,7 @@ ${injectedInstructions.join('\n\n')}
                                 }
                                 let actorName;
                                 let actorMember = null;
-                                const actorId = action.senderId;
+                                const actorId = isGroupChat ? action.senderId : charId; 
                                 if (isGroupChat) {
                                         // 在群聊中，每个动作都必须指明是哪个角色执行的 
                                         if (!actorId) {
@@ -3307,6 +3501,7 @@ ${injectedInstructions.join('\n\n')}
                                                                 currentChat.lastMessageContent = fallbackMessage;
                                                                 appendMessage(fallbackMessage);
                                                         }
+                                                        
                                                 } else {
                                                         // 未配置 TTS，直接使用文字版语音
                                                         const voiceMessage = {
@@ -3529,6 +3724,29 @@ ${injectedInstructions.join('\n\n')}
 
                                                 // 5. 使用 return 立即终止当前所有操作，不再处理后续的AI动作
                                                 return;
+                                        }
+                                        case 'recommend_friend': {
+                                                const cardId = `friend-recommendation-${Date.now()}`;
+                                                const recommendationMessage = {
+                                                        role: 'assistant',
+                                                        senderName: actorName,
+                                                        senderId: actorId,
+                                                        type: 'recommend_friend_card', // 使用新类型渲染名片
+                                                        content: action.recommendation_reason,
+                                                        newCharInfo: {
+                                                                name: action.name,
+                                                                gender: action.gender,
+                                                                relationship_with_recommender: action.relationship
+                                                        },
+                                                        generationState: 'idle', // idle, pending, success, failed
+                                                        cardId: cardId, // 分配唯一ID
+                                                        timestamp: messageTimestamp++
+                                                };
+                                                currentChat.history.push(recommendationMessage);
+                                                currentChat.lastMessageTimestamp = recommendationMessage.timestamp;
+                                                currentChat.lastMessageContent = { content: `${actorName} 给你推荐了一个朋友。` }; // 简化预览
+                                                appendMessage(recommendationMessage);
+                                                break;
                                         }
 
 

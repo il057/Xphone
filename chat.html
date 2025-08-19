@@ -78,7 +78,8 @@
                     </button>
                     <div id="add-menu" class="dropdown-menu hidden">
                         <a href="#" id="add-friend-btn" class="dropdown-menu-item">添加好友</a>
-                        <a href="#" class="dropdown-menu-item">发起群聊</a>
+                        <a href="#" id="ai-generate-friend-btn" class="dropdown-menu-item">查找可能认识的人</a>
+                        <a href="#" id="create-group-chat-btn" class="dropdown-menu-item">发起群聊</a>
                     </div>
                 </div>
             </div>
@@ -108,6 +109,8 @@
     <script type="module">
         import { db } from './db.js';
         import { showToast, promptForInput } from './ui-helpers.js';
+        import { showCharacterGeneratorModal } from './characterGenerator.js';
+
         const chatListContainer = document.getElementById('chat-list');
         const notificationChannel = new BroadcastChannel('xphone_notifications');
         let renderTimeout; // 用于防抖的计时器
@@ -276,13 +279,12 @@
                 }
             });
 
-            const createGroupBtn = addMenu.querySelector('a:nth-child(2)');
-            createGroupBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                // 跳转到一个新的页面来选择联系人
-                window.location.href = 'contactsPicker.html';
-                addMenu.classList.add('hidden');
-            });
+            const createGroupBtn = document.getElementById('create-group-chat-btn');
+                createGroupBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        window.location.href = 'contactsPicker.html';
+                        addMenu.classList.add('hidden');
+                });
 
             // Hide menu if clicking elsewhere
             window.addEventListener('click', () => {
@@ -291,6 +293,12 @@
                     addBtn.classList.remove('active');
                 }
             });
+
+            document.getElementById('ai-generate-friend-btn').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        showCharacterGeneratorModal();
+                        addMenu.classList.add('hidden'); // 关闭下拉菜单
+                });
         }
 
         //创建一个请求渲染的函数，内置防抖

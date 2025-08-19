@@ -143,8 +143,8 @@ db.version(35).stores({
     });
 });
 
-db.version(37).stores({
-        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp',
+db.version(38).stores({
+        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp, personaAbstract', 
         apiProfiles: '++id, &profileName',
         ttsProfiles: '++id, &profileName',
         globalSettings: '&id, activeApiProfileId',
