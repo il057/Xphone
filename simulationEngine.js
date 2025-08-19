@@ -1180,6 +1180,45 @@ async function processAndNotify(chat, message, allChatsMap) {
 }
 
 /**
+ *  根据传入的人设文本直接生成摘要（不访问数据库）
+ * @param {string} personaText - 完整的人设文本
+ * @returns {Promise<string>} - 返回生成的摘要文本
+ */
+export async function generateAbstractFromPersonaText(personaText) {
+        if (!personaText || !personaText.trim()) {
+                return "一个信息很少的人。";
+        }
+
+        const systemPrompt = `
+        You are an expert character analyst. Your task is to read the detailed character persona below and create a concise, 1-3 sentence summary that captures the character's core personality, motivations, and key traits.
+
+        **Detailed Persona to Summarize:**
+        ---
+        ${personaText}
+        ---
+
+        **Output Requirements:**
+        - Your response MUST be the summary text ONLY.
+        - Do NOT include any explanations, comments, or markdown.
+        - The summary should be in Chinese.
+    `;
+
+        try {
+                const abstract = await callApi(systemPrompt, [], { temperature: 0.5 }, 'text');
+                if (abstract && abstract.trim()) {
+                        return abstract;
+                }
+        } catch (error) {
+                console.error(`Failed to generate abstract from text:`, error);
+                // Fallback
+                return personaText.substring(0, 50) + '...';
+        }
+        // Fallback
+        return personaText.substring(0, 50) + '...';
+}
+
+
+/**
  * 获取或生成一个角色的简短人设摘要。
  * @param {string} charId - 要获取摘要的角色ID。
  * @returns {Promise<string>} - 返回角色的摘要。
@@ -1194,52 +1233,23 @@ export async function getPersonaAbstract(charId) {
         }
 
         const persona = character.settings?.aiPersona;
-        if (!persona || !persona.trim()) {
-                return "一个信息很少的人。";
+
+        // 调用辅助函数来生成摘要
+        const abstract = await generateAbstractFromPersonaText(persona);
+
+        // 保存新生成的摘要到数据库以备后用
+        if (abstract) {
+                await db.chats.update(charId, { personaAbstract: abstract });
         }
 
-        // 调用AI生成摘要
-        const systemPrompt = `
-        You are an expert character analyst. Your task is to read the detailed character persona below and create a concise, 1-3 sentence summary that captures the character's core personality, motivations, and key traits.
-
-        **Detailed Persona to Summarize:**
-        ---
-        ${persona}
-        ---
-
-        **Output Requirements:**
-        - Your response MUST be the summary text ONLY.
-        - Do NOT include any explanations, comments, or markdown.
-        - The summary should be in Chinese.
-    `;
-
-        try {
-                const abstract = await callApi(systemPrompt, [], { temperature: 0.5 }, 'text');
-
-                if (abstract && abstract.trim()) {
-                        // 保存摘要到数据库以备后用
-                        await db.chats.update(charId, { personaAbstract: abstract });
-                        return abstract;
-                }
-        } catch (error) {
-                console.error(`Failed to generate persona abstract for ${charId}:`, error);
-                // Fallback logic: 如果AI调用失败，返回人设的前50个字符
-                return persona.substring(0, 50) + '...';
-        }
-
-        // 如果AI调用成功但返回空，也执行Fallback
-        return persona.substring(0, 50) + '...';
+        return abstract || "一个信息很少的人。";
 }
 
-
-// simulationEngine.js
-
-//... (imports, getPersonaAbstract 保持不变) ...
-
 /**
- * [已终极升级] 使用 AI 生成新角色人设及其双向人际关系。
+ * 使用 AI 生成新角色人设及其双向人际关系。
  * @param {object} options - 创建角色的选项。
  * @param {number} options.groupId - 新角色所属的分组ID。
+ * @param {string} [options.recommenderId] - 推荐这个新角色的现有角色的ID。
  * @param {string} [options.name] - 新角色的可选名字。
  * @param {string} [options.gender] - 新角色的可选性别。
  * @param {string} [options.birthday] - 新角色的可选生日。
@@ -1248,8 +1258,7 @@ export async function getPersonaAbstract(charId) {
  * @returns {Promise<object|null>} - 成功则返回包含角色数据和双向关系数组的对象，失败则返回 null。
  */
 export async function generateNewCharacterPersona(options) {
-        // [已修复] 从 options 安全地解构 relations
-        const { groupId, name, gender, birthday, relations, recommendationContext } = options;
+        const { groupId, name, gender, birthday, relations, recommendationContext, recommenderId } = options;
 
         if (!groupId) {
                 throw new Error("必须提供一个分组ID来生成角色。");
@@ -1267,9 +1276,17 @@ export async function generateNewCharacterPersona(options) {
                 existingNames = allCharsInGroup.map(c => c.name).concat(allCharsInGroup.map(c => c.realName));
                 const memberAbstracts = await Promise.all(
                         allCharsInGroup.map(async (member) => {
-                                const abstract = await getPersonaAbstract(member.id);
+                                let personaContent;
+                                // 如果当前成员是推荐人，则使用其完整人设
+                                if (member.id === recommenderId) {
+                                        console.log(`为推荐人 ${member.name} 注入完整人设。`);
+                                        personaContent = member.settings.aiPersona;
+                                } else {
+                                        // 否则，使用人设摘要
+                                        personaContent = await getPersonaAbstract(member.id);
+                                }
                                 const birthDate = member.birthday ? `(生日: ${member.birthday})` : '';
-                                return `- ${member.realName} (昵称: ${member.name}, ID: ${member.id}, 性别: ${member.gender || '未知'}) ${birthDate}：${abstract}`;
+                                return `- ${member.realName} (昵称: ${member.name}, ID: ${member.id}, 性别: ${member.gender || '未知'}) ${birthDate}：${personaContent}`;
                         })
                 );
                 contextPrompt = `这个分组（名为 “${group.name}”）里已经有以下角色：\n${memberAbstracts.join('\n')}`;
@@ -1312,15 +1329,16 @@ export async function generateNewCharacterPersona(options) {
         }
 
         const systemPrompt = `
-        You are a world-class character creator and sociologist for a simulated chat application.
+        You are a master storyteller and character designer for a gripping social simulation drama. Your primary goal is to create unforgettable, compelling, and deeply flawed characters. Bland, perfectly nice, or boringly agreeable characters are failures. You are here to inject drama, personality, and realism into the world.
+
         # App Features Background
-        Characters can:
-        - Send text, images, voice messages.
-        - Send and receive stickers
-        - Pat each other (a form of virtual affection).
-        - Post on a social feed called "Moments".
-        - Engage in voice and video calls.
-        - Have distinct typing styles (e.g., use of emojis, punctuation, sentence length).
+        Characters express their personality through these features:
+        - Text, images, voice messages.
+        - Sending and receiving stickers.
+        - Patting each other (can be affectionate, condescending, or playful).
+        - Posting on a social feed called "Moments" (can be for attention, genuine sharing, or passive-aggression).
+        - Voice and video calls.
+        - Distinct typing styles (e.g., use of emojis, punctuation, sentence length, slang, or even curse words).
 
         # World Context & Setting
         ${worldBookPrompt}
@@ -1335,6 +1353,11 @@ export async function generateNewCharacterPersona(options) {
         - User-Defined Relationships: ${userRelationsPrompt}
         ${recommendationPrompt}
 
+        # CRITICAL CREATION PHILOSOPHY
+        1.  **Embrace Flaws and Conflict**: Perfection is boring. Every character you create MUST have significant flaws, biases, or 'bad habits'. They should have strong, controversial opinions. Think about what makes them difficult to get along with. Their personality should have the potential to create friction or conflict with existing group members.
+        2.  **Create Moral Ambiguity**: Avoid creating one-dimensional 'saints' or 'villains'. A kind character might have a manipulative streak. A grumpy, abrasive character might be fiercely loyal to the few people they trust. Give them depth.
+        3.  **Show, Don't Just Tell**: A character's personality MUST be reflected in their "appUsageHabits". If a character is described as 'hot-tempered and impatient', their typing style should reflect that (e.g., 'uses aggressive punctuation like '!!!', sends short, blunt messages, might use curse words'). If they are 'passive-aggressive', they might often use trailing dots '...' or make sarcastic posts on their "Moments" feed.
+
         # Your Task (Three Parts)
 
         ## Part 1: Create the Character Persona
@@ -1345,7 +1368,14 @@ export async function generateNewCharacterPersona(options) {
         3.  Generate a new name that fits the group's cultural context. 
         4.  The character's persona MUST be detailed, including their personality traits, interests, quirks, and any relevant background information.
         5.  The character's persona must be in Chinese.
-
+        6.  **Nickname Realism is Crucial**: The nickname (\`name\`) is an online handle, not just a shortened real name. It MUST reflect the character's persona, age, and internet savviness.
+            * **For younger, creative, or chronically online characters**: The nickname should RARELY be related to their real name. Instead, create a nickname based on hobbies, inside jokes, puns/homophones (\`谐音梗\`), a favorite character, an abstract concept, or something edgy/cool.
+            * **For older characters, professionals, or those less familiar with the internet**: It is more appropriate to use a part of their real name, their full name, or a professional title (e.g., 'Professor Wang').
+            * **You MUST choose a style that fits the character you are creating.** Do not default to using part of the real name unless the character's persona justifies it.
+        7.  **性格必须受到星座的启发 (Personality Inspired by Astrology)**: 当你决定角色的生日时，其对应的星座应该成为其性格的核心灵感来源。
+            * **避免刻板印象**: 你【不必】创造一个100%符合星座描述的模板人物。现实中的人远比星座复杂。你可以利用星座的核心特质作为基础，然后添加独特的、甚至是与之“矛盾”的元素来增加深度。
+            * **制造内在矛盾**: 一个“矛盾”的星座性格往往更加真实和有趣。例如，一个表面自信张扬的狮子座，其行为的内在动机可能恰恰是为了掩盖深深的不安感；一个本该随性自由的射手座，却可能在某个特定领域（比如感情或工作上）有着惊人的执着和占有欲。请你主动去设计这种复杂性。
+            
         ## Part 2: Generate Outgoing Relationships (New Character -> Existing Members)
         Determine the new character's initial relationship type and favorability score towards **all** existing members.
         - For relationships **already defined by the user**, you must respect that definition. Your only job is to assign a logical favorability score (from -1000 to 1000) and provide a reason.
@@ -1359,15 +1389,20 @@ export async function generateNewCharacterPersona(options) {
         **CRITICAL RULE: Inside the JSON string values (like "persona" or "reason"), you MUST NOT use double quotes ("). Use single quotes ('') or Chinese quotes (「」) instead to avoid parsing errors.**
 
         {
-          "name": "新角色的昵称",
+          "name": "新角色的昵称 (注意：必须遵循'Nickname Realism'规则，不要无故使用真名的一部分)",
           "realName": "新角色的真实姓名",
           "gender": "male | female | unspecified",
+          "birthday": "新角色的生日 (必须选择一个合适的日期，使其星座能够支撑你为TA设定的核心性格)",
           "persona": {
-                "corePersonality": "详细的核心性格、背景故事、动机和价值观。这是角色的灵魂。",
-                "appearance": "角色的外貌描述。这对于视频通话功能的沉浸感很重要。",
+                "corePersonality": "详细的核心性格。必须包括角色的优点、致命缺陷 (fatal flaw)、秘密欲望、世界观和 pet peeves (特别讨厌的东西)。角色的背景故事应该能解释这些特质的由来。",
+                "coreDrive": "描述角色的核心驱动力。这是TA所有行为背后最根本的欲望。例如：'寻求他人的认可'，'掌控一切以获得安全感'，'逃避过去的创伤'。",
+                "theLieTheyBelieve": "描述角色内心深处信奉的一个关于自己或世界的‘谎言’。这个谎言是TA大部分缺点和冲突的根源。例如：'我必须永远扮演小丑，否则没人会喜欢我'，'真正的亲密关系是不存在的'。",
+                "relationshipPattern": "描述角色建立和维持人际关系的典型模式。例如：'慢热且多疑，需要很长时间才能真正信任他人'，'习惯于在关系中扮演照顾者的角色来获取价值感'，'享受暧昧和调情，但对确立稳定关系感到恐惧'。",
+                "appearance": "角色的外貌描述。外貌应该能反映其内在性格。",
                 "appUsageHabits": {
-                "typingStyle": "描述角色的打字习惯。例如：'喜欢用很多颜文字，说话结尾总是带着波浪号～', '消息简洁，很少用标点符号'。",
-                "featurePreference": "描述角色对App内特定功能的使用偏好。例如：'热衷于发动态分享生活，但几乎从不使用语音通话功能。', '是点赞狂魔，但很少评论。'"
+                "socialMask": "描述角色的社交面具。即TA在多数人面前展现的、用于保护真实内心的人格。例如：'用高冷和毒舌来掩饰自己的不善交际'，'总是扮演一个乐于助人的老好人，因为害怕被拒绝'。",
+                "communicationStyle": "描述角色的沟通模式。包括：打字习惯 (例如：'说话直来直去，偶尔会爆粗口来强调观点，讨厌用表情符号，觉得很虚伪。', '喜欢使用嘲讽性质的表情包，经常使用反问和省略号来表达不满。', '打字非常考究，使用完整的标点和语法，给人一种距离感。', '使用空格代替大部分标点符号'), 口头禅, 说话的节奏, 是否喜欢用比喻/反讽/双关语, 在对话中是主导者还是倾听者。这直接决定了角色的魅力。",
+                "featurePreference": "描述角色对App内特定功能的使用偏好，这必须与其性格挂钩。例如：'从不在社交动态上发自己的事，但热衷于在别人的评论区发表尖锐评论。', '痴迷于给别人发红包来观察反应，以此获得控制感。'"
                 }
         },
           "relationships": [
@@ -1397,16 +1432,33 @@ export async function generateNewCharacterPersona(options) {
                         const habits = p.appUsageHabits;
 
                         const formattedPersona = `
+--- A: 内在锚点 (Anchor) ---
+[核心驱动力]
+${p.coreDrive || '未定义'}
+
+[信奉的谎言]
+${p.theLieTheyBelieve || '未定义'}
+
+[关系模式]
+${p.relationshipPattern || '未定义'}
+
+--- B: 外在行为 (Behavior) ---
 [核心性格]
-${p.corePersonality}
+${p.corePersonality || '未定义'}
+
+[社交面具]
+${habits.socialMask || '未定义'}
 
 [外貌]
-${p.appearance}
+${p.appearance || '未定义'}
 
-[应用使用习惯]
-- 打字风格: ${habits.typingStyle}
-- 功能偏好: ${habits.featurePreference}
-        `.trim().replace(/^ +/gm, ''); // 移除前导空格
+--- C: 应用使用习惯 (Connection & Habits) ---
+[沟通风格]
+${habits.communicationStyle || '未定义'}
+
+[功能偏好]
+${habits.featurePreference || '未定义'}
+`.trim().replace(/^ +/gm, ''); // 移除前导空格
 
                         // 用格式化后的单一字符串替换掉原来的对象
                         newCharData.persona = formattedPersona;

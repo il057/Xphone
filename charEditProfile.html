@@ -199,6 +199,14 @@
         .quoted-sender {
             font-weight: 600;
         }
+
+       .form-input[type="date"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 100% !important;
+            min-width: 0 !important;
+        }
     </style>
 </head>
 <body>
@@ -232,7 +240,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700">生日</label>
-                        <input id="birthday-input" type="date" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2">
+                        <input id="birthday-input" type="date" class="form-input mt-1 block w-full rounded-md border-gray-300 p-2 h-10">
                         <p class="text-xs text-gray-500 mt-1">必须选择完整的年月日，用于计算年龄和星座。</p>
                     </div>
                     <div>

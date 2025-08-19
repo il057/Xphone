@@ -1459,7 +1459,8 @@ async function setupEventListeners() {
                                                 charId: msg.senderId,
                                                 relationship: msg.newCharInfo.relationship_with_recommender
                                         }],
-                                        recommendationContext: msg.content
+                                        recommendationContext: msg.content,
+                                        recommenderId: msg.senderId
                                 };
 
                                 // 3. 直接调用AI生成函数
@@ -1471,7 +1472,7 @@ async function setupEventListeners() {
 
                                 // 4. 创建新角色并保存到数据库
                                 const newCharacter = {
-                                        id: crypto.randomUUID(),
+                                        id: (crypto.randomUUID ? crypto.randomUUID() : `fallback-${Date.now()}-${Math.random().toString(16).substr(2, 8)}`),
                                         name: newCharData.name,
                                         realName: newCharData.realName,
                                         gender: newCharData.gender,

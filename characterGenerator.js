@@ -15,8 +15,19 @@ export async function showCharacterGeneratorModal(prefilledData = {}) {
                 const modal = document.createElement('div');
                 modal.id = modalId;
                 modal.className = 'modal visible';
-                // 将关系设定改为 <details> 手风琴，并新增生日输入框
                 modal.innerHTML = `
+        <style>
+            #${modalId} #gen-birthday-input {
+                /* 强制重置外观，让宽度计算更可控 */
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                appearance: none;
+                
+                /* 核心修复：强制宽度为100%，并覆盖所有其他最小宽度限制 */
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+        </style>
         <div class="modal-content bg-white rounded-lg w-full max-w-md max-h-[90vh] flex flex-col">
             <header class="p-4 border-b text-center">
                 <h3 class="font-semibold text-lg">查找可能认识的人</h3>
@@ -42,7 +53,7 @@ export async function showCharacterGeneratorModal(prefilledData = {}) {
                 
                 <div>
                     <label for="gen-birthday-input" class="block text-sm font-medium text-gray-700">生日 (可选)</label>
-                    <input type="date" id="gen-birthday-input" class="form-input w-full mt-1 p-2 border rounded-md">
+                    <input type="date" id="gen-birthday-input" class="form-input w-full mt-1 p-2 h-10 border rounded-md">
                 </div>
 
                 <div>
@@ -164,7 +175,7 @@ export async function showCharacterGeneratorModal(prefilledData = {}) {
                         if (!newCharData) throw new Error("AI未能生成有效的角色数据。");
 
                         const newCharacter = {
-                                id: crypto.randomUUID(),
+                                id: (crypto.randomUUID ? crypto.randomUUID() : `fallback-${Date.now()}-${Math.random().toString(16).substr(2, 8)}`),
                                 name: newCharData.name,
                                 realName: newCharData.realName,
                                 gender: newCharData.gender,

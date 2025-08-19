@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const charId = isNew ? null : urlParams.get('id'); // Only get charId if not new
     const prefilledName = urlParams.get('name') || '';
     let chatData;
+    let personaHasChanged = false;
     let customPresets = []; // 用于存储从数据库加载的自定义预设
     let customCssPresets = [];
     const defaultAvatar = 'https://files.catbox.moe/kkll8p.svg';
@@ -69,6 +70,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         { name: '黑白', value: 'black_white', colors: { userBg: '#343a40', userText: '#f8f9fa', aiBg: '#f8f9fa', aiText: '#343a40' } },
     ];
     
+        if (personaInput) {
+                // 使用 { once: true } 确保事件只触发一次，一旦检测到修改就将标志位设为 true
+                personaInput.addEventListener('input', () => {
+                        personaHasChanged = true;
+                }, { once: true });
+        }
     // --- Functions ---
 
     async function initializeNewCharacter() {
@@ -607,7 +614,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function saveChanges() {
         saveBtn.textContent = '保存中...';
         saveBtn.disabled = true;
+
+        let newPersonaAbstract = chatData?.personaAbstract;
         
+        // 只有在人设文本框被修改过后，才执行这里的逻辑
+        if (personaHasChanged) {
+                const confirmed = await showConfirmModal(
+                        '更新人设摘要',
+                        '检测到人设已被修改，是否需要重新生成AI摘要？\n(这可能需要一些时间)',
+                        '是，重新生成',
+                        '否，暂时不用'
+                );
+
+                if (confirmed) {
+                        showToast('正在生成新的人设摘要...', 'info');
+                        const currentPersonaText = document.getElementById('persona-input').value.trim();
+                        newPersonaAbstract = await generateAbstractFromPersonaText(currentPersonaText);
+                        showToast('摘要已更新！', 'success');
+                }
+        }
+
         const activeSwatch = themeSwatchesContainer.querySelector('.active');
         let themeSetting;
         if (activeSwatch) {
@@ -679,6 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ...sharedSettings,
                     aiPersona: personaInput.value.trim(),
                 },
+                personaAbstract: newPersonaAbstract,
                 id: finalCharId,
                 history: [], 
                 isGroup: 0,
@@ -722,7 +749,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ...(chatData.settings || {}),
                         ...sharedSettings,
                         aiPersona: personaInput.value.trim(),
-                    }
+                    },
+                    personaAbstract: newPersonaAbstract
                 };
                 await db.chats.put(updatedData);
                 showToastOnNextPage('保存成功！', 'success');

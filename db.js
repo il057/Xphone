@@ -450,8 +450,14 @@ export async function callApi(systemPrompt, messagesPayload = [], generationConf
                 const textMessages = messagesPayload
                         .filter(msg => typeof msg.content === 'string')
                         .map(msg => ({ role: msg.role, content: msg.content }));
-                const messages = [{ role: 'system', content: systemPrompt }, ...textMessages];
-
+                let messages;
+                if (textMessages.length === 0) {
+                        // 如果没有历史消息，一些模型/代理需要将系统指令作为用户消息发送
+                        messages = [{ role: 'user', content: systemPrompt }];
+                } else {
+                        messages = [{ role: 'system', content: systemPrompt }, ...textMessages];
+                }
+                
                 response = await fetch(defaultUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
