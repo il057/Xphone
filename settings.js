@@ -320,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!confirmed) return;
                 try {
                         const backupData = {
-                                version: 37, // 确保导出版本与当前数据库版本一致
+                                version: 38, // 确保导出版本与当前数据库版本一致
                                 timestamp: Date.now()
                         };
 
@@ -508,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
          */
         async function packAllData() {
                 const backupData = {
-                        version: 37, // 确保导出版本与当前数据库版本一致
+                        version: 38, // 确保导出版本与当前数据库版本一致
                         timestamp: Date.now()
                 };
                 const tableNames = db.tables.map(t => t.name);
