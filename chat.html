@@ -271,7 +271,7 @@
             
             // Add Friend Logic
             document.getElementById('add-friend-btn').addEventListener('click', async () => {
-                const charName = await promptForInput("请输入您想添加的好友名字：", "例如：小明、小红", false, false);
+                const charName = await promptForInput("请输入您想添加的好友名字：", "例如：小明、小红", false, false, '');
                 if(charName && charName.trim() !== '') {
                     // This is a simplified flow. A real app would save this name and pass it
                     // as a default value to the edit page.

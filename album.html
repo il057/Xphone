@@ -148,7 +148,7 @@
         
         async function processAndSavePhoto(url) {
             // 第四个参数 true 表示这个输入是可选的
-            const description = await promptForInput('图片描述 (可选)', '给图片起个名字或描述，留空则AI无法使用', true, true);
+            const description = await promptForInput('图片描述 (可选)', '给图片起个名字或描述，留空则AI无法使用', true, true, '');
             if (description === null) return;
 
             await db.globalAlbum.add({ url: url.trim(), description: description.trim() });

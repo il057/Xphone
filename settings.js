@@ -421,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         * 处理添加新方案
         */
         async function handleAddNewProfile() {
-                const profileName = await promptForInput("请输入新方案的名称:", `方案 ${state.allProfiles.length + 1}`, false, false);
+                const profileName = await promptForInput("请输入新方案的名称:", `方案 ${state.allProfiles.length + 1}`, false, false, `方案 ${state.allProfiles.length + 1}`);
                 if (!profileName || !profileName.trim()) return;
 
                 const newProfile = {
@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         async function handleAddNewTtsProfile() {
-                const profileName = await promptForInput("请输入新 TTS 方案的名称:", `ElevenLabs 方案 ${state.allTtsProfiles.length + 1}`, false, false);
+                const profileName = await promptForInput("请输入新 TTS 方案的名称:", `ElevenLabs 方案 ${state.allTtsProfiles.length + 1}`, false, false, `ElevenLabs 方案 ${state.allTtsProfiles.length + 1}`);
                 if (!profileName || !profileName.trim()) return;
 
                 const newProfile = {

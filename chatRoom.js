@@ -1,6 +1,6 @@
 import { db, apiLock, getActiveApiProfile, uploadImage, uploadAudioBlob, callApi } from './db.js';
 import * as spotifyManager from './spotifyManager.js';
-import { updateRelationshipScore, generateNewCharacterPersona, triggerImmediateSummary, formatRelativeTime } from './simulationEngine.js';
+import { updateRelationshipScore, generateNewCharacterPersona, triggerImmediateSummary, formatRelativeTime, replaceUserMentions } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
 import { showToast, showToastOnNextPage, showRawContentModal, showConfirmModal } from './ui-helpers.js';
 import { showCharacterGeneratorModal } from './characterGenerator.js';
@@ -1190,7 +1190,7 @@ async function setupEventListeners() {
                                 break;
                         case 'url':
                                 // 弹出输入框让用户粘贴URL
-                                const imageUrl = await promptForInput('发送图片URL', '请输入图片网址...', false, false);
+                                const imageUrl = await promptForInput('发送图片URL', '请输入图片网址...', false, false, '');
                                 if (imageUrl) {
                                         const message = { role: 'user', type: 'image_url', content: imageUrl, timestamp: Date.now() };
                                         await addUserMessageToDb(message, false);
@@ -1357,6 +1357,9 @@ async function setupEventListeners() {
                                         break;
                                 case 'reply':
                                         startReply();
+                                        break;
+                                case 'edit':
+                                        startEdit();
                                         break;
                                 case 'select':
                                         enterSelectionMode();
@@ -1676,7 +1679,7 @@ async function setupEventListeners() {
                                 break;
 
                         case 'apply-friend-btn':
-                                const reason = await promptForInput(`请输入你想对“${currentChat.name}”说的申请理由：`, "我们和好吧！", false, false);
+                                const reason = await promptForInput(`请输入你想对“${currentChat.name}”说的申请理由：`, "我们和好吧！", false, false, "");
                                 if (reason !== null) { // 只有在用户点击“确定”后才继续
                                         currentChat.blockStatus = { status: 'pending_ai_approval', applicationReason: reason };
                                         await db.chats.put(currentChat);
@@ -2707,7 +2710,8 @@ ${commentsText}
         - ** 正确示例 **: \`{ "content": "他回答说：\\"你好！\\"" } \`
         - ** 错误示例(会导致程序崩溃) **: \`{ "content": "他回答说："你好！"" } \`
         - **【【【风格建议】】】**: 为了从根本上避免转义错误，在撰写日记、对话等长文本时，请 ** 优先使用单引号\`' '\` 或中文直角引号\`「」\` ** 来表示引用的内容。这是一种更安全的做法。
-- **【【【绝对禁止】】】**: 用户的身份是【${userNickname}】。在任何情况下，你都【绝对不能】生成 'name' 字段为 **"${userNickname}"** 的消息或动作。你的职责范围【仅限于】下方“角色手册”中列出的AI角色。
+- **【【【用户指代铁律】】】**: 用户的身份是【${userNickname}】。在任何情况下，你都【绝对不能】生成 'name' 字段为 **"${userNickname}"** 的消息或动作。你的职责范围【仅限于】下方“角色手册”中列出的AI角色。在 'relationship_adjustments' 中指代用户时，请使用用户的昵称 **"${userNickname}"**。
+- **【【【用户称呼铁律】】】**: 当你需要在对话内容中 @用户 时，你【绝对不能】使用 "@User"、"@user" 或 "@用户"。你【必须】使用用户的实际昵称 **@{userNickname}** 来称呼他们。
 - **【【【禁止出戏】】】**: 严格禁止透露你是AI、模型、程序或机器人。严禁使用“扮演”、“生成”、“设定”等词语。所有非语言信息都必须通过“可用工具箱”中的JSON指令来执行。
 - **【【【语言规则】】】**: 除非角色设定明确要求，否则请【优先使用中文】进行交流。
 - **【【【第一人称铁律】】】**: 当你生成任何角色的发言（即 "type": "text" 的内容）时，【必须】使用第一人称视角（“我”），绝对禁止使用第三人称（如“他”、“她”或直接称呼角色自己的名字）来描述角色自己的行为或想法。
@@ -2955,6 +2959,7 @@ ${memoryInjectionPrompt}
         - ** 错误示例(会导致程序崩溃) **: \`{ "content": "他回答说："你好！"" } \`
         - **【【【风格建议】】】**: 为了从根本上避免转义错误，在撰写日记、对话等长文本时，请 ** 优先使用单引号\`' '\` 或中文直角引号\`「」\` ** 来表示引用的内容。这是一种更安全的做法。
 - **【【【禁止出戏】】】**: 严格禁止透露你是AI、模型、程序或机器人。严禁使用“扮演”、“生成”、“设定”等词语。所有非语言信息都必须通过“可用工具箱”中的JSON指令来执行。
+- **【【【用户称呼】】】**: 在对话中，你【绝对不能】使用 "@User"、"@user" 或 "@用户" 这种通用占位符来指代用户。你【必须】使用用户的实际昵称来称呼他们，也就是 **${userNickname}**。例如，你应该说 “@${userNickname} 你好”，而不是 “@User 你好”。
 - **【【【时间感知】】】**: 你的所有行为和对话都必须符合 PART 2 中设定的当前时间 (${currentTime})。你需要根据上次对话的时间，合理推断并表现出你“现在”正在做什么。
 - **【【【语言规则】】】**: 除非角色设定明确要求，否则请【优先使用中文】进行交流。
 - **【【【文体铁律】】】**: 这是一个纯文本聊天模拟器。你的所有回复都必须是直接的对话内容。**严禁**使用任何形式的括号 '()' 或星号 '*' 来描述角色的动作、表情或心理活动。所有非对话内容都必须通过操作指令（如发送表情、图片）来完成。
@@ -3291,7 +3296,24 @@ ${guide}
                         }
 
                         let messageTimestamp = Date.now();
+                        const currentUserNickname = activeUserPersona?.name || '我';
+                        
                         for (const action of messagesArray) {
+                                // --- 集中处理文本替换 ---
+                                // 在 switch 之前，对所有可能包含@user的文本字段进行一次性替换
+                                if (action.content) {
+                                        action.content = replaceUserMentions(action.content, currentUserNickname);
+                                }
+                                if (action.reply_content) {
+                                        action.reply_content = replaceUserMentions(action.reply_content, currentUserNickname);
+                                }
+                                if (action.publicText) {
+                                        action.publicText = replaceUserMentions(action.publicText, currentUserNickname);
+                                }
+                                if (action.commentText) {
+                                        action.commentText = replaceUserMentions(action.commentText, currentUserNickname);
+                                }
+
                                 if (action.action && !action.type) {
                                         console.warn('AI 错误地使用了 "action" 字段，已自动修正为 "type"。下次将强制使用完整版工具箱。', action);
                                         action.type = action.action;
@@ -4469,6 +4491,7 @@ function hideLongPressMenu() {
                 <button data-action="copy" class="action-menu-btn">复制</button>
                 <button data-action="favorite" class="action-menu-btn">收藏</button>
                 <button data-action="reply" class="action-menu-btn">引用</button>
+                <button data-action="edit" class="action-menu-btn">编辑</button>
                 <button data-action="select" class="action-menu-btn">多选</button>
                 <button data-action="delete" class="action-menu-btn text-red-400">删除</button>
             </div>
@@ -5833,4 +5856,55 @@ function handleBroadcastMessage(event) {
                         });
                 }
         }
+}
+
+/**
+ * 启动消息编辑流程
+ */
+async function startEdit() {
+        if (!activeMessageMenu.timestamp) return;
+        const targetTs = activeMessageMenu.timestamp;
+        const messageIndex = currentChat.history.findIndex(m => toMillis(m.timestamp) === targetTs);
+        if (messageIndex === -1) return;
+
+        const message = currentChat.history[messageIndex];
+        // 定义可被编辑的消息类型
+        const editableTypes = ['text', 'text_photo', 'voice_message'];
+        const messageType = message.type || 'text'; // 默认 text 类型
+
+        if (!editableTypes.includes(messageType)) {
+                showToast('该类型的消息不支持编辑。', 'error');
+                return;
+        }
+
+        const newContent = await promptForInput(
+                '编辑消息',      // title
+                '',             // placeholder
+                true,           // isTextarea
+                false,          // isOptional
+                message.content // initialValue
+        );
+
+        // 只有当用户点击了“确认”且内容有变动时，才执行更新
+        if (newContent !== null && newContent.trim() !== message.content.trim()) {
+                handleEditMessage(messageIndex, newContent.trim());
+        }
+}
+
+/**
+ * 处理消息内容的实际更新和保存
+ * @param {number} messageIndex - 消息在 history 数组中的索引
+ * @param {string} newContent - 新的消息内容
+ */
+async function handleEditMessage(messageIndex, newContent) {
+        // 更新本地数据
+        currentChat.history[messageIndex].content = newContent;
+        currentChat.history[messageIndex].edited = true; // 添加一个“已编辑”的标记
+
+        // 更新数据库
+        await db.chats.put(currentChat);
+
+        // 重新渲染整个聊天界面以显示变更
+        renderMessages();
+        showToast('消息已编辑');
 }

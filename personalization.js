@@ -508,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const config = presetConfig[type];
                 const presets = state[type + 'WallpaperPresets'];
                 // Dynamic prompt text
-                const newPresetName = await promptForInput(`为你的新${type === 'topology' ? '拓扑' : '渐变'}方案命名：`, "我的方案", false, false);
+                const newPresetName = await promptForInput(`为你的新${type === 'topology' ? '拓扑' : '渐变'}方案命名：`, "我的方案", false, false, '');
 
                 if (newPresetName && newPresetName.trim()) {
                         presets.push({

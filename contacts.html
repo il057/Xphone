@@ -245,7 +245,7 @@
                 addBtn.classList.toggle('active', !addMenu.classList.contains('hidden'));
             });
             document.getElementById('add-friend-btn').addEventListener('click', async () => {
-                const charName = await promptForInput("请输入您想添加的好友名字：", "例如：小明、小红", false, false);
+                const charName = await promptForInput("请输入您想添加的好友名字：", "例如：小明、小红", false, false, '');
                 if(charName && charName.trim() !== '') {
                     window.location.href = `charEditProfile.html?isNew=true&name=${encodeURIComponent(charName)}`;
                 }
@@ -325,7 +325,7 @@
                  * 处理新建分组的逻辑
                  */
                 async function handleCreateGroup() {
-                        const newGroupName = await promptForInput("请输入新的分组名：", "例如：我的新分组", false, false);
+                        const newGroupName = await promptForInput("请输入新的分组名：", "例如：我的新分组", false, false, '');
                         if (!newGroupName || !newGroupName.trim()) return;
 
                         try {

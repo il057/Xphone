@@ -174,7 +174,7 @@
                 showToast("请至少选择一个好友来创建群聊。", 'error');
                 return;
             }
-            const groupName = await promptForInput("请输入群聊名称：", "群聊", false, false);
+            const groupName = await promptForInput("请输入群聊名称：", "群聊", false, false, '');
             if (!groupName || !groupName.trim()) return;
 
             const memberIds = Array.from(selectedContacts);

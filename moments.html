@@ -248,10 +248,19 @@
             </div>
         </div>
     </div>
+        <div id="comment-editor-modal" class="modal hidden items-center justify-center z-50">
+                <div class="modal-content bg-white rounded-lg w-full max-w-md max-h-[80vh] flex flex-col">
+                        <header class="p-4 border-b font-semibold text-center">编辑评论</header>
+                        <main id="comment-editor-list" class="flex-grow p-4 space-y-3 overflow-y-auto"></main>
+                        <footer class="p-2 border-t">
+                                <button id="close-comment-editor-btn" class="modal-btn modal-btn-cancel w-full">关闭</button>
+                        </footer>
+                </div>
+        </div>
     
 <script type="module">
     import { db } from './db.js';
-    import { showToast, showConfirmModal } from './ui-helpers.js';
+    import { showToast, showConfirmModal, promptForInput } from './ui-helpers.js';
 
     // 固定ID，用于区分“当前用户”，而不是依赖易变的昵称
     const CURRENT_USER_ID = 'user';
@@ -273,6 +282,7 @@
     let displayPersona = null; // 用于存储当前用户的活动人格
     let themeColor = '#3b82f6';
     let currentPostPayload = {}; // 用于创建动态时的临时数据
+    let editingPostId = null;
 
     function getCoverBackground(wallpaperValue) {
                 const fallbackGradient = 'linear-gradient(to top right, #a18cd1, #fbc2eb)';
@@ -354,6 +364,16 @@
                 
                 return commentHtml;
             }).join('');
+
+            const commentsMenuItems = postEl.querySelector('.comments-menu-items');
+                if (commentsMenuItems) {
+                        const hasComments = post.comments && post.comments.length > 0;
+                        if (hasComments) {
+                                commentsMenuItems.innerHTML = `<a href="#" class="manage-comments-btn dropdown-menu-item">编辑评论</a>`;
+                        } else {
+                                commentsMenuItems.innerHTML = '';
+                        }
+                }
         }
 
         const feedbackContainer = postEl.querySelector('.post-feedback');
@@ -564,7 +584,9 @@
                             <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg>
                         </button>
                         <div class="post-actions-menu dropdown-menu hidden">
-                            <a href="#" class="delete-post-btn dropdown-menu-item text-red-600">删除</a>
+                            <div class="comments-menu-items"></div> 
+                            <a href="#" class="edit-post-btn dropdown-menu-item">编辑动态</a>
+                            <a href="#" class="delete-post-btn dropdown-menu-item text-red-600">删除动态</a>
                         </div>
                     </div>
                 </div>
@@ -598,27 +620,35 @@
     }
 
     function openPostCreator(type) {
-        currentPostPayload = { type: type, visibleGroupIds: null, mentionIds: null };
-        const modalTitle = postModal.querySelector('#modal-title');
-        const publicTextarea = postModal.querySelector('#post-public-text');
-        const imageDescGroup = postModal.querySelector('#image-desc-group');
+        editingPostId = null; // 确保不在编辑模式
+            currentPostPayload = { type: type, visibleGroupIds: null, mentionIds: null };
+            const modalTitle = postModal.querySelector('#modal-title');
+            const publicTextarea = postModal.querySelector('#post-public-text');
+            const imageDescGroup = postModal.querySelector('#image-desc-group');
+            const confirmBtn = document.getElementById('confirm-create-post');
 
-        publicTextarea.value = '';
-        postModal.querySelector('#post-image-description').value = '';
+            // 重置输入框和按钮
+            publicTextarea.value = '';
+            postModal.querySelector('#post-image-description').value = '';
+            confirmBtn.textContent = '发布';
 
-        if(type === 'text') {
-            modalTitle.textContent = '写动态';
-            publicTextarea.placeholder = '分享新鲜事...';
-            imageDescGroup.classList.add('hidden');
-        } else {
-            modalTitle.textContent = '发照片';
-            publicTextarea.placeholder = '给图片配一段公开的文字 (可选)...';
-            imageDescGroup.classList.remove('hidden');
-        }
-        
-        document.getElementById('visibility-selector-text').textContent = '谁可以看 (默认公开)';
-        document.getElementById('mention-selector-text').textContent = '提醒谁看 (可选)';
-        postModal.classList.add('visible');
+            // 确保下拉框可见
+            document.getElementById('open-visibility-selector').closest('.custom-select-container').classList.remove('hidden');
+            document.getElementById('open-mention-selector').closest('.custom-select-container').classList.remove('hidden');
+
+            if (type === 'text') {
+                    modalTitle.textContent = '写动态';
+                    publicTextarea.placeholder = '分享新鲜事...';
+                    imageDescGroup.classList.add('hidden');
+            } else {
+                    modalTitle.textContent = '发照片';
+                    publicTextarea.placeholder = '给图片配一段公开的文字 (可选)...';
+                    imageDescGroup.classList.remove('hidden');
+            }
+
+            document.getElementById('visibility-selector-text').textContent = '谁可以看 (默认公开)';
+            document.getElementById('mention-selector-text').textContent = '提醒谁看 (可选)';
+            postModal.classList.add('visible');
     }
     
     addBtn.addEventListener('click', (e) => {
@@ -635,7 +665,51 @@
         }
     });
 
-    document.getElementById('cancel-create-post').addEventListener('click', () => postModal.classList.remove('visible'));
+        document.getElementById('cancel-create-post').addEventListener('click', () => {
+                postModal.classList.remove('visible');
+                editingPostId = null; // 重置编辑状态
+        });
+        document.getElementById('confirm-create-post').addEventListener('click', async () => {
+                        const publicText = postModal.querySelector('#post-public-text').value.trim();
+                        const imageDesc = postModal.querySelector('#post-image-description').value.trim();
+
+                        if (currentPostPayload.type === 'image' && !imageDesc) return showToast('图片描述不能为空！', 'error');
+                        if (currentPostPayload.type === 'text' && !publicText) return showToast('动态内容不能为空！', 'error');
+
+                        try {
+                                if (editingPostId) {
+                                        // 更新模式
+                                        const postData = {
+                                                publicText: publicText,
+                                                imageDescription: currentPostPayload.type === 'image' ? imageDesc : '',
+                                        };
+                                        await db.xzonePosts.update(editingPostId, postData);
+                                        showToast('动态更新成功！');
+                                } else {
+                                        // 创建模式
+                                        const newPostData = {
+                                                authorId: CURRENT_USER_ID,
+                                                timestamp: Date.now(),
+                                                likes: [],
+                                                comments: [],
+                                                type: currentPostPayload.type === 'text' ? 'text_post' : 'image_post',
+                                                publicText: publicText,
+                                                imageDescription: currentPostPayload.type === 'image' ? imageDesc : '',
+                                                visibleGroupIds: currentPostPayload.visibleGroupIds || null,
+                                                mentionIds: currentPostPayload.mentionIds || null,
+                                        };
+                                        await db.xzonePosts.add(newPostData);
+                                }
+                        } catch (error) {
+                                console.error("保存动态失败:", error);
+                                showToast("操作失败，请查看控制台。", "error");
+                        } finally {
+                                // 清理并刷新
+                                postModal.classList.remove('visible');
+                                editingPostId = null;
+                                await renderPosts();
+                        }
+                });
 
     const visibilitySelectorButton = document.getElementById('open-visibility-selector');
     const visibilitySelectorDropdown = document.getElementById('visibility-selector-dropdown');
@@ -676,51 +750,7 @@
         document.getElementById('mention-selector-text').textContent = selectedIds.length > 0 ? `已提醒 ${selectedIds.length} 人` : '提醒谁看 (可选)';
     });
 
-    document.getElementById('confirm-create-post').addEventListener('click', async () => {
-        const publicText = postModal.querySelector('#post-public-text').value.trim();
-        const imageDesc = postModal.querySelector('#post-image-description').value.trim();
 
-        if (currentPostPayload.type === 'image' && !imageDesc) return showToast('图片描述不能为空！', 'error');
-        if (currentPostPayload.type === 'text' && !publicText) return showToast('动态内容不能为空！', 'error');
-
-        const newPostData = {
-            authorId: CURRENT_USER_ID,
-            timestamp: Date.now(),
-            likes: [],
-            comments: [],
-            type: currentPostPayload.type === 'text' ? 'text_post' : 'image_post',
-            publicText: publicText,
-            imageDescription: currentPostPayload.type === 'image' ? imageDesc : '',
-            visibleGroupIds: currentPostPayload.visibleGroupIds || null,
-            mentionIds: currentPostPayload.mentionIds || null,
-        };
-
-        // 1. 添加动态并获取新帖子的ID
-        const newPostId = await db.xzonePosts.add(newPostData);
-
-        // 2. 如果有@提及，则发送隐藏的系统提示
-        if (newPostData.mentionIds && newPostData.mentionIds.length > 0) {
-            const mentionedIds = newPostData.mentionIds;
-            const userDisplayName = getDisplayName('user'); // 获取当前用户的显示名
-
-            for (const charId of mentionedIds) {
-                const chat = await db.chats.get(charId);
-                if (chat) {
-                    const systemMessage = {
-                        role: 'system',
-                        type: 'user_post_mention', // 定义一个新的消息类型
-                        content: `[系统提示：用户 ${userDisplayName} 在一条新动态中 @提到了你。请你查看并决定是否需要回应。动态ID: ${newPostId}]`,
-                        timestamp: new Date(Date.now() + 1), // 确保时间戳在后
-                        isHidden: true // 这条消息对用户不可见
-                    };
-                    chat.history.push(systemMessage);
-                    await db.chats.put(chat);
-                }
-            }
-        }
-        postModal.classList.remove('visible');
-        await renderPosts();
-    });
 
     feedContainer.addEventListener('click', async (e) => {
         const target = e.target;
@@ -752,6 +782,22 @@
                 postEl.remove();
             }
             return;
+        }
+        if (target.closest('.edit-post-btn')) {
+                    e.preventDefault();
+                    const post = await db.xzonePosts.get(postId);
+                    if (post) {
+                            openPostEditor(post);
+                    }
+                    return;
+            }
+        if (target.closest('.manage-comments-btn')) {
+                e.preventDefault();
+                const post = await db.xzonePosts.get(postId);
+                if (post) {
+                        openCommentEditor(post);
+                }
+                return;
         }
 
         if (target.closest('.action-icon')) {
@@ -926,6 +972,185 @@
                     notificationChannel.close();
             });
     });
+
+        /**
+         * 打开动态编辑器，并用现有动态数据填充。
+         * @param {object} post - 要编辑的动态对象。
+         */
+        function openPostEditor(post) {
+                editingPostId = post.id; // 标记我们正在编辑
+                currentPostPayload = {
+                        type: post.type === 'image_post' ? 'image' : 'text',
+                        visibleGroupIds: post.visibleGroupIds || null,
+                        mentionIds: post.mentionIds || null,
+                };
+
+                const modalTitle = postModal.querySelector('#modal-title');
+                const publicTextarea = postModal.querySelector('#post-public-text');
+                const imageDescGroup = postModal.querySelector('#image-desc-group');
+                const imageDescTextarea = postModal.querySelector('#post-image-description');
+                const confirmBtn = document.getElementById('confirm-create-post');
+
+                document.getElementById('open-visibility-selector').closest('.custom-select-container').classList.add('hidden');
+                document.getElementById('open-mention-selector').closest('.custom-select-container').classList.add('hidden');
+
+                // 根据动态类型设置标题和占位符
+                if (currentPostPayload.type === 'image') {
+                        modalTitle.textContent = '编辑照片动态';
+                        publicTextarea.placeholder = '给图片配一段公开的文字 (可选)...';
+                        imageDescGroup.classList.remove('hidden');
+                        imageDescTextarea.value = post.imageDescription || '';
+                } else {
+                        modalTitle.textContent = '编辑文字动态';
+                        publicTextarea.placeholder = '分享新鲜事...';
+                        imageDescGroup.classList.add('hidden');
+                }
+
+                publicTextarea.value = post.publicText || '';
+                confirmBtn.textContent = '保存更改'; // 更改按钮文字
+                postModal.classList.add('visible');
+        }
+
+        /**
+         * 统一处理动态的创建和更新。
+         */
+        async function handleConfirmPost() {
+                const publicText = postModal.querySelector('#post-public-text').value.trim();
+                const imageDesc = postModal.querySelector('#post-image-description').value.trim();
+
+                // 验证输入
+                if (currentPostPayload.type === 'image' && !imageDesc) return showToast('图片描述不能为空！', 'error');
+                if (currentPostPayload.type === 'text' && !publicText) return showToast('动态内容不能为空！', 'error');
+
+                const postData = {
+                        type: currentPostPayload.type === 'text' ? 'text_post' : 'image_post',
+                        publicText: publicText,
+                        imageDescription: currentPostPayload.type === 'image' ? imageDesc : '',
+                        visibleGroupIds: currentPostPayload.visibleGroupIds || null,
+                        mentionIds: currentPostPayload.mentionIds || null,
+                };
+
+                try {
+                        if (editingPostId) {
+                                // 更新模式
+                                await db.xzonePosts.update(editingPostId, postData);
+                                showToast('动态更新成功！');
+                        } else {
+                                // 创建模式
+                                const newPostData = {
+                                        ...postData,
+                                        authorId: CURRENT_USER_ID,
+                                        timestamp: Date.now(),
+                                        likes: [],
+                                        comments: [],
+                                };
+                                const newPostId = await db.xzonePosts.add(newPostData);
+                                if (newPostData.mentionIds && newPostData.mentionIds.length > 0) {
+                                        const mentionedIds = newPostData.mentionIds;
+                                        const userDisplayName = getDisplayName('user'); // 获取当前用户的显示名
+
+                                        for (const charId of mentionedIds) {
+                                                const chat = await db.chats.get(charId);
+                                                if (chat) {
+                                                        const systemMessage = {
+                                                                role: 'system',
+                                                                type: 'user_post_mention', // 定义一个新的消息类型
+                                                                content: `[系统提示：用户 ${userDisplayName} 在一条新动态中 @提到了你。请你查看并决定是否需要回应。动态ID: ${newPostId}]`,
+                                                                timestamp: new Date(Date.now() + 1), // 确保时间戳在后
+                                                                isHidden: true // 这条消息对用户不可见
+                                                        };
+                                                        chat.history.push(systemMessage);
+                                                        await db.chats.put(chat);
+                                                }
+                                        }
+                                }
+                        }
+                } catch (error) {
+                        console.error("保存动态失败:", error);
+                        showToast("操作失败，请查看控制台。", "error");
+                } finally {
+                        // 清理并刷新
+                        postModal.classList.remove('visible');
+                        editingPostId = null;
+                        document.getElementById('confirm-create-post').textContent = '发布';
+                        await renderPosts();
+                }
+        }
+        /**
+             * 打开评论编辑器模态框并填充内容
+             * @param {object} post - 包含评论的动态对象
+             */
+        async function openCommentEditor(post) {
+                const modal = document.getElementById('comment-editor-modal');
+                const listEl = document.getElementById('comment-editor-list');
+                listEl.innerHTML = ''; // 清空旧内容
+
+                if (!post.comments || post.comments.length === 0) {
+                        listEl.innerHTML = '<p class="text-sm text-gray-500 text-center">没有评论可编辑。</p>';
+                } else {
+                        post.comments.forEach((comment, index) => {
+                                const authorName = getDisplayName(comment.author);
+                                const item = document.createElement('div');
+                                item.className = 'p-2 rounded-md bg-gray-50 flex items-start justify-between gap-2';
+                                item.innerHTML = `
+                    <div class="flex-grow">
+                        <p class="text-sm"><strong class="font-medium" style="color:var(--theme-color);">${authorName}:</strong> ${comment.text}</p>
+                    </div>
+                    <div class="flex-shrink-0 flex items-center gap-2">
+                        <button class="edit-comment-btn text-xs text-blue-500 hover:underline" data-post-id="${post.id}" data-comment-index="${index}">编辑</button>
+                        <button class="delete-comment-btn text-xs text-red-500 hover:underline" data-post-id="${post.id}" data-comment-index="${index}">删除</button>
+                    </div>
+                `;
+                                listEl.appendChild(item);
+                        });
+                }
+
+                modal.classList.add('visible');
+        }
+
+        // 为新的模态框和其内部按钮绑定事件监听
+        document.getElementById('close-comment-editor-btn').addEventListener('click', () => {
+                document.getElementById('comment-editor-modal').classList.remove('visible');
+        });
+
+        document.getElementById('comment-editor-list').addEventListener('click', async (e) => {
+                const postId = parseInt(e.target.dataset.postId);
+                const commentIndex = parseInt(e.target.dataset.commentIndex);
+
+                if (isNaN(postId) || isNaN(commentIndex)) return;
+
+                const post = await db.xzonePosts.get(postId);
+                if (!post) return;
+
+                const comment = post.comments[commentIndex];
+
+                if (e.target.classList.contains('edit-comment-btn')) {
+                        // 编辑评论
+                        const newText = await promptForInput('编辑评论', '请输入新的评论内容...', true, false, comment.text);
+                        if (newText !== null && newText.trim() !== '') {
+                                post.comments[commentIndex].text = newText.trim();
+                                await db.xzonePosts.update(postId, { comments: post.comments });
+                                showToast('评论已更新！');
+                                await openCommentEditor(post); // 刷新模态框内容
+                                await renderPosts(); // 刷新主列表
+                        }
+                } else if (e.target.classList.contains('delete-comment-btn')) {
+                        // 删除评论
+                        const confirmed = await showConfirmModal('确认删除', '确定要删除这条评论吗？', '确认删除', '取消');
+                        if (confirmed) {
+                                post.comments.splice(commentIndex, 1);
+                                await db.xzonePosts.update(postId, { comments: post.comments });
+                                showToast('评论已删除。');
+                                if (post.comments.length === 0) {
+                                        document.getElementById('comment-editor-modal').classList.remove('visible');
+                                } else {
+                                        await openCommentEditor(post); // 刷新模态框
+                                }
+                                await renderPosts(); // 刷新主列表
+                        }
+                }
+        });
+    
 
     </script>
 </body>

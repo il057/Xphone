@@ -425,7 +425,7 @@ async function triggerInactiveAiAction(charId) {
         const [personaPresets, globalSettings, stickers] = await Promise.all([
                 db.personaPresets.toArray(),
                 db.globalSettings.get('main'),
-                db.userStickers.toArray() // <-- 新增这行
+                db.userStickers.toArray() 
         ]);
 
     let activeUserPersona = null;
@@ -545,17 +545,16 @@ ${commentsText}
     const allCharsInDB = await db.chats.toArray();
     const groupMates = charGroupId ? allCharsInDB.filter(c => c.groupId === charGroupId && c.id !== charId && !c.isGroup) : [];
     let mentionableFriendsPrompt = "## 4.5 可@的同伴\n";
-    const userDisplayName = xzoneSettings.nickname || '我';
+    const userNickname = activeUserPersona?.name || '我';
     
     // 始终将用户添加为可@对象
-    mentionableFriendsPrompt += `- ${userDisplayName} (ID: user)\n`;
+    mentionableFriendsPrompt += `- ${userNickname} (ID: user)\n`;
 
     if (groupMates.length > 0) {
         mentionableFriendsPrompt += groupMates.map(m => `- ${m.realName} (昵称: ${m.name}, 性别: ${m.gender || '未知'}, ID: ${m.id})`).join('\n');
     }
     const currentTime = new Date().toLocaleString('zh-CN', { dateStyle: 'full', timeStyle: 'short' });
-    const userNickname = xzoneSettings.nickname || '我';
-    
+
     const lastUserMessage = chat.history.filter(m => m.role === 'user' && !m.isHidden).slice(-1)[0];
     let recentContextSummary = "你们最近没有聊过天。";
     if (lastUserMessage) {
@@ -604,11 +603,12 @@ ${commentsText}
 
 
 ## 1.1 核心铁律
-- **【【【内容创新铁律】】】**: 你的行动【必须】是新颖的。在行动前，请仔细阅读下方的“**最近的对话上下文**”。**如果一个话题（例如询问对方是否吃饭）在近期对话中【已经出现过，无论谁提出的】，就【严禁】再次提及或重复提问。** 你需要展现出你生活的连续性和多样性。
+- **【【【内容创新】】】**: 你的行动【必须】是新颖的。在行动前，请仔细阅读下方的“**最近的对话上下文**”。**如果一个话题（例如询问对方是否吃饭）在近期对话中【已经出现过，无论谁提出的】，就【严禁】再次提及或重复提问。** 你需要展现出你生活的连续性和多样性。
 - **【【【语言铁律】】】**: 你的所有产出【必须优先使用中文】。除非角色设定中有特殊的外语要求，否则严禁使用英文。
+- **【【【用户称呼】】】**: 当你需要在对话内容中 @用户 时，你【绝对不能】使用 "@User"、"@user" 或 "@用户"。你【必须】使用用户的实际昵称 **@{userNickname}** 来称呼他们。
 - **【【【格式铁律】】】**: 你的回复【必须】是一个完整的、符合 PART 5 要求的 JSON 对象。
 - **【【【名称识别】】】**: 你必须能识别角色的简称或别名。例如，当用户提到“Sam”时，你应该知道他们指的是“Sam Sparks”。
-- **【【【称呼自然化铁律】】】**: 你的称呼方式必须反映你与对方的关系、好感度以及当前的对话氛围。不要总是生硬地使用全名或简称。
+- **【【【称呼自然化】】】**: 你的称呼方式必须反映你与对方的关系、好感度以及当前的对话氛围。不要总是生硬地使用全名或简称。
 
 1.  **@提及**: 使用 \`@\` 符号时，后面必须跟对方的【昵称】 (例如: @az)。
 
@@ -719,6 +719,16 @@ ${stickerListForPrompt}
         const responseArray = parsedObject.actions;
         const actorName = chat.name; 
         for (const action of responseArray) {
+                if (action.content) {
+                        action.content = replaceUserMentions(action.content, userNickname);
+                }
+                if (action.publicText) {
+                        action.publicText = replaceUserMentions(action.publicText, userNickname);
+                }
+                if (action.commentText) {
+                        action.commentText = replaceUserMentions(action.commentText, userNickname);
+                }
+
              switch (action.type) {
                 case 'do_nothing':
                     console.log(`后台活动: 角色 "${actorName}" 决定保持沉默。`);
@@ -947,7 +957,8 @@ async function triggerInactiveGroupAiAction(actor, group) {
 2.  **【时间感知铁律】**: 你的行动【必须】符合你的人设和当前时间 (${currentTime})。你需要参考下方“最近的群聊内容”中记录的**上一次互动时间**，如果距离现在已经很久，你的发言应该是开启一个符合当前时间的新话题，而不是突然回复一个旧话题。
 3.  你的回复【必须】是一个包含【一个动作】的JSON数组。
 4.  你【不能】扮演用户("${userNickname}")或其他任何角色，只能是你自己("${actor.name}")。
-5.  **【【【称呼自然化铁律】】】**: 你的称呼方式必须反映你与对方的关系、好感度以及当前的对话氛围。不要总是生硬地使用全名或简称。
+5.  在对话中，你【绝对不能】使用 "@User"、"@user" 或 "@用户" 这种通用占位符来指代用户。你【必须】使用用户的实际昵称来称呼他们，也就是 **${userNickname}**。例如，你应该说 “@${userNickname} 你好”，而不是 “@User 你好”。
+6.  **【【【称呼自然化铁律】】】**: 你的称呼方式必须反映你与对方的关系、好感度以及当前的对话氛围。不要总是生硬地使用全名或简称。
         1.  **@提及**: 使用 \`@\` 符号时，后面必须跟对方的【昵称】 (例如: @az)。
 
         2.  **正文称呼**:
@@ -998,6 +1009,9 @@ ${stickerListForPrompt}
                 const responseArray = parsedObject.actions;
 
                 for (const action of responseArray) {
+                        if (action.content) {
+                                action.content = replaceUserMentions(action.content, userNickname);
+                        }
                         // 因为这是后台活动，我们只处理几种简单的主动行为
                         switch (action.type) {
                                 case 'do_nothing':
@@ -1719,4 +1733,19 @@ export async function triggerImmediateSummary(chatId) {
 
         // 直接调用核心逻辑函数，并传入高优先级
         await _runSummarizationForChat(chat, apiLock.PRIORITY_HIGH);
+}
+
+/**
+ * 在AI生成的文本中，将通用的@User占位符替换为用户实际的昵称 (大小写不敏感)。
+ * @param {string} text - AI返回的原始文本.
+ * @param {string} userNickname - 当前用户的显示昵称.
+ * @returns {string} - 替换后的文本.
+ */
+export function replaceUserMentions(text, userNickname) {
+        if (!text || !userNickname) {
+                return text;
+        }
+        // 使用正则表达式全局和大小写不敏感地替换 @User, @user, @USER, @用户 等
+        // /g 表示全局匹配, /i 表示大小写不敏感
+        return text.replace(/@(user|用户)/gi, `@${userNickname}`);
 }

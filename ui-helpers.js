@@ -34,21 +34,24 @@ function createModal(modalId, contentHtml) {
     return modal;
 }
 
+// 文件: ui-helpers.js
+
 /**
  * 显示一个通用的、可自定义的输入框菜单。
  * @param {string} title - 菜单标题
  * @param {string} placeholder - 输入框的提示文字
  * @param {boolean} isTextarea - 是否使用多行文本框
  * @param {boolean} isOptional - 是否允许输入为空
+ * @param {string} [initialValue=''] - 输入框的初始值
  * @returns {Promise<string|null>} - 用户确认则返回输入的字符串，取消则返回 null
  */
-export function promptForInput(title, placeholder = '', isTextarea = false, isOptional = false) {
-    return new Promise((resolve) => {
-        const inputHtml = isTextarea
-            ? `<textarea id="prompt-input-field" class="modal-input w-full" rows="3" placeholder="${placeholder}"></textarea>`
-            : `<input id="prompt-input-field" class="modal-input" placeholder="${placeholder}">`;
+export function promptForInput(title, placeholder = '', isTextarea = false, isOptional = false, initialValue = '') {
+        return new Promise((resolve) => {
+                const inputHtml = isTextarea
+                        ? `<textarea id="prompt-input-field" class="modal-input w-full" rows="3" placeholder="${placeholder}"></textarea>`
+                        : `<input id="prompt-input-field" class="modal-input" placeholder="${placeholder}">`;
 
-        const modalHtml = `
+                const modalHtml = `
             <h3 class="text-lg font-semibold text-center p-4 border-b">${title}</h3>
             <div class="p-4">${inputHtml}</div>
             <div class="p-4 border-t grid grid-cols-2 gap-3">
@@ -57,41 +60,41 @@ export function promptForInput(title, placeholder = '', isTextarea = false, isOp
             </div>
         `;
 
-        const modal = createModal('dynamic-prompt-modal', modalHtml);
-        
-        // 这样可以确保我们只在刚刚创建的这个模态框内部查找元素，避免了ID冲突。
-        const inputField = modal.querySelector('#prompt-input-field');
-        const confirmBtn = modal.querySelector('#prompt-confirm-btn');
-        const cancelBtn = modal.querySelector('#prompt-cancel-btn');
+                const modal = createModal('dynamic-prompt-modal', modalHtml);
 
-        inputField.focus();
+                const inputField = modal.querySelector('#prompt-input-field');
+                const confirmBtn = modal.querySelector('#prompt-confirm-btn');
+                const cancelBtn = modal.querySelector('#prompt-cancel-btn');
 
-        const handleConfirm = () => {
-            const value = inputField.value.trim();
-            if (!value && !isOptional) { // 只有在非可选时才检查
-                showToast("内容不能为空！", 'error');
-                return;
-            }
-            cleanup();
-            resolve(value); // 返回 trim 后的值，如果为空就是空字符串
-        };
+                // 设置初始值并聚焦
+                inputField.value = initialValue;
+                inputField.focus();
 
-        const handleCancel = () => {
-            cleanup();
-            resolve(null); // 用户取消
-        };
+                const handleConfirm = () => {
+                        const value = inputField.value.trim();
+                        if (!value && !isOptional) {
+                                showToast("内容不能为空！", 'error');
+                                return;
+                        }
+                        cleanup();
+                        resolve(value);
+                };
 
-        const cleanup = () => {
-            modal.remove();
-            confirmBtn.removeEventListener('click', handleConfirm);
-            cancelBtn.removeEventListener('click', handleCancel);
-        };
+                const handleCancel = () => {
+                        cleanup();
+                        resolve(null);
+                };
 
-        confirmBtn.addEventListener('click', handleConfirm, { once: true });
-        cancelBtn.addEventListener('click', handleCancel, { once: true });
-    });
+                const cleanup = () => {
+                        modal.remove();
+                        confirmBtn.removeEventListener('click', handleConfirm);
+                        cancelBtn.removeEventListener('click', handleCancel);
+                };
+
+                confirmBtn.addEventListener('click', handleConfirm, { once: true });
+                cancelBtn.addEventListener('click', handleCancel, { once: true });
+        });
 }
-
 /**
  * 显示上传方式选择菜单 (本地上传 vs URL)，并处理移动端兼容性问题。
  * @param {HTMLInputElement} fileInputElement - 当用户点击本地上传时，需要被触发的文件输入元素。

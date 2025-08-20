@@ -413,7 +413,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function saveCustomTheme() {
-        const presetName = await promptForInput("为你的自定义方案起个名字吧：", "例如：清新蓝、温暖橙", false, false);
+        const presetName = await promptForInput("为你的自定义方案起个名字吧：", "例如：清新蓝、温暖橙", false, false, '');
         if (!presetName || !presetName.trim()) {
             if (presetName !== null) showToast("名字不能为空！");
             return;
@@ -588,7 +588,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
    async function processAndSaveCharAvatar(url) {
-        const name = await promptForInput('为头像命名', '例如：开心、哭泣', false, false);
+        const name = await promptForInput('为头像命名', '例如：开心、哭泣', false, false, '');
         if (name === null) return; // 用户取消
 
         if (!chatData.settings.aiAvatarLibrary) {
@@ -1033,7 +1033,7 @@ ${currentCss}
                         return;
                 }
 
-                const presetName = await promptForInput("为这个样式预设起个名字：", "例如：可爱，简约", false, false);
+                const presetName = await promptForInput("为这个样式预设起个名字：", "例如：可爱，简约", false, false, '');
                 if (!presetName || !presetName.trim()) {
                         if (presetName !== null) showToast("名字不能为空！", 'error');
                         return;
@@ -1308,7 +1308,7 @@ ${currentCss}
             // 1. 暂存当前选择，以便用户取消时恢复
             const previousGroupId = chatData.groupId;
 
-            const newGroupName = await promptForInput("请输入新的分组名：", "例如：我的新分组", false, false);
+            const newGroupName = await promptForInput("请输入新的分组名：", "例如：我的新分组", false, false, '');
 
             if (newGroupName && newGroupName.trim()) {
                 // 2. 检查分组名是否已存在
@@ -1409,7 +1409,7 @@ ${currentCss}
             successMessage = `角色 “${chatData.name}” 已被成功删除。`;
         }
 
-        const confirmation = await promptForInput(confirmationPrompt, `${chatData.name}`, false, false);
+        const confirmation = await promptForInput(confirmationPrompt, `${chatData.name}`, false, false, '');
 
         if (confirmation === chatData.name) {
             try {
