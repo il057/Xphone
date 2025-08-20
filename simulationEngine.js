@@ -335,98 +335,81 @@ export function stopActiveSimulation() {
  * 它会随机挑选一个角色，让他/她进行一次独立思考和行动
  */
 export async function runActiveSimulationTick() {
-    // If the API is locked by a higher or equal priority task, skip this tick entirely.
-    if (apiLock.getCurrentLock() !== 'idle') {
-        // console.log(`API is locked by '${apiLock.getCurrentLock()}', skipping background tick.`);
-        return;
-    }
 
-    // Attempt to acquire the lowest priority lock.
-    if (!(await apiLock.acquire('background_tick'))) {
-        // This means another task took the lock while we were checking.
-        console.log("Could not acquire 'background_tick' lock, another process became active.");
-        return;
-    }
-
-    try {
-
-        console.log("模拟器心跳 Tick...");
-        
-        const settings = await db.globalSettings.get('main');
-        if (!settings?.enableBackgroundActivity) {
-            stopActiveSimulation();
-            return;
-        }
-
-        const privateChatProbability = settings.activeSimTickProb || 0.3;
-        const groupChatProbability = settings.groupActiveSimTickProb || 0.15;
-
-        // --- 处理私聊 ---
-        const allSingleChats = await db.chats.where('isGroup').equals(0).toArray();
-        // 筛选出可以进行后台活动的角色（未被拉黑）
-        const eligibleChats = allSingleChats.filter(chat => !chat.blockStatus || (chat.blockStatus.status !== 'blocked_by_ai' && chat.blockStatus.status !== 'blocked_by_user'));
-
-        if (eligibleChats.length > 0) {
-            // 随机打乱数组
-            eligibleChats.sort(() => 0.5 - Math.random());
-            // 每次心跳只唤醒1到2个角色，避免API过载
-            const chatsToWake = eligibleChats.slice(0, Math.min(eligibleChats.length, 2)); 
-            console.log(`本次唤醒 ${chatsToWake.length} 个角色:`, chatsToWake.map(c => c.name).join(', '));
-
-            for (const chat of chatsToWake) {
-            // 1. 处理被用户拉黑的角色
-                if (chat.blockStatus?.status === 'blocked_by_user') {
-                    const blockedTimestamp = chat.blockStatus.timestamp;
-                    if (!blockedTimestamp) continue;
-
-                    const cooldownHours = settings.blockCooldownHours || 1;
-                    const cooldownMilliseconds = cooldownHours * 60 * 60 * 1000;
-                    const timeSinceBlock = Date.now() - blockedTimestamp;
-
-                    if (timeSinceBlock > cooldownMilliseconds) {
-                        console.log(`角色 "${chat.name}" 的冷静期已过...`);
-                        chat.blockStatus.status = 'pending_system_reflection';
-                        await db.chats.put(chat);
-                        triggerAiFriendApplication(chat.id);
-                    }
-                    continue;
-                }
+                console.log("模拟器心跳 Tick...");
                 
-                // 2. 处理正常好友的随机活动
-                const lastMessage = chat.history.slice(-1)[0];
-                let isReactionary = false;
-                if (lastMessage && lastMessage.isHidden && lastMessage.role === 'system' && lastMessage.content.includes('[系统提示：')) {
-                    isReactionary = true;
+                const settings = await db.globalSettings.get('main');
+                if (!settings?.enableBackgroundActivity) {
+                stopActiveSimulation();
+                return;
                 }
 
-                if (!chat.blockStatus && (isReactionary || Math.random() < privateChatProbability)) {
-                    console.log(`角色 "${chat.name}" 被唤醒 (原因: ${isReactionary ? '动态互动' : '随机'})，准备行动...`);
-                    await triggerInactiveAiAction(chat.id);
-                }
-            }
-        }
+                const privateChatProbability = settings.activeSimTickProb || 0.3;
+                const groupChatProbability = settings.groupActiveSimTickProb || 0.15;
 
-        // --- 处理群聊 ---
-        const allGroupChats = await db.chats.where('isGroup').equals(1).toArray();
-        if (allGroupChats.length > 0) {
-            for (const group of allGroupChats) {
-                // 每个心跳周期，每个群聊有 15% 的几率发生一次主动行为
-                if (group.members && group.members.length > 0 && Math.random() < groupChatProbability) {
-                    // 从群成员中随机挑选一个“搞事”的
-                    const actorId = group.members[Math.floor(Math.random() * group.members.length)];
-                    const actor = await db.chats.get(actorId); // 获取完整的角色信息
-                    if (actor) {
-                        console.log(`群聊 "${group.name}" 被唤醒，随机挑选 "${actor.name}" 发起行动...`);
-                        await triggerInactiveGroupAiAction(actor, group);
-                    }
+                // --- 处理私聊 ---
+                const allSingleChats = await db.chats.where('isGroup').equals(0).toArray();
+                // 筛选出可以进行后台活动的角色（未被拉黑）
+                const eligibleChats = allSingleChats.filter(chat => !chat.blockStatus || (chat.blockStatus.status !== 'blocked_by_ai' && chat.blockStatus.status !== 'blocked_by_user'));
+
+                if (eligibleChats.length > 0) {
+                // 随机打乱数组
+                eligibleChats.sort(() => 0.5 - Math.random());
+                // 每次心跳只唤醒1到2个角色，避免API过载
+                const chatsToWake = eligibleChats.slice(0, Math.min(eligibleChats.length, 2)); 
+                console.log(`本次唤醒 ${chatsToWake.length} 个角色:`, chatsToWake.map(c => c.name).join(', '));
+
+                for (const chat of chatsToWake) {
+                // 1. 处理被用户拉黑的角色
+                        if (chat.blockStatus?.status === 'blocked_by_user') {
+                        const blockedTimestamp = chat.blockStatus.timestamp;
+                        if (!blockedTimestamp) continue;
+
+                        const cooldownHours = settings.blockCooldownHours || 1;
+                        const cooldownMilliseconds = cooldownHours * 60 * 60 * 1000;
+                        const timeSinceBlock = Date.now() - blockedTimestamp;
+
+                        if (timeSinceBlock > cooldownMilliseconds) {
+                                console.log(`角色 "${chat.name}" 的冷静期已过...`);
+                                chat.blockStatus.status = 'pending_system_reflection';
+                                await db.chats.put(chat);
+                                triggerAiFriendApplication(chat.id);
+                        }
+                        continue;
+                        }
+                        
+                        // 2. 处理正常好友的随机活动
+                        const lastMessage = chat.history.slice(-1)[0];
+                        let isReactionary = false;
+                        if (lastMessage && lastMessage.isHidden && lastMessage.role === 'system' && lastMessage.content.includes('[系统提示：')) {
+                        isReactionary = true;
+                        }
+
+                        if (!chat.blockStatus && (isReactionary || Math.random() < privateChatProbability)) {
+                        console.log(`角色 "${chat.name}" 被唤醒 (原因: ${isReactionary ? '动态互动' : '随机'})，准备行动...`);
+                        await triggerInactiveAiAction(chat.id);
+                        }
                 }
-            }
-        }
-    } finally {
-            // 释放锁
-            apiLock.release('background_tick');
-            console.log("模拟器心跳完成，锁已释放。");
-    }
+                }
+
+                // --- 处理群聊 ---
+                const allGroupChats = await db.chats.where('isGroup').equals(1).toArray();
+                if (allGroupChats.length > 0) {
+                for (const group of allGroupChats) {
+                        // 每个心跳周期，每个群聊有 15% 的几率发生一次主动行为
+                        if (group.members && group.members.length > 0 && Math.random() < groupChatProbability) {
+                        // 从群成员中随机挑选一个“搞事”的
+                        const actorId = group.members[Math.floor(Math.random() * group.members.length)];
+                        const actor = await db.chats.get(actorId); // 获取完整的角色信息
+                        if (actor) {
+                                console.log(`群聊 "${group.name}" 被唤醒，随机挑选 "${actor.name}" 发起行动...`);
+                                await triggerInactiveGroupAiAction(actor, group);
+                        }
+                        }
+                }
+                }
+                await runSummarizationEngine();
+
 }
 
 /**
@@ -434,6 +417,7 @@ export async function runActiveSimulationTick() {
  * @param {string} charId - 要触发的角色的ID
  */
 async function triggerInactiveAiAction(charId) {
+        return apiLock.enqueue(async () => {
     const chat = await db.chats.get(charId);
     const apiConfig = await getActiveApiProfile(); 
     if (!apiConfig) return; // 如果没有任何API方案，则中止
@@ -745,17 +729,19 @@ ${stickerListForPrompt}
                 case 'text_photo': 
                         { 
                                 let messageContent = {};
-                                if (action.type === 'send_sticker') {
+                                let messageType = action.type;
+                                if (messageType === 'send_sticker') {
                                         // 查找表情URL
                                         const sticker = stickers.find(s => s.name === action.name);
                                         if (sticker) {
+                                                messageType = 'sticker';
                                                 messageContent = { content: sticker.url, meaning: sticker.name };
                                         } else {
                                                 // 如果找不到表情，则作为文本发送
-                                                action.type = 'text';
+                                                messageType = 'text';
                                                 messageContent = { content: `[表情: ${action.name}]` };
                                         }
-                                } else if (action.type === 'text_photo') {
+                                } else if (messageType === 'text_photo') {
                                         messageContent = { content: action.description };
                                         
                                 }
@@ -767,7 +753,7 @@ ${stickerListForPrompt}
                                         role: 'assistant',
                                         senderName: actorName,
                                         senderId: charId,
-                                        type: action.type,
+                                        type: messageType,
                                         timestamp: Date.now(),
                                         ...messageContent
                                 };
@@ -837,9 +823,11 @@ ${stickerListForPrompt}
     } catch (error) {
         console.error(`角色 "${chat.name}" 的独立行动失败:`, error);
     }
+        }, apiLock.PRIORITY_LOW, `background_action_${charId}`);
 }
 
 async function triggerAiFriendApplication(chatId) {
+        return apiLock.enqueue(async () => {
     console.log(`正在为角色 ${chatId} 触发好友申请流程...`);
     const chat = await db.chats.get(chatId);
     const apiConfig = await getActiveApiProfile(); // <-- 修改这里
@@ -902,6 +890,7 @@ ${contextSummary || "（没有找到相关的对话记录）"}
         if(chat.blockStatus) chat.blockStatus.timestamp = Date.now();
         await db.chats.put(chat);
     }
+        }, apiLock.PRIORITY_LOW, `background_action_${charId}`);
 }
 
 /**
@@ -910,6 +899,7 @@ ${contextSummary || "（没有找到相关的对话记录）"}
  * @param {object} group - 该成员所在的群聊对象
  */
 async function triggerInactiveGroupAiAction(actor, group) {
+        return apiLock.enqueue(async () => {
         const apiConfig = await getActiveApiProfile();
         if (!apiConfig) return;
 
@@ -1019,6 +1009,7 @@ ${stickerListForPrompt}
                                                 if (action.type === 'send_sticker') {
                                                         const sticker = stickers.find(s => s.name === action.stickerName);
                                                         if (sticker) {
+                                                                messageType = 'sticker';
                                                                 messageContent = { content: sticker.url, meaning: sticker.name };
                                                         } else {
                                                                 // 找不到表情，则作为文本发送
@@ -1058,55 +1049,7 @@ ${stickerListForPrompt}
         } catch (error) {
                 console.error(`角色 "${actor.name}" 在群聊 "${group.name}" 的独立行动失败:`, error);
         }
-}
-
-/**
- * 从可能包含 markdown 或其他文本的字符串中提取并解析JSON。
- * 此版本能正确处理对象（{}）和数组（[]）。
- * @param {string} raw - The raw string from the AI.
- * @returns {object|array|null} - The parsed JSON object/array or null if parsing fails.
- */
-function extractAndParseJson(raw) {
-    if (typeof raw !== 'string' || !raw.trim()) {
-        return null;
-    }
-
-    // 1. 优先处理被 markdown 代码块包裹的 JSON
-    const jsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/);
-    let s = jsonMatch ? jsonMatch[1].trim() : raw.trim();
-
-    // 2. 寻找JSON结构的起始位置 (寻找第一个 '{' 或 '[')
-    const startIndex = s.search(/[\{\[]/);
-    if (startIndex === -1) {
-        console.error('extractJson() failed: No JSON start character found.', { originalString: raw });
-        return null;
-    }
-
-    // 3. 根据起始符号，确定对应的结束符号
-    const startChar = s[startIndex];
-    const endChar = startChar === '{' ? '}' : ']';
-    
-    // 4. 寻找最后一个匹配的结束符号
-    const endIndex = s.lastIndexOf(endChar);
-    if (endIndex === -1 || endIndex < startIndex) {
-        console.error('extractJson() failed: No matching JSON end character found.', { originalString: raw });
-        return null;
-    }
-
-    // 5. 截取有效的JSON子串
-    s = s.substring(startIndex, endIndex + 1);
-
-    // 6. 尝试解析
-    try {
-        return JSON.parse(s);
-    } catch (e) {
-        console.error('extractJson() failed: JSON.parse error after cleanup.', {
-            error: e.message,
-            stringAttemptedToParse: s,
-            originalString: raw
-        });
-        return null;
-    }
+        }, apiLock.PRIORITY_LOW, `background_action_${charId}`);
 }
 
 /**
@@ -1114,7 +1057,7 @@ function extractAndParseJson(raw) {
  * @param {Date | string | number} timestamp - 要格式化的时间戳
  * @returns {string} - 格式化后的字符串 (例如 "刚刚", "5分钟前", "昨天")
  */
-function formatRelativeTime(timestamp) {
+export function formatRelativeTime(timestamp) {
         const now = new Date();
         const date = new Date(timestamp);
         const diffMs = now - date;
@@ -1146,7 +1089,7 @@ async function processAndNotify(chat, message, allChatsMap) {
 
         // 发送跨页面通知
         const notificationChannel = new BroadcastChannel('xphone_notifications');
-        notificationChannel.postMessage({ type: 'new_message' });
+        notificationChannel.postMessage({ type: 'new_message', charId: chat.id });
 
         // 触发桌面通知
         if (Notification.permission === 'granted') {
@@ -1489,4 +1432,286 @@ ${habits.featurePreference || '未定义'}
                 console.error("AI character generation failed:", error);
                 return null;
         }
+}
+
+/**
+ * 根据聊天上下文获取当前激活的用户人设 (Persona)
+ * 遵循 聊天特定 -> 分组特定 -> 全局默认 的优先级，与 chatRoom.js 保持一致。
+ * @param {object} chat - 当前的AI角色聊天对象
+ * @returns {Promise<object>} - 返回找到的人设对象或一个默认对象
+ */
+async function getActiveUserPersonaForChat(chat) {
+        const [personaPresets, globalSettings] = await Promise.all([
+                db.personaPresets.toArray(),
+                db.globalSettings.get('main')
+        ]);
+
+        let foundPersona = null;
+
+        if (personaPresets && personaPresets.length > 0) {
+                // 1. 最高优先级：检查是否有人设直接应用于此AI角色 (虽然不常见，但保留此逻辑以备扩展)
+                foundPersona = personaPresets.find(p => p.appliedChats && p.appliedChats.includes(chat.id));
+
+                // 2. 其次：检查此AI角色所在的分组是否应用了人设
+                if (!foundPersona && chat.groupId) {
+                        const groupIdStr = String(chat.groupId);
+                        foundPersona = personaPresets.find(p => p.appliedChats && p.appliedChats.includes(groupIdStr));
+                }
+
+                // 3. 最后：回退到全局默认人设
+                if (!foundPersona && globalSettings && globalSettings.defaultPersonaId) {
+                        foundPersona = personaPresets.find(p => p.id === globalSettings.defaultPersonaId);
+                }
+        }
+
+        // 返回找到的人设，或一个安全的默认值
+        return foundPersona || { name: '我', persona: '用户的角色设定未知。' };
+}
+
+/**
+ * 为总结生成一个更简洁的显示名称
+ * @param {string} realName - 角色的真实姓名
+ * @returns {string} - 返回处理后的名称 (例如，英文名取First Name)
+ */
+function _getDisplayNameForSummary(realName) {
+        if (!realName) return '未知角色';
+        // 如果真实姓名包含空格，我们假定它是“名 姓”格式的西文名，并只取名字部分
+        if (realName.trim().includes(' ')) {
+                return realName.split(' ')[0];
+        }
+        // 否则，返回完整的真实姓名（适用于中文名等）
+        return realName;
+}
+
+/**
+ * [重构] 创建用于AI进行对话线程分析和叙事性总结的System Prompt
+ * @param {Array<object>} messagesToAnalyze - 需要分析的消息数组
+ * @param {object} character - AI角色的聊天对象
+ * @param {object} userPersona - 用户的身份卡对象
+ * @returns {string} - 返回构建好的 systemPrompt 字符串
+ */
+function _createTopicAnalysisPrompt(messagesToAnalyze, character, userPersona) {
+        // 使用真实名称，并特殊格式化表情包
+        const characterDisplayName = _getDisplayNameForSummary(character.realName);
+        const userPersonaDisplayName = userPersona.name; // User Persona的name通常是简洁的
+        const userGender = userPersona.gender === 'female' ? '女性' : '男性';
+
+        
+        const conversationText = messagesToAnalyze.map(m => {
+                const senderName = m.role === 'user' ? userPersona.name : character.realName;
+                let content = '';
+                if (m.type === 'sticker') {
+                        content = `[发送了名为‘${m.meaning}’的表情]`;
+                } else {
+                        content = m.content;
+                }
+                return `[${new Date(m.timestamp).getTime()}] ${senderName}: ${content}`;
+        }).join('\n');
+
+        return `
+You are an expert psychologist and relationship analyst. Your task is to analyze a conversation transcript between "${character.realName}" and "${userPersona.name}" to distill the **psychological and relational essence** of the interaction. This summary will serve as "${character.realName}"'s **subjective memory**.
+
+**ABSOLUTE RULES:**
+- ** Maintain a strict third-person perspective.** The word "I" ("我") is FORBIDDEN in your output. You are an observer, not a participant.
+- **Use correct pronouns.** You have been provided with the participants' gender information. Use it accurately.
+
+**Participant Information:**
+- **${characterDisplayName}:** The character whose memory is being formed.
+- **${userPersonaDisplayName}:** The other participant. Gender: ${userGender}.
+
+**The Goal of Memory:**
+The goal is not to remember *what was said*, but *what it meant*. You must look beyond the surface-level text to answer:
+- What was the **emotional arc** of this conversation? (e.g., from tense to relaxed)
+- What was the ultimate **outcome** or **conclusion**?
+- How did the **relationship dynamic shift**? (e.g., they grew closer, a conflict emerged)
+- What new **character traits** or **motivations** were revealed?
+
+**Transcript to Analyze:**
+---
+${conversationText}
+---
+
+**Your Task & Rules:**
+1.  **Third-Person Analysis:** All summaries MUST be written from a detached, third-person analytical perspective, using the names "${characterDisplayName}" and "${userPersonaDisplayName}". never use "Assistant" or "User"
+2.  **Radical Abstraction & Synthesis:** You MUST NOT simply retell the conversation. Your primary task is to abstract the core meaning.
+3.  **Focus on the "Why":** Don't just state that a topic was discussed. Explain *why* it was brought up and what the *impact* was.
+4.  **Filter Ruthlessly:** Discard all trivial exchanges (greetings, simple confirmations) and merge smaller related points into a single, cohesive analytical summary. For a typical chat segment of 30-50 messages, you should only identify **one or two truly significant** memory-worthy events.
+5.  **Interpret Actions:** Interpret actions like sending a sticker ('[发送了名为‘死了’的表情]') as emotional data. The summary should reflect the emotion (e.g., "${userPersona.name} 用一种夸张的方式表达了他的疲惫或觉得事情很有趣。"), not the literal text.
+
+Keyword Generation Philosophy (CRITICAL):**
+The keywords are NOT for summarizing the topic. They are **TRIGGERS** for future memory recall. You must generate keywords that are **highly likely to be mentioned again in future conversations**.
+
+-   **DO:** Use concrete nouns, names of people/places/things, or specific activities mentioned in the chat. (e.g., "那家咖啡馆", "《星际探险家》这款游戏", "上次的画展", "道歉").
+-   **DO NOT:** Use abstract, analytical, or psychological concepts. These are bad because people rarely say them out loud.
+
+**MANDATORY OUTPUT FORMAT:**
+Your entire response MUST be a single, valid JSON object. Inside the JSON string values, you MUST NOT use double quotes ("). Use single quotes ('') or Chinese quotes (「」) instead.
+
+{
+  "threads": [
+    {
+      "topic_summary": "(Here is the 1-2 sentence, highly abstractive and analytical summary of the significant event, written in Chinese.)",
+      "keywords": ["Keyword1", "Keyword2"],
+      "message_timestamps": [/* related message timestamps */]
+    }
+  ]
+}
+`;
+}
+
+/**
+ * 后台聊天总结引擎的主调度函数
+ * 增加了限流阀，每次心跳最多只调度有限数量的总结任务。
+ */
+async function runSummarizationEngine() {
+        console.log("后台总结引擎启动...");
+        const settings = await db.globalSettings.get('main');
+        const MAX_SUMMARIES_PER_TICK =  2; // 从设置中读取，或默认为2
+        let summariesScheduledThisTick = 0;
+
+        const allChats = await db.chats.where('isGroup').equals(0).toArray();
+
+        for (const chat of allChats) {
+                if (summariesScheduledThisTick >= MAX_SUMMARIES_PER_TICK) {
+                        console.log("本轮后台活动已达到总结任务调度上限。");
+                        break; // 退出循环
+                }
+
+                // 我们需要一个轻量级的方式来判断是否“可能”需要总结
+                const summaryTriggerCount = settings?.summaryTriggerCount || 25;
+                // 使用对话轮数 (userActionCount) 作为判断依据
+                const currentActionCount = chat.userActionCount || 0;
+                const lastSummaryActionCount = chat.lastSummaryActionCount || 0;
+
+                if (chat.pendingSummaryAnalysis || (currentActionCount - lastSummaryActionCount >= summaryTriggerCount)) {
+                        _runSummarizationForChat(chat);
+                        summariesScheduledThisTick++;
+                }
+        }
+
+        console.log("后台总结引擎运行完毕。");
+}
+
+/**
+ * 为单个聊天执行“智能边界”总结的核心逻辑函数（最终架构版）
+ * @param {object} chat - 要处理的聊天对象
+ * @param {number} [priority=apiLock.PRIORITY_LOW] - 任务的优先级
+ */
+async function _runSummarizationForChat(chat, priority = apiLock.PRIORITY_LOW) {
+        const settings = await db.globalSettings.get('main');
+        const summaryTriggerCount = settings?.summaryTriggerCount || 25;
+
+        // 【1. 捕获初始轮数】这是本次总结操作要同步到的目标轮数
+        const actionCountAtStart = chat.userActionCount || 0;
+
+        const [currentChatState, userPersona] = await Promise.all([
+                db.chats.get(chat.id),
+                getActiveUserPersonaForChat(chat)
+        ]);
+
+        // 【2. 根据时间戳和缓存获取数据】
+        const lastSummary = await db.chatSummaries.where('chatId').equals(chat.id).last();
+        const lastSummaryTime = lastSummary ? new Date(lastSummary.summaryEndTime).getTime() : 0;
+
+        // 获取所有新消息
+        let allMessagesToAnalyze = currentChatState.history.filter(msg =>
+                new Date(msg.timestamp).getTime() > lastSummaryTime && !msg.isHidden && msg.role !== 'system'
+        );
+
+        // 如果有待办任务，则将待办任务所涉及的旧消息也捞出来一起分析，以提供更完整的上下文
+        if (currentChatState.pendingSummaryAnalysis?.analyzedUpToTimestamp) {
+                const pendingMessages = currentChatState.history.filter(msg =>
+                        new Date(msg.timestamp).getTime() > lastSummaryTime &&
+                        new Date(msg.timestamp).getTime() <= new Date(currentChatState.pendingSummaryAnalysis.analyzedUpToTimestamp).getTime() &&
+                        !msg.isHidden && msg.role !== 'system'
+                );
+                // 合并并去重
+                const messageMap = new Map();
+                allMessagesToAnalyze.forEach(m => messageMap.set(m.timestamp, m));
+                pendingMessages.forEach(m => messageMap.set(m.timestamp, m));
+                allMessagesToAnalyze = Array.from(messageMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+        }
+
+        // 【3. 检查触发条件】
+        if (priority === apiLock.PRIORITY_LOW) {
+                if (!currentChatState.pendingSummaryAnalysis && (actionCountAtStart - (currentChatState.lastSummaryActionCount || 0) < summaryTriggerCount)) {
+                        return;
+                }
+        }
+        if (allMessagesToAnalyze.length === 0) {
+                console.log(`角色 "${chat.name}" 没有需要总结的新消息。`);
+                // 如果没有新消息，但有待办，清空待办并同步计数器，防止死循环
+                if (currentChatState.pendingSummaryAnalysis) {
+                        await db.chats.update(chat.id, { pendingSummaryAnalysis: null, lastSummaryActionCount: actionCountAtStart });
+                }
+                return;
+        }
+
+        console.log(`角色 "${chat.name}" 开始智能分析，目标轮数: ${actionCountAtStart}`);
+
+        return apiLock.enqueue(async () => {
+                try {
+                        const systemPrompt = _createTopicAnalysisPrompt(allMessagesToAnalyze, currentChatState, userPersona);
+                        const analysisResult = await callApi(systemPrompt, [], { temperature: 0.5 }, 'json');
+
+                        if (!analysisResult || !Array.isArray(analysisResult.threads)) {
+                                throw new Error("AI未能返回有效的话题分析结果。");
+                        }
+
+                        const analyzedTimestamps = new Set(allMessagesToAnalyze.map(m => new Date(m.timestamp).getTime()));
+                        const completedThreads = analysisResult.threads.filter(thread =>
+                                thread.message_timestamps.every(ts => analyzedTimestamps.has(ts))
+                        );
+                        const completedTopicSummaries = new Set(completedThreads.map(t => t.topic_summary));
+                        const incompleteThreads = analysisResult.threads.filter(t => !completedTopicSummaries.has(t.topic_summary));
+
+                        if (completedThreads.length > 0) {
+                                for (const thread of completedThreads) {
+                                        await db.chatSummaries.add({
+                                                chatId: chat.id,
+                                                summaryContent: thread.topic_summary.replace(/我/g, _getDisplayNameForSummary(currentChatState.realName)),
+                                                keywords: thread.keywords || [],
+                                                summaryStartTime: new Date(Math.min(...thread.message_timestamps)),
+                                                summaryEndTime: new Date(Math.max(...thread.message_timestamps)),
+                                                priority: 0,
+                                                isEnabled: true
+                                        });
+                                }
+                                console.log(`已为 "${chat.name}" 成功生成 ${completedThreads.length} 条话题总结。`);
+                        }
+
+                        // 【4. 更新计数器与缓存状态】
+                        await db.chats.update(chat.id, {
+                                // 无论本次是否生成了新总结，都将轮数指针同步到运行开始时的状态
+                                lastSummaryActionCount: actionCountAtStart,
+                                // 如果有未完成话题，则存入缓存；否则清空
+                                pendingSummaryAnalysis: incompleteThreads.length > 0 ? {
+                                        threads: incompleteThreads,
+                                        analyzedUpToTimestamp: allMessagesToAnalyze[allMessagesToAnalyze.length - 1].timestamp
+                                } : null
+                        });
+
+                        console.log(`总结流程完毕。轮数指针已同步至: ${actionCountAtStart}。${incompleteThreads.length > 0 ? `${incompleteThreads.length}个话题已存入待办。` : '所有话题均已完结。'}`);
+
+                } catch (error) {
+                        console.error(`为角色 "${chat.name}" 生成智能总结时出错:`, error);
+                }
+        }, priority, `smart_summarize_${chat.realName}`);
+}
+
+/**
+ * 事件驱动的即时总结函数
+ * 它会以高优先级为指定聊天触发一次完整的智能总结流程。
+ * @param {string} chatId - 要触发总结的聊天ID
+ */
+export async function triggerImmediateSummary(chatId) {
+        console.log(`即时总结被触发，高优先级处理: ${chatId}`);
+        const chat = await db.chats.get(chatId);
+        if (!chat) {
+                console.error("triggerImmediateSummary 失败：找不到聊天对象。");
+                return;
+        }
+
+        // 直接调用核心逻辑函数，并传入高优先级
+        await _runSummarizationForChat(chat, apiLock.PRIORITY_HIGH);
 }

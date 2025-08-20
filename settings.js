@@ -148,7 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('background-activity-switch').checked = state.globalSettings.enableBackgroundActivity || false;
                 document.getElementById('background-interval-input').value = state.globalSettings.backgroundActivityInterval || 60;
                 document.getElementById('block-cooldown-input').value = state.globalSettings.blockCooldownHours || 1;
-
+                document.getElementById('summary-trigger-count-input').value = state.globalSettings.summaryTriggerCount || 25;
+                // 填充云同步设置
                 syncGitHubTokenInput.value = state.globalSettings.syncGitHubToken || '';
                 syncGistIdInput.value = state.globalSettings.syncGistId || '';
 
@@ -229,6 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.globalSettings.blockCooldownHours = parseFloat(document.getElementById('block-cooldown-input').value) || 1;
                         state.globalSettings.activeSimTickProb = parseInt(privateChatProbSlider.value) / 100;
                         state.globalSettings.groupActiveSimTickProb = parseInt(groupChatProbSlider.value) / 100;
+                        state.globalSettings.summaryTriggerCount = parseInt(document.getElementById('summary-trigger-count-input').value) || 25;
+
                         // 如果启用了后台活动，启动模拟引擎
                         await db.globalSettings.put(state.globalSettings);
 
@@ -320,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!confirmed) return;
                 try {
                         const backupData = {
-                                version: 38, // 确保导出版本与当前数据库版本一致
+                                version: 39, // 确保导出版本与当前数据库版本一致
                                 timestamp: Date.now()
                         };
 
@@ -508,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
          */
         async function packAllData() {
                 const backupData = {
-                        version: 38, // 确保导出版本与当前数据库版本一致
+                        version: 39, // 确保导出版本与当前数据库版本一致
                         timestamp: Date.now()
                 };
                 const tableNames = db.tables.map(t => t.name);

@@ -233,6 +233,12 @@
                             <input type="number" id="block-cooldown-input" value="1" min="0.1" step="0.1" class="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
                             <p class="mt-2 text-xs text-gray-500">被拉黑超过这个时间后，AI才有几率重新申请好友。</p>
                         </div>
+                        <div >
+                                <label for="summary-trigger-count-input" class="block text-sm font-medium text-gray-700">聊天总结触发轮数</label>
+                                <input type="number" id="summary-trigger-count-input" value="25" min="10"
+                                        class="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+                                <p class="mt-2 text-xs text-gray-500">当一个对话中，未被总结的新消息轮数超过此数量时，后台将尝试为其生成一份记忆摘要。数值越小，总结越频繁，API消耗越高。</p>
+                        </div>
                     </div>
                 </section>
                 <section class="bg-white p-4 rounded-xl shadow-sm">

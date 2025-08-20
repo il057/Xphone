@@ -1,6 +1,6 @@
 import { db, apiLock, getActiveApiProfile, uploadImage, uploadAudioBlob, callApi } from './db.js';
 import * as spotifyManager from './spotifyManager.js';
-import { updateRelationshipScore, generateNewCharacterPersona } from './simulationEngine.js';
+import { updateRelationshipScore, generateNewCharacterPersona, triggerImmediateSummary, formatRelativeTime } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
 import { showToast, showToastOnNextPage, showRawContentModal, showConfirmModal } from './ui-helpers.js';
 import { showCharacterGeneratorModal } from './characterGenerator.js';
@@ -76,6 +76,8 @@ const replyPreviewBar = document.getElementById('reply-preview-bar');
 const chatInputArea = document.querySelector('footer');
 const lockOverlay = document.getElementById('chat-lock-overlay');
 const lockContent = document.getElementById('chat-lock-content');
+const manualSummaryBtn = document.getElementById('manual-summary-btn'); // [新增]
+
 // 音乐
 const listenTogetherBtn = document.getElementById('listen-together-btn');
 const playlistModal = document.getElementById('playlist-modal');
@@ -129,6 +131,9 @@ const incomingCallName = document.getElementById('incoming-call-name');
 const incomingCallStatus = document.getElementById('incoming-call-status');
 const rejectIncomingCallBtn = document.getElementById('reject-incoming-call-btn');
 const acceptIncomingCallBtn = document.getElementById('accept-incoming-call-btn');
+
+
+const notificationChannel = new BroadcastChannel('xphone_notifications');
 
 function toMillis(t) {
         return new Date(t).getTime();
@@ -269,6 +274,8 @@ async function init() {
 
         //在所有UI设置好之后，检查并处理离线事件
         await handleChatEntryLogic();
+
+        
 }
 
 // --- UI and Rendering Functions ---
@@ -522,8 +529,10 @@ function setAccentColor() {
         // 3. 将这个可读颜色应用到所有需要的地方
         const backBtnHeader = document.querySelector('header a.header-btn');
         const profileBtnHeader = document.getElementById('char-profile-link');
+        const summaryBtnHeader = document.getElementById('manual-summary-btn');
         if (backBtnHeader) backBtnHeader.style.color = readableColor;
         if (profileBtnHeader) profileBtnHeader.style.color = readableColor;
+        if (summaryBtnHeader) summaryBtnHeader.style.color = readableColor;
         charNameHeader.style.color = readableColor;
 
         // 3. 将颜色应用到底部所有操作图标上
@@ -1076,6 +1085,49 @@ async function setupEventListeners() {
                         // 使用 requestSubmit() 来触发表单的 'submit' 事件，
                         // 这样我们的 handleSendMessage 函数就会被调用。
                         chatForm.requestSubmit();
+                }
+        });
+
+        // 手动总结按钮的事件监听
+        manualSummaryBtn.addEventListener('click', async () => {
+                const confirmed = await showConfirmModal(
+                        '手动生成总结',
+                        '确定要为最近的对话立即生成一份记忆总结吗？<br><small class="text-gray-500">这将调用AI并消耗API额度。</small>',
+                        '确认生成',
+                        '取消'
+                );
+
+                if (!confirmed) return;
+
+                // 定义加载中和原始的图标
+                const waitReplyBtn = document.getElementById('wait-reply-btn');
+                const originalIcon = manualSummaryBtn.innerHTML;
+                const spinnerIcon = `
+            <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>`;
+
+                try {
+                        // 禁用按钮并显示加载动画
+                        manualSummaryBtn.disabled = true;
+                        waitReplyBtn.disabled = true;
+                        manualSummaryBtn.innerHTML = spinnerIcon;
+
+                        showToast('总结任务已提交，请稍候...', 'info');
+
+                        await triggerImmediateSummary(charId);
+
+                        showToast('记忆总结已成功生成！', 'success');
+
+                } catch (error) {
+                        console.error("手动总结失败:", error);
+                        showToast('生成总结时出错，详情请查看控制台。', 'error');
+                } finally {
+                        // 无论成功或失败，都必须恢复按钮状态
+                        manualSummaryBtn.disabled = false;
+                        waitReplyBtn.disabled = false;
+                        manualSummaryBtn.innerHTML = originalIcon;
                 }
         });
 
@@ -1634,6 +1686,11 @@ async function setupEventListeners() {
         });
 }
 
+notificationChannel.addEventListener('message', handleBroadcastMessage);
+window.addEventListener('unload', () => {
+        notificationChannel.removeEventListener('message', handleBroadcastMessage);
+        notificationChannel.close();
+});
 
 // --- Core Logic Functions ---
 
@@ -1859,19 +1916,21 @@ function getDisplayName(id) {
 }
 
 async function getAiResponse(charIdToTrigger = null) {
+        if (apiLock.isQueued('user_chat')) {
+                showToast('正在处理您的请求，请稍候...'); // 给予用户明确的反馈
+                return; // 提前退出，防止重复入队
+        }
+
+        const headerEl = document.getElementById('char-name-header');
+        headerEl.textContent = '等待中...'; // 立即将状态改为“等待中”
+        headerEl.classList.add('typing-status'); // 可以复用“输入中”的动画效果
+
+        return apiLock.enqueue(async () => {
+        const startTime = Date.now();
         let apiCallSuccess = false;
         // If the API is locked by any process, wait a moment and retry.
         // This gives priority to user actions over background tasks.
-        if (apiLock.getCurrentLock() !== 'idle') {
-                console.log("API is busy, waiting to get user chat response...");
-                await sleep(1000); // Wait 1 second before retrying
-        }
-
-        // Attempt to acquire the high-priority lock.
-        if (!(await apiLock.acquire('user_chat'))) {
-                showToast("系统正忙，请稍后再试。"); // This should rarely happen
-                return;
-        }
+        
 
         if (charIdToTrigger && typeof charIdToTrigger === 'object' && 'target' in charIdToTrigger) {
                 charIdToTrigger = null;
@@ -1896,7 +1955,6 @@ async function getAiResponse(charIdToTrigger = null) {
                 const headerElOnError = document.getElementById('char-name-header');
                 headerElOnError.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
                 headerElOnError.classList.remove('typing-status');
-                apiLock.release('user_chat'); // 释放锁
                 return; // 提前退出函数，防止错误
         }
 
@@ -1921,7 +1979,6 @@ async function getAiResponse(charIdToTrigger = null) {
                 const headerElOnError = document.getElementById('char-name-header');
                 headerElOnError.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
                 headerElOnError.classList.remove('typing-status');
-                apiLock.release('user_chat'); // 别忘了释放锁
                 return;
         }
         
@@ -1929,6 +1986,49 @@ async function getAiResponse(charIdToTrigger = null) {
 
         try {
                 let systemPrompt;
+                let shouldTriggerSummary = false; 
+
+                // =================================================================
+                // 动态记忆注入系统
+                // =================================================================
+                let memoryInjectionPrompt = "";
+                const lastUserMessageText = currentChatForAPI.history.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
+
+                // 1. 获取最近的2条“重要”或“普通”总结
+                const recentSummaries = await db.chatSummaries
+                        .where('chatId').equals(activeCharId)
+                        .and(s => s.isEnabled === true)
+                        .reverse() // 获取最新的
+                        .limit(2)
+                        .toArray();
+
+                // 2. 根据用户最新消息的关键词，触发相关的旧总结
+                let keywordTriggeredSummaries = [];
+                if (lastUserMessageText) {
+                        const allSummaries = await db.chatSummaries.where({ chatId: activeCharId, isEnabled: true }).toArray();
+                        keywordTriggeredSummaries = allSummaries.filter(summary =>
+                                summary.keywords && summary.keywords.some(keyword => lastUserMessageText.includes(keyword.toLowerCase()))
+                        );
+                }
+
+                // 3. 合并、去重并格式化所有相关记忆
+                const allRelevantSummaries = [...recentSummaries, ...keywordTriggeredSummaries];
+                const uniqueSummaries = Array.from(new Map(allRelevantSummaries.map(s => [s.id, s])).values());
+
+                // 按时间倒序排序
+                uniqueSummaries.sort((a, b) => b.summaryEndTime - a.summaryEndTime);
+
+                if (uniqueSummaries.length > 0) {
+                        memoryInjectionPrompt = "# PART 0: 你的相关记忆摘要 (请优先参考)\n" + uniqueSummaries.slice(0, 4).map(s => { // 最多注入4条
+                                const relativeTime = formatRelativeTime(s.summaryEndTime);
+                                // 计算有效时长（分钟）
+                                const durationMinutes = Math.round((s.summaryEndTime - s.summaryStartTime) / 60000);
+                                let durationText = durationMinutes < 1 ? "片刻" : `持续了约${durationMinutes}分钟`;
+
+                                return `// 记忆 (发生于 ${relativeTime}, ${durationText}):\n${s.summaryContent}\n`;
+                        }).join('\n');
+                }
+
                 const maxMemory = currentChat.settings.maxMemory || 10;
                 const currentTime = new Date().toLocaleString('zh-CN', { dateStyle: 'full', timeStyle: 'short' });
                 let recentHistory = currentChatForAPI.history.slice(-maxMemory);
@@ -2006,24 +2106,42 @@ async function getAiResponse(charIdToTrigger = null) {
                 }
 
                 let worldBookContext = "";
-                // 检查单人世界书
-                if (currentChatForAPI.settings && currentChatForAPI.settings.worldBookId) {
-                        const personalBook = await db.worldBooks.get(currentChatForAPI.settings.worldBookId);
-                        if (personalBook) {
-                                worldBookContext += `\n\n# 你需要【绝对优先】参考的个人世界观与历史背景:\n`;
-                                worldBookContext += `## ${personalBook.name}\n${personalBook.content}\n\n`;
-                        }
-                }
-                if (currentChatForAPI.groupId) {
-                        const group = await db.xzoneGroups.get(currentChatForAPI.groupId);
-                        if (group && group.worldBookIds && group.worldBookIds.length > 0) {
-                                const worldBooks = await db.worldBooks.bulkGet(group.worldBookIds);
-                                worldBookContext += "\n\n# 你需要参考的世界观与历史背景:\n";
-                                worldBooks.forEach(book => {
-                                        if (book) {
-                                                worldBookContext += `## ${book.name}\n${book.content}\n\n`;
-                                        }
+                // 世界书分级注入逻辑
+                const bookIdsToLoad = new Set();
+                const personalBookIds = currentChatForAPI.settings?.worldBookIds || [];
+                const group = currentChatForAPI.groupId ? await db.xzoneGroups.get(currentChatForAPI.groupId) : null;
+                const groupBookIds = group?.worldBookIds || [];
+
+                // 合并所有可能相关的世界书ID
+                [...personalBookIds, ...groupBookIds].forEach(id => bookIdsToLoad.add(id));
+
+                if (bookIdsToLoad.size > 0) {
+                        const allRelevantBooks = await db.worldBooks.bulkGet(Array.from(bookIdsToLoad));
+                        const filteredBooks = allRelevantBooks.filter(book => book && !book.name.includes('编年史'));
+
+                        // 1. 无条件注入“始终启用”的世界书
+                        const alwaysBooks = filteredBooks.filter(b => b.triggerType === 'always');
+                        if (alwaysBooks.length > 0) {
+                                worldBookContext += "\n\n# PART X: 核心世界观 (你必须时刻遵守)\n";
+                                alwaysBooks.forEach(book => {
+                                        worldBookContext += `## ${book.name}\n${book.content}\n\n`;
                                 });
+                        }
+
+                        // 2. 根据上下文关键词，触发注入相关的世界书
+                        const keywordBooks = filteredBooks.filter(b => b.triggerType === 'keyword');
+                        if (keywordBooks.length > 0) {
+                                // 使用我们之前为记忆摘要创建的 combinedContext
+                                const triggeredBooks = keywordBooks.filter(book =>
+                                        book.keywords.some(keyword => combinedContext.includes(keyword.toLowerCase()))
+                                );
+
+                                if (triggeredBooks.length > 0) {
+                                        worldBookContext += "\n\n# PART Y: 相关背景知识 (因对话触发)\n";
+                                        triggeredBooks.forEach(book => {
+                                                worldBookContext += `## ${book.name}\n${book.content}\n\n`;
+                                        });
+                                }
                         }
                 }
 
@@ -2138,7 +2256,8 @@ async function getAiResponse(charIdToTrigger = null) {
                         injectedInstructions.push(instructions.handleMusicControl);
                 }
                 console.log("Injected instructions:", injectedInstructions);
-                const lastUserMessageText = currentChatForAPI.history.filter(m => m.role === 'user').pop()?.content || '';
+
+
                 let relevantDiariesPrompt = "";
 
                 const authorIdToSearch = isGroupChat
@@ -2507,6 +2626,7 @@ ${commentsText}
                 `;
 
                                 simplifiedToolboxPrompt = `
+你的回复必须是一个JSON数组, 数组中每个对象都必须包含一个 "type" 键来指定动作类型。
 -发送文本: text(senderId, content)
 -引用回复: quote_reply(senderId, target_timestamp, reply_content)
 -发送表情: send_sticker(senderId, name)
@@ -2630,7 +2750,7 @@ ${Array.from(groupMemberDetailsMap.values()).map(m => `
 - **示例**: {"source_char_name": "角色A", "target_char_name": "角色B", "score_change": 2, "reason": "用户赞同了我的观点，很开心。"}
 
 
-# PART 5: 可用工具箱 (Unified Toolbox of Actions)
+# PART 5: 可用工具箱 (Toolbox - 核心指令是 "type")
 ${toolboxContent}
 
 ## 5.6 共享资源库(所有角色共用)
@@ -2743,6 +2863,7 @@ ${guide}
             `;
 
                                 simplifiedToolboxPrompt = `
+你的回复必须是一个JSON数组, 数组中每个对象都必须包含一个 "type" 键来指定动作类型。
 -发送文本: text(content)
 -引用回复: quote_reply(target_timestamp, reply_content)
 -发送表情: send_sticker(name)
@@ -2784,7 +2905,9 @@ ${guide}
                                 const userNickname = activeUserPersona?.name || '我';
                                 const userPersona = activeUserPersona?.persona || '用户的角色设定未知。';
 
-                                systemPrompt = `         
+                                systemPrompt = `    
+${memoryInjectionPrompt}      
+
 # PART 1: 核心角色与使命 (Core Role & Mission)
 你正在扮演名为“${currentChat.realName}”的角色（你的昵称为“${currentChat.name}”），与用户进行一对一的私密对话。
 
@@ -2882,7 +3005,7 @@ ${relationsContext}
 - **示例**: {"source_char_name": "角色A", "target_char_name": "User", "score_change": 2, "reason": "用户赞同了我的观点，很开心。"}
 
 
-# PART 5: 可用工具箱 (Unified Toolbox of Actions)
+# PART 5: 可用工具箱 (Toolbox - 核心指令是 "type")
 ${toolboxContent}
 ## 5.6 你的可用资源库 (必须精确匹配名称)
 - **你的可用头像库**:
@@ -2995,7 +3118,6 @@ ${guide}
                         // 恢复UI状态
                         headerEl.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
                         headerEl.classList.remove('typing-status');
-                        apiLock.release('user_chat'); // 确保在出错时也释放锁
                         return; // 提前退出函数
                 }
                 apiCallSuccess = true;
@@ -3132,6 +3254,13 @@ ${guide}
 
                         let messageTimestamp = Date.now();
                         for (const action of messagesArray) {
+                                if (action.action && !action.type) {
+                                        console.warn('AI 错误地使用了 "action" 字段，已自动修正为 "type"。下次将强制使用完整版工具箱。', action);
+                                        action.type = action.action;
+                                        delete action.action;
+                                        // 触发重试机制
+                                        sessionStorage.setItem('ai_last_call_failed', 'true');
+                                }
                                 if (!action.type) {
                                         console.warn("AI action is missing 'type' field, skipping:", action);
                                         continue;
@@ -3668,6 +3797,8 @@ ${guide}
                                                         timestamp: new Date(messageTimestamp++)
                                                 });
                                                 appendMessage({ role: 'system', type: 'system_message', content: `⭐ ${actorName} 将此事标记为核心记忆。` });
+                                                shouldTriggerSummary = true;
+
                                                 break;
 
                                         case 'create_countdown': {
@@ -3731,6 +3862,7 @@ ${guide}
                                                                 appendMessage(systemMessage);
                                                         }
                                                 }
+                                                shouldTriggerSummary = true;
                                                 break;
                                         case 'pat_user':
                                                 const patteeNameUser = currentChat.settings.myNickname || '我';
@@ -3891,6 +4023,10 @@ ${guide}
 
                         if (!isGroupChat) updateHeaderStatus();
                 }
+                if (shouldTriggerSummary) {
+                        // 如果有需要触发即时总结的动作，调用即时总结函数
+                        triggerImmediateSummary(charId);
+                }
         } catch (error) {
                 console.error("API call failed:", error);
                 // 提取错误状态码（如果有的话）
@@ -3899,7 +4035,6 @@ ${guide}
                 // 显示一个更简洁的 Toast 提示
                 showToast(`获取AI回复失败${errorCode}`, 'error');
         } finally {
-                apiLock.release('user_chat');
                 if (isCallActive) {
                         // 通话模式结束AI响应时的处理
                         isAiRespondingInCall = false;
@@ -3920,7 +4055,10 @@ ${guide}
                         headerEl.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
                         headerEl.classList.remove('typing-status');
                 }
+                const duration = Date.now() - startTime;
+                console.log(`本次AI回复耗时: ${duration}ms`);
         }
+        }, apiLock.PRIORITY_HIGH, 'user_chat');
 }
 // --- Status ---
 
@@ -5147,27 +5285,6 @@ async function handleMultiImageUpload(event) {
         }
 }
 
-/**
- * 格式化时间戳为相对时间字符串
- * @param {Date | string | number} timestamp - 要格式化的时间戳
- * @returns {string} - 格式化后的字符串 (例如 "刚刚", "5分钟前", "昨天")
- */
-function formatRelativeTime(timestamp) {
-        const now = new Date();
-        const date = new Date(timestamp);
-        const diffMs = now - date;
-        const diffSeconds = Math.round(diffMs / 1000);
-        const diffMinutes = Math.round(diffSeconds / 60);
-        const diffHours = Math.round(diffMinutes / 60);
-        const diffDays = Math.round(diffHours / 24);
-
-        if (diffMinutes < 1) return '刚刚';
-        if (diffMinutes < 60) return `${diffMinutes}分钟前`;
-        if (diffHours < 24) return `${diffHours}小时前`;
-        if (diffDays === 1) return '昨天';
-        if (diffDays < 7) return `${diffDays}天前`;
-        return date.toLocaleDateString('zh-CN'); // 超过一周则显示具体日期
-}
 
 // --- 通话核心功能函数 ---
 
@@ -5659,5 +5776,23 @@ async function generateAudioFromText(text, voiceId, ttsProfile) {
                 console.error("Failed to upload audio to Cloudinary, using temporary blob URL as fallback.", uploadError);
                 // 如果上传失败，我们仍然可以创建一个临时 URL 作为后备方案，保证功能可用
                 return URL.createObjectURL(audioBlob);
+        }
+}
+
+function handleBroadcastMessage(event) {
+        // 检查消息类型和是否存在chatId
+        if (event.data && event.data.type === 'new_message' && event.data.chatId) {
+                // 如果消息中的chatId与当前聊天室的charId匹配
+                if (event.data.chatId === charId) {
+                        console.log('接收到当前聊天室的新消息广播，正在刷新...');
+                        // 重新从数据库加载数据并渲染
+                        // 这是一个很好的实践，因为它能确保数据是最新的
+                        db.chats.get(charId).then(updatedChat => {
+                                if (updatedChat) {
+                                        currentChat = updatedChat; // 更新全局的 currentChat 变量
+                                        renderMessages(); // 调用现有的渲染函数
+                                }
+                        });
+                }
         }
 }

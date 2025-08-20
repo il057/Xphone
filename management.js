@@ -263,7 +263,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!confirmed) return;
 
                 await db.transaction('rw', db.chats, async () => {
-                        const updates = selectedIds.map(id => ({ key: id, changes: { history: [], lastMessageTimestamp: null, lastMessageContent: null } }));
+                        const updates = selectedIds.map(id => ({ key: id, changes: { 
+                                history: [], 
+                                lastMessageTimestamp: null, 
+                                lastMessageContent: null,
+                                lastSummaryActionCount: null,
+                                userActionCount: 0
+                        } }));
                         await db.chats.bulkUpdate(updates);
                 });
                 showToast(`已成功清空 ${selectedIds.length} 个角色的聊天记录。`, 'success');
@@ -277,7 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!confirmed) return;
 
                 await db.transaction('rw', db.chats, db.xzonePosts, db.memories, db.diaries, db.callLogs, db.favorites, async () => {
-                        const historyUpdates = selectedIds.map(id => ({ key: id, changes: { history: [], lastMessageTimestamp: null, lastMessageContent: null } }));
+                        const historyUpdates = selectedIds.map(id => ({ key: id, changes: { 
+                                history: [], 
+                                lastMessageTimestamp: null, 
+                                lastMessageContent: null,
+                                lastSummaryActionCount: null,
+                                userActionCount: 0
+                        } }));
                         await db.chats.bulkUpdate(historyUpdates);
 
                         for (const id of selectedIds) {
@@ -309,7 +321,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!confirmed) return;
 
                 await db.transaction('rw', ...db.tables, async () => {
+                        const charactersToDelete = await db.chats.bulkGet(selectedIds);
+                        const charNameMap = new Map(charactersToDelete.map(c => [c.id, { name: c.name, realName: c.realName }]));
+
                         for (const id of selectedIds) {
+                                const charInfo = charNameMap.get(id);
+                                if (!charInfo) continue;
+
+                                const { name: charName, realName: charRealName } = charInfo;
+
                                 await db.chats.delete(id);
                                 await db.xzonePosts.where('authorId').equals(id).delete();
                                 await db.memories.where('chatId').equals(id).delete();
@@ -318,12 +338,49 @@ document.addEventListener('DOMContentLoaded', () => {
                                 await db.favorites.where('chatId').equals(id).delete();
                                 await db.relationships.where('sourceCharId').equals(id).delete();
                                 await db.relationships.where('targetCharId').equals(id).delete();
+                                const eventLogsToDelete = await db.eventLog.filter(log =>
+                                        log.content.includes(charName) || log.content.includes(charRealName)
+                                ).primaryKeys();
+                                if (eventLogsToDelete.length > 0) {
+                                        await db.eventLog.bulkDelete(eventLogsToDelete);
+                                }
+
                                 // 从群聊中移除该角色
                                 await db.chats.where('isGroup').equals(1).modify(group => {
                                         if (group.members && group.members.includes(id)) {
                                                 group.members = group.members.filter(memberId => memberId !== id);
                                         }
                                 });
+                        }
+                        const allNames = charactersToDelete.flatMap(c => [c.name, c.realName]);
+
+                        // 清理 OfflineSummary
+                        const summariesToUpdate = await db.offlineSummary.toArray();
+                        for (const summary of summariesToUpdate) {
+                                const originalEventCount = summary.events.length;
+                                summary.events = summary.events.filter(event =>
+                                        !allNames.some(name => event.includes(name))
+                                );
+                                if (summary.events.length < originalEventCount) {
+                                        if (summary.events.length > 0) {
+                                                await db.offlineSummary.put(summary);
+                                        } else {
+                                                await db.offlineSummary.delete(summary.id);
+                                        }
+                                }
+                        }
+
+                        // 清理 WorldBooks (编年史)
+                        const chroniclesToUpdate = await db.worldBooks.filter(book => book.name.includes('编年史')).toArray();
+                        for (const chronicle of chroniclesToUpdate) {
+                                const lines = chronicle.content.split('\n');
+                                const newLines = lines.filter(line =>
+                                        !allNames.some(name => line.includes(name))
+                                );
+                                if (newLines.length < lines.length) {
+                                        chronicle.content = newLines.join('\n');
+                                        await db.worldBooks.put(chronicle);
+                                }
                         }
                 });
                 showToast(`已成功删除 ${selectedIds.length} 个角色。`, 'success');

@@ -3,6 +3,7 @@
 import { db, uploadImage, getActiveApiProfile, callApi } from './db.js'; 
 import { showUploadChoiceModal, showImagePickerModal, showAlbumPickerModal, promptForInput } from './ui-helpers.js'; // 导入三个助手
 import { showToast, showToastOnNextPage, showConfirmModal } from './ui-helpers.js';
+import { formatRelativeTime } from './simulationEngine.js'; 
 
 document.addEventListener('DOMContentLoaded', async () => {
     // --- DB & State ---
@@ -1139,6 +1140,150 @@ ${currentCss}
                 });
         }
 
+        // --- State for Summary Editor ---
+        let editingSummaryId = null;
+
+        /**
+         * 渲染指定角色的记忆摘要列表
+         */
+        async function renderSummaryList() {
+                const container = document.getElementById('summary-list-container');
+                if (!charId || !container) return;
+
+                const summaries = await db.chatSummaries.where('chatId').equals(charId).reverse().toArray();
+
+                if (summaries.length === 0) {
+                        container.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">暂无记忆摘要</p>';
+                        return;
+                }
+
+                container.innerHTML = summaries.map(summary => `
+            <div class="summary-card p-3 border rounded-lg ${summary.isEnabled ? 'bg-white' : 'bg-gray-100 opacity-60'}">
+                <div class="flex justify-between items-start">
+                    <div class="flex-grow">
+                        <p class="text-xs text-gray-400">${formatRelativeTime(summary.summaryEndTime)}</p>
+                        <p class="summary-content-text text-sm text-gray-700 mt-1 whitespace-pre-wrap">${summary.summaryContent}</p>
+                        <p class="text-xs text-gray-400 mt-2">关键词: ${summary.keywords.join(', ')}</p>
+                    </div>
+                    <div class="flex flex-col items-center space-y-2 ml-2 flex-shrink-0">
+                        <button data-summary-action="toggle" data-summary-id="${summary.id}" title="${summary.isEnabled ? '禁用' : '启用'}" class="p-1">
+                            ${summary.isEnabled
+                                ? '<svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>'
+                                : '<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>'
+                        }
+                        </button>
+                        <button data-summary-action="edit" data-summary-id="${summary.id}" title="编辑" class="p-1">
+                            <svg class="w-5 h-5 text-gray-400 hover:text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                        </button>
+                         <button data-summary-action="delete" data-summary-id="${summary.id}" title="删除" class="p-1">
+                            <svg class="w-5 h-5 text-gray-400 hover:text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        }
+
+        /**
+         * 为摘要列表的按钮绑定事件委托
+         */
+        function setupSummaryEventListeners() {
+                const container = document.getElementById('summary-list-container');
+                if (!container) return;
+
+                container.addEventListener('click', async (e) => {
+                        const button = e.target.closest('button[data-summary-action]');
+                        if (!button) return;
+
+                        const action = button.dataset.summaryAction;
+                        const summaryId = parseInt(button.dataset.summaryId);
+
+                        switch (action) {
+                                case 'toggle':
+                                        const summary = await db.chatSummaries.get(summaryId);
+                                        await db.chatSummaries.update(summaryId, { isEnabled: !summary.isEnabled });
+                                        await renderSummaryList();
+                                        break;
+                                case 'edit':
+                                        await openSummaryEditor(summaryId);
+                                        break;
+                                case 'delete':
+                                        const confirmed = await showConfirmModal('删除摘要', '确定要永久删除这条记忆摘要吗？', '删除', '取消');
+                                        if (confirmed) {
+                                                await db.chatSummaries.delete(summaryId);
+                                                await renderSummaryList();
+                                        }
+                                        break;
+                        }
+                });
+        }
+
+        /**
+         * 打开摘要编辑器模态框
+         */
+        async function openSummaryEditor(summaryId) {
+                editingSummaryId = summaryId;
+                const summary = await db.chatSummaries.get(summaryId);
+                // 复用现有的promptForInput模态框，只需要创建一个新的就行
+                const modalId = 'summary-editor-modal';
+                document.getElementById(modalId)?.remove();
+
+                const modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'modal visible';
+                modal.innerHTML = `
+            <div class="modal-content bg-white rounded-lg w-full max-w-lg max-h-[90vh] flex flex-col">
+                <header class="p-4 border-b font-semibold text-center">编辑记忆摘要</header>
+                <main class="flex-grow p-4 space-y-4 overflow-y-auto">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">摘要内容</label>
+                        <textarea id="summary-content-input" class="form-input mt-1 w-full" rows="6">${summary.summaryContent}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">关键词 (逗号分隔)</label>
+                        <input type="text" id="summary-keywords-input" class="form-input mt-1 w-full" value="${summary.keywords.join(', ')}">
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-700">优先级</label>
+                         <select id="summary-priority-select" class="form-input mt-1 block w-full">
+                            <option value="0" ${summary.priority === 0 ? 'selected' : ''}>普通</option>
+                            <option value="1" ${summary.priority === 1 ? 'selected' : ''}>重要</option>
+                            <option value="2" ${summary.priority === 2 ? 'selected' : ''}>核心</option>
+                        </select>
+                    </div>
+                </main>
+                <footer class="p-4 border-t grid grid-cols-2 gap-3">
+                    <button class="modal-btn modal-btn-cancel">取消</button>
+                    <button class="modal-btn modal-btn-confirm">保存</button>
+                </footer>
+            </div>
+        `;
+                document.body.appendChild(modal);
+
+                modal.querySelector('.modal-btn-cancel').addEventListener('click', () => modal.remove());
+                modal.querySelector('.modal-btn-confirm').addEventListener('click', handleSaveSummary);
+        }
+
+        /**
+         * 保存编辑后的摘要
+         */
+        async function handleSaveSummary() {
+                const content = document.getElementById('summary-content-input').value;
+                const keywords = document.getElementById('summary-keywords-input').value.split(',').map(k => k.trim()).filter(Boolean);
+                const priority = parseInt(document.getElementById('summary-priority-select').value);
+
+                await db.chatSummaries.update(editingSummaryId, {
+                        summaryContent: content,
+                        keywords: keywords,
+                        priority: priority
+                });
+
+                document.getElementById('summary-editor-modal').remove();
+                editingSummaryId = null;
+                await renderSummaryList();
+                showToast('摘要已更新！', 'success');
+        }
+
 
     // --- Event Listeners ---
     customBubbleCssInput.addEventListener('input', () => applyLiveCssPreview(customBubbleCssInput.value));
@@ -1239,6 +1384,8 @@ ${currentCss}
                 chatData.history = [];
                 chatData.lastMessageTimestamp = null;
                 chatData.lastMessageContent = null;
+                chatData.lastSummaryActionCount = null;
+                chatData.userActionCount = 0;
                 await db.chats.put(chatData);
                 showToast('聊天记录已清空！');
         }
@@ -1267,9 +1414,14 @@ ${currentCss}
         if (confirmation === chatData.name) {
             try {
                 // --- 使用事务进行级联删除 ---
-                await db.transaction('rw', db.chats, db.xzonePosts, db.relationships, db.memories, db.favorites, db.callLogs, db.diaries, async () => {
+                    await db.transaction('rw', ...db.tables, async () => {
                     const idToDelete = chatData.id;
+                        const characterToDelete = await db.chats.get(idToDelete);
+                        if (!characterToDelete) return;
+                        const charName = characterToDelete.name;
+                        const charRealName = characterToDelete.realName;
 
+                        
                     // 1. 删除角色/群聊本身
                     await db.chats.delete(idToDelete);
 
@@ -1295,6 +1447,42 @@ ${currentCss}
 
                         // 删除与该角色的所有通话记录
                         await db.callLogs.where('charId').equals(idToDelete).delete();
+
+                            // 3. 删除相关的 EventLog
+                            const eventLogsToDelete = await db.eventLog.filter(log =>
+                                    log.content.includes(charName) || log.content.includes(charRealName)
+                            ).primaryKeys();
+                            await db.eventLog.bulkDelete(eventLogsToDelete);
+
+                            // 4. 清理 OfflineSummary (简报)
+                            const summariesToUpdate = await db.offlineSummary.filter(summary =>
+                                    summary.events.some(event => event.includes(charName) || event.includes(charRealName))
+                            ).toArray();
+
+                            for (const summary of summariesToUpdate) {
+                                    summary.events = summary.events.filter(event =>
+                                            !event.includes(charName) && !event.includes(charRealName)
+                                    );
+                                    if (summary.events.length > 0) {
+                                            await db.offlineSummary.put(summary);
+                                    } else {
+                                            await db.offlineSummary.delete(summary.id);
+                                    }
+                            }
+
+                            // 5. 清理 WorldBooks (编年史)
+                            const chroniclesToUpdate = await db.worldBooks.filter(book =>
+                                    book.name.includes('编年史') && (book.content.includes(charName) || book.content.includes(charRealName))
+                            ).toArray();
+
+                            for (const chronicle of chroniclesToUpdate) {
+                                    const lines = chronicle.content.split('\n');
+                                    const newLines = lines.filter(line =>
+                                            !line.includes(charName) && !line.includes(charRealName)
+                                    );
+                                    chronicle.content = newLines.join('\n');
+                                    await db.worldBooks.put(chronicle);
+                            }
 
                         // 从群聊中移除该角色
                         await db.chats.where('isGroup').equals(1).modify(group => {
@@ -1333,17 +1521,29 @@ ${currentCss}
     });
         setupCollapsibleSection('world-book-header', 'world-book-content');
         setupCollapsibleSection('relationship-header', 'relationship-content');
-    
+
+        // 为摘要区域的折叠功能添加事件监听
+        const summaryHeader = document.getElementById('summary-header');
+        if (summaryHeader) {
+                summaryHeader.addEventListener('click', () => {
+                        const content = document.getElementById('summary-content');
+                        const icon = summaryHeader.querySelector('svg');
+                        content.classList.toggle('hidden');
+                        icon.classList.toggle('rotate-180');
+                });
+        }
 
     // --- Init ---
  
-    if (isNew) {
-        document.querySelector('h1').textContent = '创建新角色'; // Change header title
-        initializeNewCharacter();
-    } else if (charId) {
-        loadData(); // This function is now for existing characters only
-    } else {
-        showToastOnNextPage('无效的链接，缺少必要参数。', 'error');
-        window.location.href = 'contacts.html';
-    }
+        if (isNew) {
+                document.querySelector('h1').textContent = '创建新角色'; // Change header title
+                initializeNewCharacter();
+        } else if (charId) {
+                loadData(); // This function is now for existing characters only
+                renderSummaryList();
+        } else {
+                showToastOnNextPage('无效的链接，缺少必要参数。', 'error');
+                window.location.href = 'contacts.html';
+        }
+        setupSummaryEventListeners();
 });

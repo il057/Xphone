@@ -143,13 +143,14 @@ db.version(35).stores({
     });
 });
 
-db.version(38).stores({
-        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp, personaAbstract', 
+db.version(39).stores({
+        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp, personaAbstract, pendingSummaryAnalysis', 
+        chatSummaries: '++id, chatId, summaryStartTime, summaryEndTime, keywords, priority, isEnabled',
         apiProfiles: '++id, &profileName',
         ttsProfiles: '++id, &profileName',
         globalSettings: '&id, activeApiProfileId',
         userStickers: '++id, &url, name, order',
-        worldBooks: '&id, name',
+        worldBooks: '&id, name, triggerType',
         musicLibrary: '&id',
         personaPresets: '++id, name, avatar, gender, birthday, persona',
         xzoneSettings: '&id',
@@ -168,6 +169,12 @@ db.version(38).stores({
         offlineSummary: '&id, timestamp',
         callLogs: '++id, charId, type, startTime, duration',
         diaries: '++id, chatId, authorId, timestamp, content, keywords, &[authorId+timestamp]'
+}).upgrade(tx => {
+        // [新增] 为旧的世界书数据添加默认值
+        return tx.table('worldBooks').toCollection().modify(book => {
+                book.triggerType = 'always'; // 默认所有旧的世界书都是“始终启用”
+                book.keywords = [];
+        });
 });
 
 /**
@@ -184,73 +191,63 @@ export async function getActiveApiProfile() {
 }
 
 /**
- * A simple, priority-based asynchronous lock for controlling access to the API.
- * Prevents race conditions between user-initiated requests and background tasks.
+ * [重构] 一个基于优先级的异步任务队列，用于控制对API的访问。
+ * A priority-based asynchronous queue to manage API access, preventing race conditions.
  */
 export const apiLock = {
-    _lockKey: 'xphone_api_lock',
-    _lockTTL: 30000, // 30 seconds Time-To-Live for the lock to prevent deadlocks
+        _queue: [],
+        _isLocked: false,
+        PRIORITY_HIGH: 10, // 用户聊天、即时总结等
+        PRIORITY_LOW: 1,   // 后台模拟、批量总结等
 
-    /**
-     * Attempts to acquire the lock.
-     * @param {string} requester - A descriptive name for the task requesting the lock (e.g., 'user_chat', 'background_tick').
-     * @returns {Promise<boolean>} - True if the lock was acquired, false otherwise.
-     */
-    async acquire(requester) {
-        const now = Date.now();
-        const currentLock = localStorage.getItem(this._lockKey);
+        /**
+         * 检查具有特定名称的任务是否已在队列中。
+         * @param {string} requester - 任务的名称。
+         * @returns {boolean} - 如果任务已在队列中，则返回 true。
+         */
+        isQueued(requester) {
+                // 使用 .some() 高效地检查队列中是否存在匹配的任务
+                return this._queue.some(task => task.requester === requester);
+        },
+        /**
+         * 将一个任务加入队列。
+         * @param {Function} action - 要执行的异步函数。
+         * @param {number} priority - 任务的优先级。
+         * @param {string} requester - 任务的名称，用于调试。
+         * @returns {Promise} - 一个在你的任务完成时解析的Promise。
+         */
+        enqueue(action, priority, requester) {
+                return new Promise((resolve, reject) => {
+                        this._queue.push({ action, priority, requester, resolve, reject });
+                        // 按优先级从高到低排序
+                        this._queue.sort((a, b) => b.priority - a.priority);
+                        this._processQueue();
+                });
+        },
 
-        if (currentLock) {
-            const { timestamp } = JSON.parse(currentLock);
-            // If lock is old, consider it expired and allow acquiring.
-            if (now - timestamp > this._lockTTL) {
-                 console.warn("Found an expired API lock. Overriding.");
-            } else {
-                // If a lock exists and is not expired, deny acquisition.
-                // console.log(`API lock is held by another process. Requester "${requester}" must wait.`);
-                return false;
-            }
+        async _processQueue() {
+                if (this._isLocked || this._queue.length === 0) {
+                        return;
+                }
+
+                this._isLocked = true;
+                const task = this._queue.shift(); // 取出最高优先级的任务
+
+                console.log(`API Lock: Acquired by "${task.requester}" (Priority: ${task.priority}). Queue size: ${this._queue.length}`);
+
+                try {
+                        const result = await task.action();
+                        task.resolve(result);
+                } catch (error) {
+                        console.error(`API Lock: Task "${task.requester}" failed.`, error);
+                        task.reject(error);
+                } finally {
+                        this._isLocked = false;
+                        console.log(`API Lock: Released by "${task.requester}".`);
+                        // 立即尝试处理队列中的下一个任务
+                        this._processQueue();
+                }
         }
-
-        // Acquire the lock
-        const newLock = { requester, timestamp: now };
-        localStorage.setItem(this._lockKey, JSON.stringify(newLock));
-        // console.log(`API lock acquired by "${requester}".`);
-        return true;
-    },
-
-    /**
-     * Releases the lock.
-     * @param {string} requester - The name of the task releasing the lock. Should match the acquiring requester.
-     */
-    release(requester) {
-        const currentLock = localStorage.getItem(this._lockKey);
-        if (currentLock) {
-            const { requester: lockRequester } = JSON.parse(currentLock);
-            // Only the original acquirer should release the lock
-            if (lockRequester === requester) {
-                localStorage.removeItem(this._lockKey);
-                // console.log(`API lock released by "${requester}".`);
-            }
-        }
-    },
-
-    /**
-     * Gets the current lock holder's name.
-     * @returns {string} - 'idle' if no lock, or the name of the lock holder.
-     */
-    getCurrentLock() {
-        const currentLock = localStorage.getItem(this._lockKey);
-        if (currentLock) {
-            const { requester, timestamp } = JSON.parse(currentLock);
-            if (Date.now() - timestamp > this._lockTTL) {
-                localStorage.removeItem(this._lockKey); // Clean up expired lock
-                return 'idle';
-            }
-            return requester;
-        }
-        return 'idle';
-    }
 };
 
 
@@ -477,6 +474,8 @@ export async function callApi(systemPrompt, messagesPayload = [], generationConf
         }
 
         const data = await response.json();
+        console.log("Full API Response:", JSON.stringify(data, null, 2)); // 完整打印API响应
+
         let rawContent;
 
         if (apiConfig.apiProvider === 'gemini') {
@@ -486,6 +485,11 @@ export async function callApi(systemPrompt, messagesPayload = [], generationConf
         }
 
         if (!rawContent) {
+                const safetyRatings = data.candidates?.[0]?.safetyRatings;
+                if (safetyRatings && safetyRatings.some(r => r.blocked === true || r.probability !== 'NEGLIGIBLE')) {
+                        console.error("API Response Blocked by Safety Filters:", data);
+                        throw new Error("AI回复内容被安全策略拦截，请检查人设或对话内容。");
+                }
                 console.error("Invalid API Response:", data);
                 throw new Error("API返回了无效的数据结构。");
         }
