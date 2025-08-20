@@ -892,6 +892,39 @@
                 }
             }
         });
+        
+        const notificationChannel = new BroadcastChannel('xphone_notifications');
+            notificationChannel.onmessage = async (event) => {
+                    if (!event.data) return;
+
+                    if (event.data.type === 'new_moment') {
+                            console.log('接收到新动态广播，正在刷新动态列表...');
+                            // 重新加载整个列表
+                            await renderPosts();
+
+                    } else if (event.data.type === 'post_update' && event.data.postId) {
+                            console.log(`接收到动态 #${event.data.postId} 的更新广播...`);
+                            const postId = event.data.postId;
+
+                            // 1. 从数据库获取这条动态的最新数据
+                            const updatedPost = await db.xzonePosts.get(postId);
+                            if (!updatedPost) return;
+
+                            // 2. 在页面上找到对应的动态元素
+                            const postElement = document.querySelector(`.favorite-card[data-post-id="${postId}"]`);
+                            if (!postElement) return;
+
+                            // 3. 检查当前用户是否收藏了这条动态
+                            const favorite = await db.favorites.where({ type: 'xzone_post', 'content.id': postId }).first();
+
+                            // 4. 调用 updatePostUI 函数，只刷新这一条动态的UI
+                            updatePostUI(postElement, updatedPost, { isFavorited: !!favorite });
+                    }
+            };
+            // 当页面关闭时，清理监听器
+            window.addEventListener('unload', () => {
+                    notificationChannel.close();
+            });
     });
 
     </script>

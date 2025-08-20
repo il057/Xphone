@@ -275,7 +275,7 @@ async function init() {
         //在所有UI设置好之后，检查并处理离线事件
         await handleChatEntryLogic();
 
-        
+        listenForLiveUpdates();
 }
 
 // --- UI and Rendering Functions ---
@@ -1066,6 +1066,40 @@ function scrollToBottom(force = false) {
         chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+function listenForLiveUpdates() {
+        notificationChannel.onmessage = async (event) => {
+                // 检查是否是新消息，并且是针对当前聊天室的
+                if (event.data && event.data.type === 'new_message' && event.data.chatId === charId) {
+                        console.log('接收到当前聊天室的新消息广播，正在刷新...');
+
+                        // 从数据库重新加载最新的聊天数据
+                        const updatedChat = await db.chats.get(charId);
+                        if (updatedChat) {
+                                // 找到比当前已渲染的最后一条消息更新的消息
+                                const lastRenderedTimestamp = renderedMessages.length > 0
+                                        ? new Date(renderedMessages[renderedMessages.length - 1].timestamp).getTime()
+                                        : 0;
+
+                                const newMessages = updatedChat.history.filter(msg =>
+                                        new Date(msg.timestamp).getTime() > lastRenderedTimestamp
+                                );
+
+                                // 将新消息追加到UI
+                                newMessages.forEach(appendMessage);
+
+                                // 更新全局的 currentChat 变量，这很重要
+                                currentChat = updatedChat;
+
+                                // 收到消息后，自动将未读数清零
+                                if (currentChat.unreadCount > 0) {
+                                        currentChat.unreadCount = 0;
+                                        await db.chats.put(currentChat);
+                                }
+                        }
+                }
+        };
+}
+
 // --- Event Listeners Setup ---
 
 async function setupEventListeners() {
@@ -1683,6 +1717,10 @@ async function setupEventListeners() {
                 callInitiator = 'ai';
                 connectCall(incomingCallOffer.type);
                 incomingCallOffer = null;
+        });
+
+        window.addEventListener('unload', () => {
+                notificationChannel.close();
         });
 }
 

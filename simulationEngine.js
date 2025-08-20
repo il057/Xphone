@@ -774,8 +774,9 @@ ${stickerListForPrompt}
                         imageUrl: action.postType === 'image' ? 'https://i.postimg.cc/KYr2qRCK/1.jpg' : '',
                         imageDescription: action.imageDescription || '',
                     };
-                    await db.xzonePosts.add(postData);
+                    const newPostId = await db.xzonePosts.add(postData);
                     console.log(`后台活动: 角色 "${actorName}" 发布了动态`);
+                    notificationChannel.postMessage({ type: 'new_moment' });
                     
                     if (postData.mentionIds && postData.mentionIds.length > 0) {
                         for (const mentionedId of postData.mentionIds) {
@@ -806,6 +807,8 @@ ${stickerListForPrompt}
                             postToLike.likes.push(charId);
                             await db.xzonePosts.update(action.postId, { likes: postToLike.likes });
                             console.log(`后台活动: 角色 "${actorName}" 点赞了动态 #${action.postId}`);
+                        
+                            notificationChannel.postMessage({ type: 'post_update', postId: action.postId });
                         }
                     }
                     break;
@@ -816,6 +819,8 @@ ${stickerListForPrompt}
                         postToComment.comments.push({ author: charId, text: action.commentText });
                         await db.xzonePosts.update(action.postId, { comments: postToComment.comments });
                         console.log(`后台活动: 角色 "${actorName}" 评论了动态 #${action.postId}`);
+
+                            notificationChannel.postMessage({ type: 'post_update', postId: action.postId });
                     }
                     break;
             }
@@ -1039,7 +1044,7 @@ ${stickerListForPrompt}
                                         groupToUpdate.lastMessageContent = message;
                                         groupToUpdate.unreadCount = (groupToUpdate.unreadCount || 0) + 1;
                                         await db.chats.put(groupToUpdate);
-                                        notificationChannel.postMessage({ type: 'new_message' });
+                                        notificationChannel.postMessage({ type: 'new_message', chatId: group.id });
 
                                         console.log(`后台群聊活动: "${actor.name}" 在 "${group.name}" 中执行了 ${action.type} 动作。`);
                                         break;
