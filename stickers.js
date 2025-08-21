@@ -3,226 +3,220 @@ import { db, uploadImage, getActiveApiProfile, callApi } from './db.js';
 import { showUploadChoiceModal, promptForInput, showToast, showConfirmModal } from './ui-helpers.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DOM Elements ---
-    const gridContainer = document.getElementById('sticker-grid-container');
-    const editBtn = document.getElementById('edit-stickers-btn');
-    const bulkAddBtn = document.getElementById('bulk-add-btn');
-    const fileInput = document.getElementById('local-sticker-input');
-    
-    const defaultTitle = document.getElementById('default-title');
-    const editModeActions = document.getElementById('edit-mode-actions');
-    const backBtn = document.getElementById('back-btn');
-    const moveTopBtn = document.getElementById('move-top-btn');
-    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+        // --- DOM Elements ---
+        const gridContainer = document.getElementById('sticker-grid-container');
+        const fileInput = document.getElementById('local-sticker-input');
 
-    // --- State ---
-    let isEditMode = false;
-    let selectedStickers = new Set();
+        // Header elements
+        const headerLeftBtn = document.getElementById('header-left-btn');
+        const defaultTitle = document.getElementById('default-title');
+        const moreOptionsBtn = document.getElementById('more-options-btn');
+        const moreOptionsMenu = document.getElementById('more-options-menu');
 
-    // --- Core Functions ---
-    async function renderStickers() {
-        gridContainer.innerHTML = '';
-        
-        // “添加”按钮
-        const addButton = document.createElement('div');
-        addButton.className = 'sticker-grid-item border-2 border-dashed border-gray-300';
-        addButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="text-gray-400" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>`;
-        addButton.addEventListener('click', () => {
-            if (isEditMode) return;
-            handleAddSticker(); // 调用新的添加流程
-        });
-        gridContainer.appendChild(addButton);
+        // Menu items
+        const bulkAddBtn = document.getElementById('bulk-add-btn');
+        const exportAllBtn = document.getElementById('export-all-btn');
+        const editBtn = document.getElementById('edit-stickers-btn');
 
-        // 渲染已有表情
-        const stickers = await db.userStickers.orderBy('order').reverse().toArray();
-        stickers.forEach(sticker => {
-            const stickerEl = createStickerElement(sticker);
-            gridContainer.appendChild(stickerEl);
-        });
-    }
-    
-    function createStickerElement(sticker) {
-        const stickerEl = document.createElement('div');
-        stickerEl.className = 'sticker-grid-item relative group';
-        stickerEl.dataset.id = sticker.id;
-        let thumbnailUrl = sticker.url;
-        // 检查URL是否是Cloudinary的URL
-        if (thumbnailUrl.includes('res.cloudinary.com')) {
-            // 在 /upload/ 后插入变换参数 'w_200/'
-            thumbnailUrl = thumbnailUrl.replace('/upload/', '/upload/w_200/');
+        // Edit mode footer elements
+        const editModeFooter = document.getElementById('edit-mode-footer');
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+        const moveTopBtn = document.getElementById('move-top-btn');
+
+        // --- State ---
+        let isEditMode = false;
+        let selectedStickers = new Set();
+        let isDragging = false;
+        let dragStartPos = { x: 0, y: 0 };
+        let selectionRectEl = null;
+
+        // --- Core Functions ---
+        async function renderStickers() {
+                gridContainer.innerHTML = '';
+
+                const addButton = document.createElement('div');
+                addButton.className = 'sticker-grid-item border-2 border-dashed border-gray-300';
+                addButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="text-gray-400" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/></svg>`;
+                addButton.addEventListener('click', () => {
+                        if (isEditMode) return;
+                        handleAddSticker();
+                });
+                gridContainer.appendChild(addButton);
+
+                const stickers = await db.userStickers.orderBy('order').reverse().toArray();
+                stickers.forEach(sticker => {
+                        const stickerEl = createStickerElement(sticker);
+                        gridContainer.appendChild(stickerEl);
+                });
         }
-        stickerEl.innerHTML = `
-            <img src="${thumbnailUrl}" alt="${sticker.name}" class="pointer-events-none w-full h-full object-contain">
+
+        function createStickerElement(sticker) {
+                const stickerEl = document.createElement('div');
+                stickerEl.className = 'sticker-grid-item relative group';
+                stickerEl.dataset.id = sticker.id;
+                let thumbnailUrl = sticker.url;
+                if (thumbnailUrl.includes('res.cloudinary.com')) {
+                        thumbnailUrl = thumbnailUrl.replace('/upload/', '/upload/w_200/');
+                }
+                stickerEl.innerHTML = `
+            <img src="${thumbnailUrl}" alt="${sticker.name}">
             <div class="absolute inset-0 bg-black/20 hidden items-center justify-center edit-mode-item">
-                <input type="checkbox" class="absolute top-2 right-2 w-5 h-5 accent-pink-500 pointer-events-none">
+                <input type="checkbox" class="absolute top-2 right-2 w-5 h-5 pointer-events-none" style="accent-color: var(--theme-color);">
             </div>
         `;
-        return stickerEl;
-    }
-
-    function toggleEditMode() {
-        isEditMode = !isEditMode;
-        
-        defaultTitle.classList.toggle('hidden', isEditMode);
-        backBtn.classList.toggle('hidden', isEditMode);
-        editModeActions.classList.toggle('hidden', !isEditMode);
-        bulkAddBtn.classList.toggle('hidden', isEditMode);
-        editBtn.textContent = isEditMode ? '完成' : '编辑';
-        gridContainer.classList.toggle('edit-mode', isEditMode);
-
-        if (!isEditMode) {
-            selectedStickers.clear();
-            renderStickers();
-        }
-    }
-    
-    // --- New Add Sticker Flow ---
-    async function handleAddSticker() {
-        const choice = await showUploadChoiceModal(fileInput);
-        if (!choice) return;
-
-        let imageUrl = null;
-
-        if (choice.type === 'local') {
-            const apiConfig = await db.globalSettings.get('main');
-            if (!apiConfig?.cloudinaryCloudName || !apiConfig?.cloudinaryUploadPreset) {
-                showToast("请先在“设置”页面配置 Cloudinary！", 'error');
-                return;
-            }
-            try {
-                imageUrl = await uploadImage(choice.value); // choice.value 是 File 对象
-            } catch (error) {
-                showToast(error.message, 'error');
-                console.error("上传或保存表情失败:", error);
-                return;
-            }
-        } else if (choice.type === 'url') {
-            imageUrl = choice.value;
+                return stickerEl;
         }
 
-        if (imageUrl) {
-            await processAndSaveSticker(imageUrl);
-        }
-    }
-    
-    async function processAndSaveSticker(url) {
-        const name = await promptForInput('给表情起个名字', '例如：开心、疑惑、赞', true);
-        if (name === null) return; // 用户取消
+        function toggleEditMode() {
+                isEditMode = !isEditMode;
+                gridContainer.classList.toggle('edit-mode', isEditMode);
 
-        try {
-            const highestOrder = await db.userStickers.orderBy('order').last();
-            const newOrder = (highestOrder?.order || 0) + 1;
-            await db.userStickers.add({ url, name, order: newOrder });
-            await renderStickers();
-        } catch (e) {
-            showToast(e.name === 'ConstraintError' ? '这个表情已经添加过了！' : '添加失败，请检查URL。', 'error');
-        }
-    }
-
-    async function handleBulkAdd() {
-        const jsonInput = await promptForInput(
-            '批量添加表情',
-            '请粘贴JSON数组或纯文本列表...\nAI会自动尝试转换文本格式。',
-            true, // isTextarea = true
-            false // isOptional = false
-        );
-
-        if (!jsonInput) return; // 用户取消
-
-        let stickersToAdd = [];
-
-        // 步骤 1: 尝试直接解析JSON
-       try {
-            stickersToAdd = JSON.parse(jsonInput);
-        } catch (error) {
-            // 步骤 2: 如果JSON解析失败，则调用AI进行转换
-            console.log("JSON解析失败，启动AI文本转换...");
-            
-            // 在调用AI前，更新UI并禁用按钮
-            bulkAddBtn.textContent = 'AI转换中...';
-            bulkAddBtn.disabled = true;
-
-            try {
-                const convertedJson = await convertTextToJsonWithAI(jsonInput);
-                if (!convertedJson) {
-                    showToast("AI无法将文本转换为有效的JSON格式，请检查您的文本或API设置。", 'error');
-                    return; // 提前返回
-                }
-                stickersToAdd = convertedJson;
-            } catch (aiError) {
-                console.error("AI转换过程中出错:", aiError);
-                showToast(`AI转换失败: ${aiError.message}`, 'error');
-                return; // 提前返回
-            } finally {
-                // 无论成功或失败，最后都恢复按钮状态
-                bulkAddBtn.textContent = '批量添加';
-                bulkAddBtn.disabled = false;
-            }
-        }
-
-        // 步骤 3: 后续处理流程 
-        try {
-            if (!Array.isArray(stickersToAdd)) {
-                throw new Error("输入的不是一个有效的JSON数组。");
-            }
-
-            const validStickers = [];
-            const invalidStickers = [];
-
-            for (const item of stickersToAdd) {
-                if (item && typeof item.name === 'string' && typeof item.url === 'string' && item.name.trim() && item.url.trim()) {
-                    validStickers.push({
-                        name: item.name.trim(),
-                        url: item.url.trim(),
-                    });
+                if (isEditMode) {
+                        defaultTitle.textContent = '选择项目';
+                        headerLeftBtn.textContent = '导出所选';
+                        headerLeftBtn.onclick = handleExportSelected;
+                        moreOptionsBtn.textContent = '完成';
+                        moreOptionsBtn.onclick = toggleEditMode;
+                        moreOptionsMenu.classList.add('hidden');
+                        editModeFooter.classList.add('visible');
+                        editModeFooter.classList.remove('hidden');
                 } else {
-                    invalidStickers.push(item);
+                        defaultTitle.textContent = '我的表情';
+                        headerLeftBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>`;
+                        headerLeftBtn.onclick = () => window.location.href = 'me.html';
+                        moreOptionsBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg>`;
+                        moreOptionsBtn.onclick = (e) => { e.stopPropagation(); moreOptionsMenu.classList.toggle('hidden'); };
+                        editModeFooter.classList.remove('visible');
+                        selectedStickers.clear();
+                        updateSelectionCount();
+                        document.querySelectorAll('.sticker-grid-item.drag-selected').forEach(el => el.classList.remove('drag-selected'));
+                        document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 }
-            }
-
-            if (invalidStickers.length > 0) {
-                console.warn("以下项目格式无效，已被忽略:", invalidStickers);
-            }
-
-            if (validStickers.length === 0) {
-                showToast("没有找到有效的表情数据来添加。", 'error');
-                return;
-            }
-
-            const highestOrderItem = await db.userStickers.orderBy('order').last();
-            let currentOrder = (highestOrderItem?.order || 0);
-
-            const stickersWithOrder = validStickers.map(sticker => {
-                currentOrder++;
-                return { ...sticker, order: currentOrder };
-            });
-
-            await db.userStickers.bulkAdd(stickersWithOrder);
-
-            showToast(`成功添加了 ${validStickers.length} 个表情！${invalidStickers.length > 0 ? `\n有 ${invalidStickers.length} 个格式错误的条目被忽略。` : ''}`);
-            await renderStickers();
-
-        } catch (processingError) {
-            console.error("批量添加表情失败:", processingError);
-            showToast(`添加失败：\n${processingError.message}\n请检查JSON格式是否正确。`, 'error');
         }
-    }
 
-// AI转换函数
-async function convertTextToJsonWithAI(text) {
-    const apiConfig = await getActiveApiProfile(); 
+        function updateSelectionCount() {
+                const count = selectedStickers.size;
+                deleteSelectedBtn.textContent = `删除 (${count})`;
+                deleteSelectedBtn.disabled = count === 0;
+                moveTopBtn.disabled = count === 0;
+                headerLeftBtn.disabled = count === 0;
+        }
 
-    if (!apiConfig || !apiConfig.apiKey || !apiConfig.model) {
-        showToast("AI转换功能需要有效的API配置。请前往“设置”页面检查您的API方案。", 'error');
-        throw new Error("API configuration is missing.");
-    }
-    // 对非Gemini服务商检查proxyUrl
-    if (apiConfig.apiProvider !== 'gemini' && !apiConfig.proxyUrl) {
-         showToast("使用默认/反代服务商时，AI API地址不能为空。请前往“设置”检查。", 'error');
-        throw new Error("Proxy URL is missing for default provider.");
-    }
-            
-    const systemPrompt = `
+        async function handleAddSticker() {
+                const choice = await showUploadChoiceModal(fileInput);
+                if (!choice) return;
+
+                let imageUrl = null;
+
+                if (choice.type === 'local') {
+                        try {
+                                imageUrl = await uploadImage(choice.value);
+                        } catch (error) {
+                                showToast(error.message, 'error');
+                                return;
+                        }
+                } else if (choice.type === 'url') {
+                        imageUrl = choice.value;
+                }
+
+                if (imageUrl) {
+                        await processAndSaveSticker(imageUrl);
+                }
+        }
+
+        async function processAndSaveSticker(url) {
+                const name = await promptForInput('给表情起个名字', '例如：开心、疑惑、赞', false, true, '');
+                if (name === null) return;
+
+                try {
+                        const highestOrder = await db.userStickers.orderBy('order').last();
+                        const newOrder = (highestOrder?.order || 0) + 1;
+                        await db.userStickers.add({ url, name, order: newOrder });
+                        await renderStickers();
+                } catch (e) {
+                        showToast(e.name === 'ConstraintError' ? '这个表情已经添加过了！' : '添加失败，请检查URL。', 'error');
+                }
+        }
+
+        async function handleBulkAdd() {
+                const jsonInput = await promptForInput(
+                        '批量添加表情',
+                        '请粘贴JSON数组或纯文本列表...\nAI会自动尝试转换文本格式。',
+                        true, false
+                );
+
+                if (!jsonInput) return;
+
+                let stickersToAdd = [];
+                try {
+                        stickersToAdd = JSON.parse(jsonInput);
+                } catch (error) {
+                        // If JSON parsing fails, call the AI for conversion
+                        console.log("JSON parsing failed, initiating AI text conversion...");
+
+                        const moreOptionsBtn = document.getElementById('more-options-btn');
+                        const moreOptionsMenu = document.getElementById('more-options-menu');
+
+                        // Ensure the menu is closed before showing the loader
+                        moreOptionsMenu.classList.add('hidden');
+
+                        // Store original icon, show spinner, and disable the button
+                        const originalIconHTML = moreOptionsBtn.innerHTML;
+                        const spinnerHTML = `<svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="var(--theme-color)" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+
+                        moreOptionsBtn.innerHTML = spinnerHTML;
+                        moreOptionsBtn.disabled = true;
+
+                        try {
+                                const convertedJson = await convertTextToJsonWithAI(jsonInput);
+                                if (!convertedJson) {
+                                        showToast("AI无法将文本转换为有效的JSON格式，请检查您的文本或API设置。", 'error');
+                                        return; // Exit if AI fails
+                                }
+                                stickersToAdd = convertedJson;
+                        } catch (aiError) {
+                                console.error("AI conversion error:", aiError);
+                                showToast(`AI转换失败: ${aiError.message}`, 'error');
+                                return; // Exit on error
+                        } finally {
+                                // IMPORTANT: Restore the button's state in the finally block
+                                moreOptionsBtn.innerHTML = originalIconHTML;
+                                moreOptionsBtn.disabled = false;
+                        }
+                }
+
+                try {
+                        if (!Array.isArray(stickersToAdd)) throw new Error("输入的不是一个有效的JSON数组。");
+                        const validStickers = stickersToAdd.filter(item => item && typeof item.name === 'string' && typeof item.url === 'string');
+                        if (validStickers.length === 0) throw new Error("没有找到有效的表情数据。");
+
+                        const highestOrder = await db.userStickers.orderBy('order').last();
+                        let currentOrder = (highestOrder?.order || 0);
+                        const stickersWithOrder = validStickers.map(s => ({ ...s, order: ++currentOrder }));
+
+                        await db.userStickers.bulkAdd(stickersWithOrder);
+                        showToast(`成功添加了 ${validStickers.length} 个表情！`);
+                        await renderStickers();
+                } catch (e) {
+                        showToast(`添加失败: ${e.message}`, 'error');
+                }
+        }
+
+        // AI转换函数
+        async function convertTextToJsonWithAI(text) {
+                const apiConfig = await getActiveApiProfile();
+
+                if (!apiConfig || !apiConfig.apiKey || !apiConfig.model) {
+                        showToast("AI转换功能需要有效的API配置。请前往“设置”页面检查您的API方案。", 'error');
+                        throw new Error("API configuration is missing.");
+                }
+                // 对非Gemini服务商检查proxyUrl
+                if (apiConfig.apiProvider !== 'gemini' && !apiConfig.proxyUrl) {
+                        showToast("使用默认/反代服务商时，AI API地址不能为空。请前往“设置”检查。", 'error');
+                        throw new Error("Proxy URL is missing for default provider.");
+                }
+
+                const systemPrompt = `
 You are a highly intelligent text-to-JSON converter. Your task is to accurately convert the user's plain text list of stickers into a valid JSON array.
 
 **Input Format Rules:**
@@ -254,68 +248,205 @@ ${text}
 - Ensure the final output is a clean, raw JSON string that can be parsed directly.
     `;
 
-    try {
-            const rawJsonString = await callApi(systemPrompt, [], { temperature: 0.1 }, 'text');
+                try {
+                        const rawJsonString = await callApi(systemPrompt, [], { temperature: 0.1 }, 'text');
 
-            if (!rawJsonString) {
-                    throw new Error("API返回内容为空或格式无效。");
-            }
+                        if (!rawJsonString) {
+                                throw new Error("API返回内容为空或格式无效。");
+                        }
 
-            // 在这里自己解析，更灵活
-            return JSON.parse(rawJsonString);
-    } catch (error) {
-        console.error("AI aPI call or parsing failed:", error);
-        // 将具体的错误信息抛出，以便上层函数可以捕获并显示给用户
-        throw error;
-    }
-}
-
-    // --- Event Listeners ---
-    editBtn.addEventListener('click', toggleEditMode);
-    bulkAddBtn.addEventListener('click', handleBulkAdd);
-
-    moveTopBtn.addEventListener('click', async () => {
-        if (selectedStickers.size === 0) return showToast('请先选择要操作的表情。', 'error');
-        const highestOrder = await db.userStickers.orderBy('order').last();
-        const newOrder = (highestOrder?.order || 0) + 1;
-        const updates = Array.from(selectedStickers).map(id => ({
-            key: id,
-            changes: { order: newOrder }
-        }));
-        await db.userStickers.bulkUpdate(updates);
-        toggleEditMode();
-    });
-
-    deleteSelectedBtn.addEventListener('click', async () => {
-        if (selectedStickers.size === 0) return showToast('请先选择要操作的表情。', 'error');
-        const confirmed = await showConfirmModal(
-            '删除表情',
-            `确定要删除选中的 ${selectedStickers.size} 个表情吗？`,
-            '删除',
-            '取消'
-        );
-        if (confirmed) {
-            await db.userStickers.bulkDelete(Array.from(selectedStickers));
-            toggleEditMode();
+                        // 在这里自己解析，更灵活
+                        return JSON.parse(rawJsonString);
+                } catch (error) {
+                        console.error("AI aPI call or parsing failed:", error);
+                        // 将具体的错误信息抛出，以便上层函数可以捕获并显示给用户
+                        throw error;
+                }
         }
-    });
 
-    gridContainer.addEventListener('click', (e) => {
-        if (!isEditMode) return;
-        const stickerItem = e.target.closest('.sticker-grid-item[data-id]');
-        if (!stickerItem) return;
+        // --- Export Functions ---
+        async function showExportOptionsModal() {
+                return new Promise(resolve => {
+                        const modalHtml = `
+                <h3 class="text-lg font-semibold text-center p-4 border-b">选择导出格式</h3>
+                <div class="p-4 space-y-3">
+                    <button data-format="json" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">JSON</button>
+                    <button data-format="text" class="w-full p-3 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200">纯文本</button>
+                </div>
+                <div class="p-2 border-t">
+                    <button data-format="cancel" class="modal-btn modal-btn-cancel w-full">取消</button>
+                </div>`;
+                        const modal = document.createElement('div');
+                        modal.className = 'modal visible';
+                        modal.innerHTML = `<div class="modal-content">${modalHtml}</div>`;
+                        document.body.appendChild(modal);
 
-        const stickerId = parseInt(stickerItem.dataset.id);
-        const checkbox = stickerItem.querySelector('input[type="checkbox"]');
-        
-        checkbox.checked = !checkbox.checked;
-        if (checkbox.checked) {
-            selectedStickers.add(stickerId);
-        } else {
-            selectedStickers.delete(stickerId);
+                        modal.addEventListener('click', (e) => {
+                                const format = e.target.dataset.format;
+                                if (format) {
+                                        modal.remove();
+                                        resolve(format === 'cancel' ? null : format);
+                                }
+                        });
+                });
         }
-    });
 
-    // --- Initial Render ---
-    renderStickers();
+        async function exportStickers(stickersToExport) {
+                if (stickersToExport.length === 0) {
+                        showToast("没有可导出的表情。", "info");
+                        return;
+                }
+
+                const format = await showExportOptionsModal();
+                if (!format) return;
+
+                let fileContent, fileExtension, mimeType;
+                if (format === 'json') {
+                        fileContent = JSON.stringify(stickersToExport.map(({ name, url }) => ({ name, url })), null, 2);
+                        fileExtension = 'json';
+                        mimeType = 'application/json';
+                } else { // text
+                        fileContent = stickersToExport.map(s => `${s.name}: ${s.url}`).join('\n');
+                        fileExtension = 'txt';
+                        mimeType = 'text/plain';
+                }
+
+                const blob = new Blob([fileContent], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Xphone_Stickers_${new Date().toISOString().slice(0, 10)}.${fileExtension}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+        }
+
+        async function handleExportAll() {
+                const allStickers = await db.userStickers.orderBy('order').reverse().toArray();
+                exportStickers(allStickers);
+        }
+
+        async function handleExportSelected() {
+                const selectedIds = Array.from(selectedStickers);
+                const stickersToExp = await db.userStickers.bulkGet(selectedIds);
+                exportStickers(stickersToExp.filter(Boolean));
+        }
+
+        // --- Event Listeners ---
+        editBtn.addEventListener('click', toggleEditMode);
+        bulkAddBtn.addEventListener('click', () => { handleBulkAdd(); moreOptionsMenu.classList.add('hidden'); });
+        exportAllBtn.addEventListener('click', () => { handleExportAll(); moreOptionsMenu.classList.add('hidden'); });
+
+        moveTopBtn.addEventListener('click', async () => {
+                if (selectedStickers.size === 0) return;
+                const highestOrder = await db.userStickers.orderBy('order').last();
+                const newOrder = (highestOrder?.order || 0) + 1;
+                const updates = Array.from(selectedStickers).map(id => ({ key: id, changes: { order: newOrder } }));
+                await db.userStickers.bulkUpdate(updates);
+                toggleEditMode();
+                await renderStickers();
+        });
+
+        deleteSelectedBtn.addEventListener('click', async () => {
+                if (selectedStickers.size === 0) return;
+                const confirmed = await showConfirmModal('删除表情', `确定要删除选中的 ${selectedStickers.size} 个表情吗？`, '删除', '取消');
+                if (confirmed) {
+                        await db.userStickers.bulkDelete(Array.from(selectedStickers));
+                        toggleEditMode();
+                        await renderStickers();
+                }
+        });
+
+        // --- Drag-to-Select Logic ---
+        gridContainer.addEventListener('mousedown', (e) => {
+                if (!isEditMode) return;
+                isDragging = true;
+                dragStartPos = { x: e.clientX, y: e.clientY };
+
+                selectionRectEl = document.createElement('div');
+                selectionRectEl.id = 'selection-rectangle';
+                document.body.appendChild(selectionRectEl);
+
+                e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+                if (!isDragging || !isEditMode) return;
+
+                const { x, y } = e;
+                const top = Math.min(y, dragStartPos.y);
+                const left = Math.min(x, dragStartPos.x);
+                const width = Math.abs(x - dragStartPos.x);
+                const height = Math.abs(y - dragStartPos.y);
+
+                selectionRectEl.style.top = `${top}px`;
+                selectionRectEl.style.left = `${left}px`;
+                selectionRectEl.style.width = `${width}px`;
+                selectionRectEl.style.height = `${height}px`;
+
+                const rectBounds = selectionRectEl.getBoundingClientRect();
+                document.querySelectorAll('.sticker-grid-item[data-id]').forEach(item => {
+                        const itemBounds = item.getBoundingClientRect();
+                        const isIntersecting = !(rectBounds.right < itemBounds.left || rectBounds.left > itemBounds.right || rectBounds.bottom < itemBounds.top || rectBounds.top > itemBounds.bottom);
+                        item.classList.toggle('drag-selected', isIntersecting);
+                });
+        });
+
+        window.addEventListener('mouseup', (e) => {
+                if (!isDragging || !isEditMode) return;
+
+                // Differentiate click from drag
+                const distance = Math.hypot(e.clientX - dragStartPos.x, e.clientY - dragStartPos.y);
+
+                if (distance < 10) { // It's a click
+                        const stickerItem = e.target.closest('.sticker-grid-item[data-id]');
+                        if (stickerItem) {
+                                const stickerId = parseInt(stickerItem.dataset.id);
+                                const checkbox = stickerItem.querySelector('input[type="checkbox"]');
+                                const wasSelected = selectedStickers.has(stickerId);
+
+                                checkbox.checked = !wasSelected;
+                                stickerItem.classList.toggle('drag-selected', !wasSelected);
+                                if (wasSelected) {
+                                        selectedStickers.delete(stickerId);
+                                } else {
+                                        selectedStickers.add(stickerId);
+                                }
+                                updateSelectionCount();
+                        }
+                } else { // It's a drag
+                        document.querySelectorAll('.sticker-grid-item.drag-selected').forEach(item => {
+                                const stickerId = parseInt(item.dataset.id);
+                                if (!selectedStickers.has(stickerId)) {
+                                        selectedStickers.add(stickerId);
+                                }
+                        });
+                        // Update checkboxes based on the final selection set
+                        document.querySelectorAll('.sticker-grid-item[data-id]').forEach(item => {
+                                const stickerId = parseInt(item.dataset.id);
+                                item.querySelector('input').checked = selectedStickers.has(stickerId);
+                                item.classList.toggle('drag-selected', selectedStickers.has(stickerId));
+                        });
+                        updateSelectionCount();
+                }
+
+                isDragging = false;
+                if (selectionRectEl) {
+                        selectionRectEl.remove();
+                        selectionRectEl = null;
+                }
+        });
+
+        // --- Initial Setup ---
+        function initializePage() {
+                headerLeftBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>`;
+                headerLeftBtn.onclick = () => window.location.href = 'me.html';
+                moreOptionsBtn.onclick = (e) => { e.stopPropagation(); moreOptionsMenu.classList.toggle('hidden'); };
+                window.addEventListener('click', () => moreOptionsMenu.classList.add('hidden'));
+
+                renderStickers();
+        }
+
+        initializePage();
 });
