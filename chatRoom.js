@@ -3,7 +3,6 @@ import * as spotifyManager from './spotifyManager.js';
 import { updateRelationshipScore, generateNewCharacterPersona, triggerImmediateSummary, formatRelativeTime, replaceUserMentions } from './simulationEngine.js';
 import { showUploadChoiceModal, showCallActionModal, promptForInput, showImageActionModal } from './ui-helpers.js';
 import { showToast, showToastOnNextPage, showRawContentModal, showConfirmModal } from './ui-helpers.js';
-import { showCharacterGeneratorModal } from './characterGenerator.js';
 
 // --- State and Constants ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -18,7 +17,7 @@ multiImageInput.multiple = true; // 关键：允许选择多个文件
 multiImageInput.style.display = 'none';
 document.body.appendChild(multiImageInput);
 
-
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
 const INITIAL_LOAD_COUNT = 30;
 const LOAD_MORE_COUNT = 20;
 let renderedMessages = [];
@@ -1063,7 +1062,20 @@ function scrollToBottom(force = false) {
         // During lazy loading, we don't want to auto-scroll unless forced (e.g., initial load)
         if (!force && isInitialLoad) return;
 
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        // Define the scroll action to avoid repetition
+        const scrollAction = () => {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+
+        // 1. Attempt to scroll immediately. This works most of the time.
+        scrollAction();
+
+        // 2. Schedule another scroll after a tiny delay.
+        // This is the key fix. It executes after the browser has finished its current layout calculations,
+        // ensuring we scroll to the TRUE bottom even if images or fonts caused a layout shift.
+        setTimeout(scrollAction, 0);
+
+        setTimeout(scrollAction, 100);
 }
 
 function listenForLiveUpdates() {
@@ -1121,6 +1133,29 @@ async function setupEventListeners() {
                         chatForm.requestSubmit();
                 }
         });
+
+        chatInput.addEventListener('focus', () => {
+                if (stickerPanel.style.maxHeight !== '0px') {
+                        // 判断是否为触摸设备
+                        if (isTouchDevice) {
+                                // 【移动端逻辑】：瞬间关闭以避免与键盘动画冲突
+                                stickerPanel.classList.add('no-transition');
+                                stickerPanel.style.maxHeight = '0px';
+                                document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
+                                setTimeout(() => {
+                                        stickerPanel.classList.remove('no-transition');
+                                }, 50);
+                        } else {
+                                // 【PC端逻辑】：平滑关闭
+                                stickerPanel.style.maxHeight = '0px';
+                                document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
+                        }
+                }
+                
+        });
+
+        
+
 
         // 手动总结按钮的事件监听
         manualSummaryBtn.addEventListener('click', async () => {
@@ -4802,20 +4837,30 @@ async function toggleStickerPanel() {
         const panel = document.getElementById('sticker-panel');
         const isOpen = panel.style.maxHeight !== '0px';
 
-        if (!isOpen) { // 打开面板
-                if (!stickerPanelRendered) {
-                        await renderStickerPanel();
-                        stickerPanelRendered = true;
-                        setTimeout(() => {
-                                scrollToBottom();
-                        }, 300);
+   
+        if (!isOpen) { // --- 准备打开面板 ---
+                if (isTouchDevice) {
+                        // 【移动端】：先收键盘，再延迟打开面板
+                        chatInput.blur();
+                        setTimeout(async () => {
+                                if (!stickerPanelRendered) {
+                                        await renderStickerPanel();
+                                        stickerPanelRendered = true;
+                                }
+                                panel.style.maxHeight = '256px';
+                                document.addEventListener('click', closeStickerPanelOnClickOutside, true);
+                        }, 50);
+                } else {
+                        // 【PC端】：直接打开面板
+                        if (!stickerPanelRendered) {
+                                await renderStickerPanel();
+                                stickerPanelRendered = true;
+                        }
+                        panel.style.maxHeight = '256px';
+                        document.addEventListener('click', closeStickerPanelOnClickOutside, true);
                 }
-                panel.style.maxHeight = '192px'; // h-48
-                // 添加一个全局监听器
-                document.addEventListener('click', closeStickerPanelOnClickOutside, true);
-        } else { // 关闭面板
+        } else { // --- 准备关闭面板 ---
                 panel.style.maxHeight = '0px';
-                // 移除全局监听器
                 document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
         }
 }
@@ -4825,9 +4870,9 @@ function closeStickerPanelOnClickOutside(event) {
         // 如果点击发生在 footer 外部，则关闭面板
         if (!footer.contains(event.target)) {
                 const panel = document.getElementById('sticker-panel');
-                if (panel.style.maxHeight !== '0px') {
-                        panel.style.maxHeight = '0px';
-                        document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
+                        if (panel.style.maxHeight !== '0px') {
+                                panel.style.maxHeight = '0px';
+                                document.removeEventListener('click', closeStickerPanelOnClickOutside, true);
                 }
         }
 }
@@ -4844,7 +4889,13 @@ async function renderStickerPanel() {
         stickers.forEach(sticker => {
                 const stickerEl = document.createElement('div');
                 stickerEl.className = 'aspect-square bg-white rounded-md flex items-center justify-center p-1 cursor-pointer hover:bg-gray-200 transition';
-                stickerEl.innerHTML = `<img src="${sticker.url}" alt="${sticker.name}" class="max-w-full max-h-full object-contain pointer-events-none">`;
+                
+                let thumbnailUrl = sticker.url;
+                if (thumbnailUrl.includes('res.cloudinary.com')) {
+                        thumbnailUrl = thumbnailUrl.replace('/upload/', '/upload/w_200/');
+                }
+
+                stickerEl.innerHTML = `<img src="${thumbnailUrl}" alt="${sticker.name}" class="max-w-full max-h-full object-contain pointer-events-none">`;
 
                 // 为每个表情创建一个独立的状态
                 let pressTimer = null;
@@ -4856,7 +4907,7 @@ async function renderStickerPanel() {
                                 isLongPress = true; // 确认这是一次长按
                                 e.preventDefault();
                                 showStickerActionMenu(e.target, sticker);
-                        }, 500);
+                        }, 700);
                 };
 
                 const cancelPress = () => {

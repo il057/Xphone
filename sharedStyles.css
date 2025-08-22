@@ -184,14 +184,13 @@ header.app-header, footer.app-dock {
     flex-shrink: 0;
 }
 
+
 /* --- Header --- */
 .app-header {
     background-color: rgba(var(--content-bg-color-rgb, 255, 255, 255), 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-color);
-    position: sticky;
-    top: 0;
     z-index: 20;
     
     /* 关键修改：在这里统一控制所有内边距 */
@@ -244,10 +243,7 @@ header.app-header, footer.app-dock {
     background-color: rgba(0,0,0,0.05);
 }
 
-/* --- Main Content Area --- */
-.main-content {
-    padding-bottom: 100px; /* Ensure content doesn't hide behind the dock */
-}
+
 
 /* --- Bottom Navigation Dock --- */
 .app-dock {
@@ -353,10 +349,10 @@ main.flex-grow {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 4. 给内容预留 header 高度（56 px 只是示例，按你实际 header 高度来）*/
+/* 4. 给内容预留 header 高度*/
 .main-content {
-  padding-top: calc(var(--app-header-h, 56px) + env(safe-area-inset-top));
-  padding-bottom: 100px;         /* 你原本用于避让底 dock 的值 */
+  padding-top: calc(56px + env(safe-area-inset-top));
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
 /* 5. 首页（或不需要滚动的页面）彻底禁掉 main 的滚动 */

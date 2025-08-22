@@ -278,3 +278,5 @@ function calcHeaderHeight(){
 }
 window.addEventListener('resize',calcHeaderHeight);
 document.addEventListener('DOMContentLoaded',calcHeaderHeight);
+
+
