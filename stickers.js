@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isDragging = false;
         let dragStartPos = { x: 0, y: 0 };
         let selectionRectEl = null;
+        let touchTimer;
 
         // --- Core Functions ---
         async function renderStickers() {
@@ -75,20 +76,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         defaultTitle.textContent = '选择项目';
                         headerLeftBtn.textContent = '导出所选';
                         headerLeftBtn.onclick = handleExportSelected;
+                        headerLeftBtn.disabled = true; // Initially disabled
+
                         moreOptionsBtn.textContent = '完成';
                         moreOptionsBtn.onclick = toggleEditMode;
-                        moreOptionsMenu.classList.add('hidden');
+                        moreOptionsMenu.classList.add('hidden'); // Hide menu in edit mode
+
                         editModeFooter.classList.add('visible');
                         editModeFooter.classList.remove('hidden');
+                        updateSelectionCount(); // Initial count update
                 } else {
+                        // This is the part that fixes the back button
                         defaultTitle.textContent = '我的表情';
                         headerLeftBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>`;
-                        headerLeftBtn.onclick = () => window.location.href = 'me.html';
+                        headerLeftBtn.onclick = () => window.location.href = 'me.html'; // Restore back functionality
+                        headerLeftBtn.disabled = false; // Re-enable the button
+
                         moreOptionsBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg>`;
                         moreOptionsBtn.onclick = (e) => { e.stopPropagation(); moreOptionsMenu.classList.toggle('hidden'); };
+
                         editModeFooter.classList.remove('visible');
+
+                        // Reset selection state
                         selectedStickers.clear();
-                        updateSelectionCount();
                         document.querySelectorAll('.sticker-grid-item.drag-selected').forEach(el => el.classList.remove('drag-selected'));
                         document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 }
@@ -358,85 +368,137 @@ ${text}
                 }
         });
 
-        // --- Drag-to-Select Logic ---
-        gridContainer.addEventListener('mousedown', (e) => {
+        // --- Drag-to-Select & Click Logic (Robust Mobile & Desktop Version) ---
+
+        let longPressTimer = null;
+        let isInteracting = false; // A single flag to know if an interaction is happening
+
+        // --- Interaction Start ---
+        const handleInteractionStart = (e) => {
                 if (!isEditMode) return;
-                isDragging = true;
-                dragStartPos = { x: e.clientX, y: e.clientY };
 
-                selectionRectEl = document.createElement('div');
-                selectionRectEl.id = 'selection-rectangle';
-                document.body.appendChild(selectionRectEl);
+                isInteracting = true;
+                const pos = getEventPosition(e);
+                dragStartPos = { x: pos.clientX, y: pos.clientY };
 
-                e.preventDefault();
-        });
+                if (e.type === 'touchstart') {
+                        // For touch, we start a timer. If it fires, it's a drag.
+                        longPressTimer = setTimeout(() => {
+                                // Prevent this from being treated as a click later
+                                isDragging = true;
+                                // Create the visual rectangle for dragging
+                                if (!selectionRectEl) {
+                                        selectionRectEl = document.createElement('div');
+                                        selectionRectEl.id = 'selection-rectangle';
+                                        document.body.appendChild(selectionRectEl);
+                                }
+                        }, 500); // 500ms defines a long press
+                }
+                // For mouse, we don't start dragging immediately, but on the first significant move.
+        };
 
-        window.addEventListener('mousemove', (e) => {
-                if (!isDragging || !isEditMode) return;
+        // --- Interaction Move ---
+        const handleInteractionMove = (e) => {
+                if (!isInteracting || !isEditMode) return;
 
-                const { x, y } = e;
-                const top = Math.min(y, dragStartPos.y);
-                const left = Math.min(x, dragStartPos.x);
-                const width = Math.abs(x - dragStartPos.x);
-                const height = Math.abs(y - dragStartPos.y);
+                const pos = getEventPosition(e);
+
+                // If it's a touch event, any movement means it's not a tap/long-press, so clear the timer.
+                if (e.type === 'touchmove') {
+                        clearTimeout(longPressTimer);
+                }
+
+                // For mouse, if we move more than a few pixels, it's officially a drag.
+                const distance = Math.hypot(pos.clientX - dragStartPos.x, pos.clientY - dragStartPos.y);
+                if (e.type === 'mousemove' && e.buttons === 1 && distance > 10 && !isDragging) {
+                        isDragging = true;
+                        if (!selectionRectEl) {
+                                selectionRectEl = document.createElement('div');
+                                selectionRectEl.id = 'selection-rectangle';
+                                document.body.appendChild(selectionRectEl);
+                        }
+                }
+
+                if (!isDragging) return;
+                e.preventDefault(); // Prevent page scroll while dragging
+
+                // Update selection rectangle visuals
+                const top = Math.min(pos.clientY, dragStartPos.y);
+                const left = Math.min(pos.clientX, dragStartPos.x);
+                const width = Math.abs(pos.clientX - dragStartPos.x);
+                const height = Math.abs(pos.clientY - dragStartPos.y);
 
                 selectionRectEl.style.top = `${top}px`;
                 selectionRectEl.style.left = `${left}px`;
                 selectionRectEl.style.width = `${width}px`;
                 selectionRectEl.style.height = `${height}px`;
 
+                // Check for intersections
                 const rectBounds = selectionRectEl.getBoundingClientRect();
                 document.querySelectorAll('.sticker-grid-item[data-id]').forEach(item => {
                         const itemBounds = item.getBoundingClientRect();
                         const isIntersecting = !(rectBounds.right < itemBounds.left || rectBounds.left > itemBounds.right || rectBounds.bottom < itemBounds.top || rectBounds.top > itemBounds.bottom);
                         item.classList.toggle('drag-selected', isIntersecting);
                 });
-        });
+        };
 
-        window.addEventListener('mouseup', (e) => {
-                if (!isDragging || !isEditMode) return;
+        // --- Interaction End ---
+        const handleInteractionEnd = (e) => {
+                clearTimeout(longPressTimer); // Always clear the timer on interaction end
+                if (!isInteracting || !isEditMode) return;
 
-                // Differentiate click from drag
-                const distance = Math.hypot(e.clientX - dragStartPos.x, e.clientY - dragStartPos.y);
-
-                if (distance < 10) { // It's a click
+                if (isDragging) {
+                        // This was a confirmed drag-select action
+                        document.querySelectorAll('.sticker-grid-item.drag-selected').forEach(item => {
+                                const stickerId = parseInt(item.dataset.id);
+                                selectedStickers.add(stickerId); // Add all visually selected items to the set
+                        });
+                } else {
+                        // This was a click or a short tap
+                        e.preventDefault(); // CRITICAL: This stops the browser from firing a delayed 'click' event
                         const stickerItem = e.target.closest('.sticker-grid-item[data-id]');
                         if (stickerItem) {
                                 const stickerId = parseInt(stickerItem.dataset.id);
-                                const checkbox = stickerItem.querySelector('input[type="checkbox"]');
-                                const wasSelected = selectedStickers.has(stickerId);
-
-                                checkbox.checked = !wasSelected;
-                                stickerItem.classList.toggle('drag-selected', !wasSelected);
-                                if (wasSelected) {
+                                if (selectedStickers.has(stickerId)) {
                                         selectedStickers.delete(stickerId);
                                 } else {
                                         selectedStickers.add(stickerId);
                                 }
-                                updateSelectionCount();
                         }
-                } else { // It's a drag
-                        document.querySelectorAll('.sticker-grid-item.drag-selected').forEach(item => {
-                                const stickerId = parseInt(item.dataset.id);
-                                if (!selectedStickers.has(stickerId)) {
-                                        selectedStickers.add(stickerId);
-                                }
-                        });
-                        // Update checkboxes based on the final selection set
-                        document.querySelectorAll('.sticker-grid-item[data-id]').forEach(item => {
-                                const stickerId = parseInt(item.dataset.id);
-                                item.querySelector('input').checked = selectedStickers.has(stickerId);
-                                item.classList.toggle('drag-selected', selectedStickers.has(stickerId));
-                        });
-                        updateSelectionCount();
                 }
 
+                // Single point of truth: Update UI based on the final `selectedStickers` set
+                document.querySelectorAll('.sticker-grid-item[data-id]').forEach(item => {
+                        const stickerId = parseInt(item.dataset.id);
+                        const isSelected = selectedStickers.has(stickerId);
+                        item.querySelector('input').checked = isSelected;
+                        item.classList.toggle('drag-selected', isSelected);
+                });
+                updateSelectionCount();
+
+                // Cleanup
                 isDragging = false;
+                isInteracting = false;
                 if (selectionRectEl) {
                         selectionRectEl.remove();
                         selectionRectEl = null;
                 }
-        });
+        };
+
+        const getEventPosition = (e) => {
+                if (e.touches && e.touches.length > 0) {
+                        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+                }
+                return { clientX: e.clientX, clientY: e.clientY };
+        };
+
+        // Bind all events
+        gridContainer.addEventListener('mousedown', handleInteractionStart);
+        window.addEventListener('mousemove', handleInteractionMove);
+        window.addEventListener('mouseup', handleInteractionEnd);
+        gridContainer.addEventListener('touchstart', handleInteractionStart, { passive: false });
+        window.addEventListener('touchmove', handleInteractionMove, { passive: false });
+        window.addEventListener('touchend', handleInteractionEnd);
 
         // --- Initial Setup ---
         function initializePage() {
