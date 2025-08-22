@@ -63,36 +63,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 htmlToRender = generatedData.html_content;
                                 await db.linkPages.put({ id: linkId, html: htmlToRender, submissions: [], createdAt: Date.now() });
+                                
+                                const submitBtn = new DOMParser().parseFromString(htmlToRender, 'text/html').getElementById('interactive-submit-btn');
+
+                                // Only perform text extraction for STATIC pages at creation time.
+                                if (!submitBtn) {
+                                        const tempDiv = document.createElement('div');
+                                        tempDiv.innerHTML = htmlToRender;
+                                        const fullTextContent = (tempDiv.textContent || "").split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+
+                                        if (fullTextContent) {
+                                                await db.tempKnowledgeTransfer.put({
+                                                        id: chatId,
+                                                        content: fullTextContent
+                                                });
+                                        }
+                                }
+                                await db.linkPages.put({ id: linkId, html: htmlToRender, submissions: [], createdAt: Date.now() });
+
                         }
                 }
 
                 contentContainer.innerHTML = htmlToRender;
 
-                // --- UNIFIED KNOWLEDGE FEEDBACK LOGIC ---
                 const submitBtn = document.getElementById('interactive-submit-btn');
-
                 if (submitBtn) {
-                        // This is an INTERACTIVE page.
-                        // Render any previous submissions.
                         const latestSubmission = pageData?.submissions?.slice(-1)[0];
                         if (latestSubmission) {
                                 renderSubmission(latestSubmission);
                         }
-                        // Attach the event listener to handle form submission.
                         submitBtn.addEventListener('click', handleFormSubmit);
-                } else {
-                        // This is a STATIC page.
-                        // Extract and save its text content for the AI immediately.
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = htmlToRender;
-                        const fullTextContent = (tempDiv.textContent || "").split('\n').map(line => line.trim()).filter(Boolean).join('\n');
-
-                        if (fullTextContent) {
-                                await db.tempKnowledgeTransfer.put({
-                                        id: chatId,
-                                        content: fullTextContent
-                                });
-                        }
                 }
 
         } catch (error) {

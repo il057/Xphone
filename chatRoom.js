@@ -37,7 +37,7 @@ let activeMessageMenu = {
         element: null,
         timestamp: null,
 };
-
+let longPressJustFinished = false;
 let currentReplyContext = null;
 
 let globalSettings;
@@ -1183,6 +1183,8 @@ async function setupEventListeners() {
                 
         });
 
+
+
         // 手动总结按钮的事件监听
         manualSummaryBtn.addEventListener('click', async () => {
                 const confirmed = await showConfirmModal(
@@ -1428,6 +1430,9 @@ async function setupEventListeners() {
                                 case 'edit':
                                         startEdit();
                                         break;
+                                case 'delete_link_html': 
+                                        await deleteLinkPageCache();
+                                        break;
                                 case 'select':
                                         enterSelectionMode();
                                         break;
@@ -1454,6 +1459,7 @@ async function setupEventListeners() {
         let pressEvent = null;
 
         const startPress = (e) => {
+                longPressJustFinished = false;
                 const wrapper = e.target.closest('.message-wrapper');
                 if (!wrapper || isSelectionMode) return;
 
@@ -1464,6 +1470,7 @@ async function setupEventListeners() {
                         if (pressEvent) {
                                 pressEvent.preventDefault();
                         }
+                        longPressJustFinished = true;
                         const timestamp = parseInt(wrapper.dataset.timestamp);
                         const msg = currentChat.history.find(m => toMillis(m.timestamp) === timestamp);
                         if (msg) {
@@ -1485,6 +1492,14 @@ async function setupEventListeners() {
         chatContainer.addEventListener('touchmove', cancelPress);
 
         chatContainer.addEventListener('click', async (e) => {
+                // --- FEATURE: Make the entire link card clickable ---
+                const linkCard = e.target.closest('[data-link-id]');
+                if (linkCard) {
+                        const linkId = linkCard.dataset.linkId;
+                        const sourceChatId = linkCard.dataset.chatId;
+                        window.location.href = `linkViewer.html?linkId=${linkId}&chatId=${sourceChatId}`;
+                        return; // Exit after handling link click
+                }
                 // --- 1. 多选模式逻辑 ---
                 if (isSelectionMode) {
                         const wrapper = e.target.closest('.message-wrapper');
@@ -1493,6 +1508,10 @@ async function setupEventListeners() {
                                 toggleMessageSelection(timestamp);
                         }
                         return; // 在多选模式下，不执行后续操作
+                }
+                if (longPressJustFinished) {
+                        longPressJustFinished = false; // Reset for the next interaction
+                        return; // Exit immediately, preventing navigation or other actions
                 }
 
                 // --- 2. “拍一拍”逻辑 ---
@@ -3445,7 +3464,7 @@ ${guide}
                                                         senderId: actorId,
                                                         type: 'text_photo', // 复用现有类型来显示图片消息
                                                         content: `${action.description}`, // 将AI的描述作为内容
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 };
                                                 currentChat.history.push(photoMessage);
                                                 currentChat.lastMessageTimestamp = photoMessage.timestamp;
@@ -3482,7 +3501,7 @@ ${guide}
                                                         type: 'transfer',
                                                         amount: action.amount,
                                                         note: action.note,
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 };
                                                 currentChat.history.push(transferMessage);
                                                 currentChat.lastMessageTimestamp = transferMessage.timestamp;
@@ -3506,7 +3525,7 @@ ${guide}
                                                         const systemNote = {
                                                                 role: 'system',
                                                                 content: `[系统提示：你已${decision === 'accept' ? '接收' : '拒绝'}了用户的转账。]`,
-                                                                timestamp: new Date(messageTimestamp++),
+                                                                timestamp: messageTimestamp++,
                                                                 isHidden: true
                                                         };
                                                         currentChat.history.push(systemNote);
@@ -3532,7 +3551,7 @@ ${guide}
                                                         senderId: actorId,
                                                         type: 'red_packet',
                                                         packetType: action.packetType,
-                                                        timestamp: new Date(messageTimestamp++),
+                                                        timestamp: messageTimestamp++,
                                                         totalAmount: action.amount,
                                                         count: action.count || 1,
                                                         greeting: action.greeting,
@@ -3581,7 +3600,7 @@ ${guide}
                                                                 const systemMessage = {
                                                                         role: 'system',
                                                                         content: `[系统提示：${actorName} 领取了 ${packet.senderName} 的红包。]`,
-                                                                        timestamp: new Date(messageTimestamp++),
+                                                                        timestamp: messageTimestamp++,
                                                                         isHidden: true
                                                                 };
                                                                 currentChat.history.push(systemMessage);
@@ -3598,7 +3617,7 @@ ${guide}
                                                         productInfo: action.productInfo,
                                                         amount: action.amount,
                                                         status: 'pending',
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 };
                                                 currentChat.history.push(waimaiMessage);
                                                 currentChat.lastMessageTimestamp = waimaiMessage.timestamp;
@@ -3616,7 +3635,7 @@ ${guide}
                                                         const systemMessage = {
                                                                 role: 'system',
                                                                 content: `[系统提示：${actorName} ${action.decision === 'paid' ? '支付' : '拒绝'} 了 ${waimaiRequest.senderName} 的外卖请求。]`,
-                                                                timestamp: new Date(messageTimestamp++),
+                                                                timestamp: messageTimestamp++,
                                                                 isHidden: true
                                                         };
                                                         currentChat.history.push(systemMessage);
@@ -3634,7 +3653,7 @@ ${guide}
                                                         description: action.description,
                                                         source_name: action.source_name,
                                                         content: action.content,
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 };
                                                 currentChat.history.push(linkMessage);
                                                 currentChat.lastMessageTimestamp = linkMessage.timestamp;
@@ -3650,7 +3669,7 @@ ${guide}
                                                                 const acceptMsg = {
                                                                         role: 'assistant',
                                                                         content: "我通过了你的好友请求，我们重新开始聊天吧！",
-                                                                        timestamp: new Date(messageTimestamp++)
+                                                                        timestamp: messageTimestamp++
                                                                 };
                                                                 currentChat.history.push(acceptMsg);
                                                                 currentChat.lastMessageTimestamp = acceptMsg.timestamp;
@@ -3676,7 +3695,7 @@ ${guide}
                                                 statusTarget.status.text = action.text || oldStatusText;
                                                 statusTarget.status.color = action.color || 'green';
                                                 if (action.text && action.text !== oldStatusText) {
-                                                        const statusMessage = { role: 'system', type: 'system_message', content: `${actorName} 将状态修改为“${action.text}”`, timestamp: new Date(messageTimestamp++) };
+                                                        const statusMessage = { role: 'system', type: 'system_message', content: `${actorName} 将状态修改为“${action.text}”`, timestamp: messageTimestamp++ };
                                                         currentChat.history.push(statusMessage);
                                                         appendMessage(statusMessage);
                                                 }
@@ -3691,7 +3710,7 @@ ${guide}
                                                                 chatToUpdate.signature = action.signature;
                                                                 await db.chats.put(chatToUpdate);
                                                                 // 这里的 actorName 是正确的“角色名”
-                                                                const sigMessage = { role: 'system', type: 'system_message', content: `${actorName} 更新了签名`, timestamp: new Date(messageTimestamp++) };
+                                                                const sigMessage = { role: 'system', type: 'system_message', content: `${actorName} 更新了签名`, timestamp: messageTimestamp++ };
                                                                 currentChat.history.push(sigMessage);
                                                                 appendMessage(sigMessage);
                                                         }
@@ -3712,7 +3731,7 @@ ${guide}
                                                                         currentChat.settings.aiAvatar = foundAvatar.url;
                                                                 }
                                                                 // 这里的 actorName 是正确的“角色名”
-                                                                const avatarMessage = { role: 'system', type: 'system_message', content: `${actorName} 更换了头像`, timestamp: new Date(messageTimestamp++) };
+                                                                const avatarMessage = { role: 'system', type: 'system_message', content: `${actorName} 更换了头像`, timestamp: messageTimestamp++ };
                                                                 currentChat.history.push(avatarMessage);
                                                                 appendMessage(avatarMessage);
                                                         } else {
@@ -3729,7 +3748,7 @@ ${guide}
                                                 const newName = action.newName || action.name;
                                                 if (newName && newName !== oldName) {
                                                         nameTarget.name = newName;
-                                                        const nameChangeMessage = { role: 'system', type: 'system_message', content: `${oldName} 将名字修改为“${newName}”`, timestamp: new Date(messageTimestamp++) };
+                                                        const nameChangeMessage = { role: 'system', type: 'system_message', content: `${oldName} 将名字修改为“${newName}”`, timestamp: messageTimestamp++ };
                                                         currentChat.history.push(nameChangeMessage);
                                                         appendMessage(nameChangeMessage);
                                                         if (!isGroupChat) {
@@ -3748,7 +3767,7 @@ ${guide}
                                                         if (foundPhoto) {
                                                                 backgroundOwner.settings.coverPhoto = foundPhoto.url;
                                                                 await db.chats.put(backgroundOwner);
-                                                                const bgMessage = { role: 'system', type: 'system_message', content: `${actorName} 更换了主页背景`, timestamp: new Date(messageTimestamp++) };
+                                                                const bgMessage = { role: 'system', type: 'system_message', content: `${actorName} 更换了主页背景`, timestamp: messageTimestamp++ };
                                                                 currentChat.history.push(bgMessage);
                                                                 appendMessage(bgMessage);
                                                         } else {
@@ -3764,7 +3783,7 @@ ${guide}
                                                 if (postAuthorChat) {
                                                         const postData = {
                                                                 authorId: postAuthorId,
-                                                                timestamp: Date.now(),
+                                                                timestamp: messageTimestamp++,
                                                                 likes: [],
                                                                 comments: [],
                                                                 type: action.postType === 'text' ? 'text_post' : 'image_post',
@@ -3773,7 +3792,7 @@ ${guide}
                                                                 mentionIds: action.mentionIds || null, // 保存mentionIds
                                                         };
                                                         const newPostId = await db.xzonePosts.add(postData);
-                                                        const postNotice = { role: 'system', type: 'system_message', content: `${actorName} 发布了一条新动态`, timestamp: new Date(messageTimestamp++) };
+                                                        const postNotice = { role: 'system', type: 'system_message', content: `${actorName} 发布了一条新动态`, timestamp: messageTimestamp++ };
                                                         currentChat.history.push(postNotice);
                                                         appendMessage(postNotice);
 
@@ -3789,7 +3808,7 @@ ${guide}
                                                                                         role: 'system',
                                                                                         type: 'user_post_mention',
                                                                                         content: `[系统提示：${actorName} 在一条新动态中 @提到了你。请你查看并决定是否需要回应。动态ID: ${newPostId}]`,
-                                                                                        timestamp: new Date(Date.now() + 1),
+                                                                                        timestamp: messageTimestamp++,
                                                                                         isHidden: true
                                                                                 };
                                                                                 mentionedChat.history.push(systemMessage);
@@ -3848,7 +3867,7 @@ ${guide}
                                                                         type: 'audio_message', // 新类型
                                                                         content: audioUrl,     // 音频链接
                                                                         transcript: action.content, // 原始文本
-                                                                        timestamp: new Date(messageTimestamp++)
+                                                                        timestamp: messageTimestamp++
                                                                 };
                                                                 currentChat.history.push(audioMessage);
                                                                 currentChat.lastMessageTimestamp = audioMessage.timestamp;
@@ -3864,7 +3883,7 @@ ${guide}
                                                                         senderId: actorId,
                                                                         type: 'voice_message',
                                                                         content: action.content,
-                                                                        timestamp: new Date(messageTimestamp++)
+                                                                        timestamp: messageTimestamp++
                                                                 };
                                                                 currentChat.history.push(fallbackMessage);
                                                                 currentChat.lastMessageTimestamp = fallbackMessage.timestamp;
@@ -3880,7 +3899,7 @@ ${guide}
                                                                 senderId: actorId,
                                                                 type: 'voice_message',
                                                                 content: action.content,
-                                                                timestamp: new Date(messageTimestamp++)
+                                                                timestamp: messageTimestamp++
                                                         };
                                                         currentChat.history.push(voiceMessage);
                                                         currentChat.lastMessageTimestamp = voiceMessage.timestamp;
@@ -3895,7 +3914,7 @@ ${guide}
                                                         chatId: charId,
                                                         authorName: actorName,
                                                         description: action.description,
-                                                        timestamp: new Date(messageTimestamp++),
+                                                        timestamp: messageTimestamp++,
                                                         type: 'diary',
                                                         isImportant: 0
                                                 });
@@ -3903,7 +3922,7 @@ ${guide}
                                                         role: 'system',
                                                         type: 'system_message',
                                                         content: `${actorName} 把这件事记在了心里。`,
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 });
                                                 appendMessage({ role: 'system', type: 'system_message', content: `${actorName} 把这件事记在了心里。` });
                                                 break;
@@ -3913,7 +3932,7 @@ ${guide}
                                                         chatId: charId,
                                                         authorName: actorName,
                                                         description: action.description,
-                                                        timestamp: new Date(messageTimestamp++),
+                                                        timestamp: messageTimestamp++,
                                                         type: 'diary',
                                                         isImportant: 1 // 标记为核心记忆
                                                 });
@@ -3921,7 +3940,7 @@ ${guide}
                                                         role: 'system',
                                                         type: 'system_message',
                                                         content: `⭐ ${actorName} 将此事标记为核心记忆。`,
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 });
                                                 appendMessage({ role: 'system', type: 'system_message', content: `⭐ ${actorName} 将此事标记为核心记忆。` });
                                                 shouldTriggerSummary = true;
@@ -3938,7 +3957,7 @@ ${guide}
                                                         chatId: charId,
                                                         authorName: actorName,
                                                         description: action.description,
-                                                        timestamp: new Date(messageTimestamp++),
+                                                        timestamp: messageTimestamp++,
                                                         targetDate: targetDate,
                                                         type: 'countdown',
                                                         isImportant: 0
@@ -3947,7 +3966,7 @@ ${guide}
                                                         role: 'system',
                                                         type: 'system_message',
                                                         content: `你和 ${actorName} 定下了一个约定。`,
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 };
                                                 currentChat.history.push(countdownMsg);
                                                 appendMessage(countdownMsg);
@@ -3966,7 +3985,7 @@ ${guide}
                                                         await db.diaries.add({
                                                                 chatId: charId, // 记录日记产生的上下文（哪个聊天会话）
                                                                 authorId: diaryAuthorId, // 记录真正的作者
-                                                                timestamp: new Date(messageTimestamp++),
+                                                                timestamp: messageTimestamp++,
                                                                 content: action.content,
                                                                 keywords: action.keywords || []
                                                         });
@@ -3976,7 +3995,7 @@ ${guide}
                                                                 role: 'system',
                                                                 type: 'system_message',
                                                                 content: `${diaryAuthor.name}似乎在沉思着什么，并写下了些东西。`,
-                                                                timestamp: new Date(messageTimestamp++)
+                                                                timestamp: messageTimestamp++
                                                         };
 
                                                         // 我们需要把这个系统消息推送到正确的聊天历史中
@@ -4031,7 +4050,7 @@ ${guide}
                                                                         type: 'sticker',
                                                                         content: stickerToSend.url,
                                                                         meaning: stickerToSend.name,
-                                                                        timestamp: new Date(messageTimestamp++)
+                                                                        timestamp: messageTimestamp++
                                                                 };
                                                                 currentChat.history.push(stickerMessage);
                                                                 currentChat.lastMessageTimestamp = stickerMessage.timestamp;
@@ -4047,7 +4066,7 @@ ${guide}
                                                                         senderId: actorId,
                                                                         type: 'text', // Send as a standard text bubble.
                                                                         content: `[${stickerName}]`, // Use the AI's description as the content. The brackets help signify an action.
-                                                                        timestamp: new Date(messageTimestamp++)
+                                                                        timestamp: messageTimestamp++
                                                                 };
                                                                 currentChat.history.push(fallbackMessage);
                                                                 currentChat.lastMessageTimestamp = fallbackMessage.timestamp;
@@ -4131,7 +4150,7 @@ ${guide}
                                                         senderName: actorName,
                                                         senderId: actorId,
                                                         content: `[未识别指令: ${action.type}] ${JSON.stringify(action)}`,
-                                                        timestamp: new Date(messageTimestamp++)
+                                                        timestamp: messageTimestamp++
                                                 };
                                                 currentChat.history.push(fallbackMessage);
                                                 currentChat.lastMessageTimestamp = fallbackMessage.timestamp;
@@ -4512,13 +4531,40 @@ async function handlePacketClick(timestamp) {
  * @param {Event} e - The mouse/touch event that triggered the menu.
  * @param {object} msg - The message object that was long-pressed.
  */
-function showLongPressMenu(e, msg) {
+async function showLongPressMenu(e, msg) {
         activeMessageMenu.timestamp = toMillis(msg.timestamp);
         const wrapper = e.target.closest('.message-wrapper');
         if (!wrapper) return;
 
+        const linkCard = wrapper.querySelector('[data-link-id]');
+        if (linkCard) {
+                // 暂时让链接卡片无法被点击，防止松开鼠标时跳转
+                linkCard.style.pointerEvents = 'none';
+        }
+
         // Position the menu
         const menu = messageActionsMenu;
+
+        const editBtn = menu.querySelector('[data-action="edit"]');
+        if (msg.type === 'share_link' && msg.content) {
+                const numericId = toMillis(msg.timestamp);
+
+                // 在查询数据库前，将数字ID转换为字符串
+                const pageCache = await db.linkPages.get(String(numericId));
+                if (pageCache) {
+                        editBtn.textContent = '删除页面缓存';
+                        editBtn.dataset.action = 'delete_link_html'; // Change the action
+                        editBtn.disabled = false;
+                } else {
+                        editBtn.textContent = '无页面缓存';
+                        editBtn.disabled = true;
+                }
+        } else {
+                // Reset to default for other message types
+                editBtn.textContent = '编辑';
+                editBtn.dataset.action = 'edit';                
+        }
+
         menu.classList.remove('hidden');
 
         // Get dimensions of the message bubble and the menu
@@ -4543,11 +4589,40 @@ function showLongPressMenu(e, msg) {
         activeMessageMenu.element = menu;
         activeMessageMenu.triggerElement = wrapper;
 }
+
+/**
+ * Deletes the cached HTML page for a shared link.
+ */
+async function deleteLinkPageCache() {
+        const numericTimestamp = activeMessageMenu.timestamp; // 这是 toMillis() 转换后的数字
+        if (!numericTimestamp) return;
+
+        const confirmed = await showConfirmModal(
+                '删除页面缓存',
+                '确定要删除这个链接已生成的页面缓存吗？删除后，下次点击将重新调用AI生成新页面。',
+                '确认删除',
+                '取消'
+        );
+        if (confirmed) {
+                await db.linkPages.delete(String(numericTimestamp));
+                showToast('页面缓存已删除！');
+        }
+
+}
+
 /**
  * Hides the long-press action menu.
  */
 function hideLongPressMenu() {
         if (activeMessageMenu.element) {
+                if (activeMessageMenu.triggerElement) {
+                        const linkCard = activeMessageMenu.triggerElement.querySelector('[data-link-id]');
+                        if (linkCard) {
+                                // 恢复链接卡片的点击功能
+                                linkCard.style.pointerEvents = 'auto';
+                        }
+                }
+                
                 activeMessageMenu.element.classList.add('hidden');
                 activeMessageMenu.element = null;
                 activeMessageMenu.timestamp = null;

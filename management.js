@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchClearHistoryBtn = document.getElementById('batch-clear-history-btn');
         const batchResetContentBtn = document.getElementById('batch-reset-content-btn');
         const batchDeleteCharsBtn = document.getElementById('batch-delete-chars-btn');
+        const batchClearLinkPagesBtn = document.getElementById('batch-clear-link-pages-btn');
 
         // --- 角色卡导出逻辑 ---
         exportCharBtn.addEventListener('click', async () => {
@@ -222,6 +223,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                 };
                 reader.readAsText(file);
+        });
+
+        
+        batchClearLinkPagesBtn.addEventListener('click', async () => {
+                const confirmed = await showConfirmModal(
+                        '确认清空缓存',
+                        '您确定要删除所有由AI生成的链接页面缓存吗？\n\n这不会删除聊天记录本身，但下次点击这些链接时需要重新生成页面（会消耗API）。',
+                        '确认清空',
+                        '取消'
+                );
+                if (!confirmed) return;
+
+                try {
+                        await db.linkPages.clear();
+                        showToast('已成功清空所有链接页面缓存！', 'success');
+                } catch (error) {
+                        console.error("清空链接页面缓存失败:", error);
+                        showToast(`操作失败: ${error.message}`, 'error');
+                }
         });
 
         // --- 批量操作按钮事件 ---
