@@ -150,6 +150,8 @@ async function init() {
                 backBtn.href = 'contacts.html';
         } else if (document.referrer.includes('contactsPicker.html')) {
                 backBtn.href = 'contacts.html';
+        } else if (document.referrer.includes('linkViewer.html')) {
+                backBtn.href = 'chat.html';
         } else {
                 // 否则，使用默认的浏览器后退功能
                 backBtn.href = 'javascript:history.back()';
@@ -159,6 +161,26 @@ async function init() {
                 showToastOnNextPage('无效或缺失的角色ID，将返回主页。', 'error');
                 window.location.href = 'index.html'; // 跳转到一个安全的页面
                 return; // 立即停止执行，防止后续代码出错
+        }
+
+        const tempKnowledge = await db.tempKnowledgeTransfer.get(charId);
+
+        if (tempKnowledge) {
+                console.log("Found temporary knowledge, injecting into memory.");
+                const chatToUpdate = await db.chats.get(charId);
+                if (chatToUpdate) {
+                        const hiddenMessage = {
+                                role: 'system',
+                                content: `[System Info: The user has just viewed the link you sent. Here is the full text content of that page, which you are now aware of:\n---\n${tempKnowledge.content}\n---]`,
+                                timestamp: new Date(Date.now() + 1),
+                                isHidden: true
+                        };
+                        chatToUpdate.history.push(hiddenMessage);
+                        await db.chats.put(chatToUpdate);
+                }
+
+                // **Crucially, delete the temporary record after use.**
+                await db.tempKnowledgeTransfer.delete(charId);
         }
 
         // Fetch all necessary data in parallel
@@ -805,11 +827,18 @@ function createBubble(msg) {
 
                         case 'share_link':
                                 bubble.classList.add('is-link-share');
+                                // 检查是否存在可供展开的详细内容
+                                const isClickable = msg.content && msg.content.trim() !== '';
+                                const clickableAttrs = isClickable ? `data-link-id="${toMillis(msg.timestamp)}" data-chat-id="${charId}"` : '';
+
                                 contentDiv.innerHTML = `
-                <div class="link-share-card">
+                <div class="link-share-card" ${clickableAttrs}>
                     <div class="title">${msg.title || '无标题'}</div>
                     ${msg.description ? `<div class="description">${msg.description}</div>` : ''}
-                    <div class="footer"><span>${msg.source_name || '链接分享'}</span></div>
+                    <div class="footer">
+                        <span>${msg.source_name || '链接分享'}</span>
+                        ${isClickable ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>' : ''}
+                    </div>
                 </div>`;
                                 break;
                         case 'voice_message':
@@ -1154,9 +1183,6 @@ async function setupEventListeners() {
                 
         });
 
-        
-
-
         // 手动总结按钮的事件监听
         manualSummaryBtn.addEventListener('click', async () => {
                 const confirmed = await showConfirmModal(
@@ -1199,8 +1225,6 @@ async function setupEventListeners() {
                         manualSummaryBtn.innerHTML = originalIcon;
                 }
         });
-
-
 
         document.getElementById('wait-reply-btn').addEventListener('click', getAiResponse);
         document.getElementById('generate-call-response-btn').addEventListener('click', () => {
@@ -1333,7 +1357,15 @@ async function setupEventListeners() {
         });
         document.getElementById('waimai-confirm-btn').addEventListener('click', sendWaimaiRequest);
 
-
+        chatContainer.addEventListener('click', (e) => {
+                const linkCard = e.target.closest('[data-link-id]');
+                if (linkCard) {
+                        const linkId = linkCard.dataset.linkId;
+                        const sourceChatId = linkCard.dataset.chatId;
+                        // Open the new viewer page with the necessary info
+                        window.location.href = `linkViewer.html?linkId=${linkId}&chatId=${sourceChatId}`;
+                }
+        });
 
         // Listener to hide the long-press menu when clicking away
         // 仅当点击既不在菜单内，也不在当前消息气泡内时才关闭菜单
@@ -2675,7 +2707,7 @@ ${commentsText}
 ## 5.2 丰富表达
 - **发送表情**: {"type": "send_sticker", "senderId": "角色的ID", "name": "表情描述文字"}
 - **发送语音**: {"type": "voice_message", "senderId": "角色的ID", "content": "语音的文字内容"}
-- **分享链接**: {"type": "share_link", "senderId": "角色的ID", "title": "文章标题", "description": "摘要", "source_name": "来源网站"}
+- **分享链接**: {"type": "share_link", "senderId": "角色的ID", "title": "文章标题", "description": "摘要", "source_name": "来源网站", "content": "文章正文"}
 - **发送图片**: {"type": "send_photo", "senderId": "角色的ID", "description": "对你想发送的图片内容的详细描述"}
 
 ## 5.3 社交与动态
@@ -2707,7 +2739,7 @@ ${commentsText}
 -引用回复: quote_reply(senderId, target_timestamp, reply_content)
 -发送表情: send_sticker(senderId, name)
 -发送语音: voice_message(senderId, content)
--分享链接: share_link(senderId, title, description, source_name)
+-分享链接: share_link(senderId, title, description, source_name, content)
 -发送图片: send_photo(senderId, description)
 -拍一拍: pat_user(senderId, suffix)
 -拍一拍其他成员: pat_member(senderId, target_name, suffix)

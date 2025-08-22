@@ -143,8 +143,8 @@ db.version(35).stores({
     });
 });
 
-db.version(39).stores({
-        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp, personaAbstract, pendingSummaryAnalysis', 
+db.version(40).stores({
+        chats: '&id, isGroup, groupId, realName, lastIntelUpdateTime, unreadCount, &blockStatus, lastMessageTimestamp, personaAbstract, pendingSummaryAnalysis',
         chatSummaries: '++id, chatId, summaryStartTime, summaryEndTime, keywords, priority, isEnabled',
         apiProfiles: '++id, &profileName',
         ttsProfiles: '++id, &profileName',
@@ -168,9 +168,11 @@ db.version(39).stores({
         eventLog: '++id, timestamp, type, groupId, processedBy',
         offlineSummary: '&id, timestamp',
         callLogs: '++id, charId, type, startTime, duration',
-        diaries: '++id, chatId, authorId, timestamp, content, keywords, &[authorId+timestamp]'
+        diaries: '++id, chatId, authorId, timestamp, content, keywords, &[authorId+timestamp]',
+        linkPages: '&id, submissions',
+        tempKnowledgeTransfer: '&id'
 }).upgrade(tx => {
-        // [新增] 为旧的世界书数据添加默认值
+        // 为旧的世界书数据添加默认值
         return tx.table('worldBooks').toCollection().modify(book => {
                 book.triggerType = 'always'; // 默认所有旧的世界书都是“始终启用”
                 book.keywords = [];

@@ -1459,7 +1459,7 @@ ${habits.featurePreference || '未定义'}
  * @param {object} chat - 当前的AI角色聊天对象
  * @returns {Promise<object>} - 返回找到的人设对象或一个默认对象
  */
-async function getActiveUserPersonaForChat(chat) {
+export async function getActiveUserPersonaForChat(chat) {
         const [personaPresets, globalSettings] = await Promise.all([
                 db.personaPresets.toArray(),
                 db.globalSettings.get('main')

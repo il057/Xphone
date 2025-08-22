@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+        <meta charset="UTF-8">
+        <script>
+                (function () {
+                        try {
+                                const themeMode = localStorage.getItem('xphone-theme-mode');
+                                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                                if (themeMode === 'dark' || (themeMode === 'auto' && systemPrefersDark)) {
+                                        document.documentElement.classList.add('dark');
+                                }
+                        } catch (e) { }
+                })();
+        </script>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+        
+        <link rel="manifest" href="./manifest.json">
+
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Xphone">
+        <meta name="theme-color" content="#3b82f6" />
+        <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+
+        <title>链接详情</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+        <link rel="stylesheet" href="sharedStyles.css">
+        <script type="module" src="applyGlobalStyles.js" defer></script>
+        <script src="https://sdk.scdn.co/spotify-player.js"></script>
+        <script type="module" src="./spotifyManager.js" defer></script>
+        <style>
+                /* Basic article styling */
+                .article-content h1,
+                .article-content h2 {
+                        font-weight: bold;
+                        margin-top: 1.5em;
+                        margin-bottom: 0.5em;
+                }
+        
+                .article-content h1 {
+                        font-size: 1.875rem;
+                }
+        
+                .article-content h2 {
+                        font-size: 1.5rem;
+                }
+        
+                .article-content p {
+                        line-height: 1.75;
+                        margin-bottom: 1em;
+                }
+        
+                .article-content a {
+                        color: var(--theme-color);
+                        text-decoration: underline;
+                }
+        
+                .article-content ul {
+                        list-style: disc;
+                        padding-left: 1.5em;
+                }
+        
+                .article-content blockquote {
+                        border-left: 4px solid var(--theme-color);
+                        padding-left: 1em;
+                        margin-left: 0;
+                        font-style: italic;
+                }
+        </style>
+</head>
+
+<body class="bg-gray-100">
+        <div class="w-full h-full mx-auto flex flex-col bg-white">
+                <header class="app-header">
+                        <div class="flex items-center justify-between">
+                                <a href="javascript:history.back()" class="header-btn p-1.5 -ml-1.5 rounded-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+                                                viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                        d="M15 19l-7-7 7-7" />
+                                        </svg>
+                                </a>
+                                <div
+                                        class="flex-grow mx-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-center">
+                                        <span id="fake-url" class="text-sm text-gray-500 dark:text-gray-400"></span>
+                                </div>
+                                <div class="w-6"></div>
+                        </div>
+                </header>
+                <main id="content-container" class="flex-grow main-content px-4 pb-4 overflow-y-auto article-content">
+                </main>
+        </div>
+        <script type="module" src="linkViewer.js" defer></script>
+</body>
+
+</html>

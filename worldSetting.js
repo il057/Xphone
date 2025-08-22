@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const modalGroupName = document.getElementById('modal-group-name');
         const cancelWorldbookBtn = document.getElementById('cancel-worldbook-btn');
         const saveWorldbookBtn = document.getElementById('save-worldbook-btn');
-
+        
         // --- State ---
         let globalSettings = {};
         let allGroups = [];
@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 infoScanRangeInput.value = globalSettings.infoScanRange || 50;
                 intelCooldownInput.value = globalSettings.intelCooldownMinutes || 5;
                 intelGeneratesMessageSwitch.checked = globalSettings.intelGeneratesMessage !== false;
+                document.getElementById('intelligent-links-switch').checked = globalSettings.enableIntelligentLinks !== false;
 
                 // 渲染分组和角色
                 groupsContainer.innerHTML = '';
@@ -204,6 +205,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 globalSettings.infoScanRange = parseInt(infoScanRangeInput.value);
                 globalSettings.intelCooldownMinutes = parseInt(intelCooldownInput.value);
                 globalSettings.intelGeneratesMessage = intelGeneratesMessageSwitch.checked;
+                globalSettings.enableIntelligentLinks = document.getElementById('intelligent-links-switch').checked;
+
                 await db.globalSettings.put(globalSettings);
 
                 // 批量更新分组的模拟开关状态
