@@ -354,7 +354,6 @@ export async function uploadAudioBlob(audioBlob, fileName = 'voice_message.mp3')
         }
 }
 
-// db.js (在文件末尾添加或替换)
 
 /**
  * (辅助函数) 将图片URL转换为Gemini API所需的Base64格式
@@ -381,7 +380,7 @@ async function urlToGenerativePart(url) {
 
 /**
  * 通用的 AI API 调用函数(版本 3 - 支持不同响应类型)
-        * @param { string } systemPrompt - 发送给 AI 的系统提示或主指令。
+* @param { string } systemPrompt - 发送给 AI 的系统提示或主指令。
  * @param { Array < object >} [messagesPayload = []] - 对话历史消息数组。
  * @param { object } [generationConfig = {}] - (可选) AI生成配置。
  * @param { 'json' | 'text' } [responseType = 'json'] - (可选) 期望的响应类型。'json'会尝试解析为对象, 'text'返回原始字符串。
@@ -496,7 +495,7 @@ export async function callApi(systemPrompt, messagesPayload = [], generationConf
                 throw new Error("API返回了无效的数据结构。");
         }
 
-        // **新增逻辑：根据 responseType 决定如何返回**
+        // **根据 responseType 决定如何返回**
         if (responseType === 'text') {
                 // 对于文本，清理 markdown 并返回原始字符串
                 return rawContent.replace(/```(json|css)?/g, '').trim();

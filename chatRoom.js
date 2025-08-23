@@ -3999,9 +3999,7 @@ ${guide}
                                                         };
 
                                                         // 我们需要把这个系统消息推送到正确的聊天历史中
-                                                        const chatToUpdate = await db.chats.get(charId);
-                                                        chatToUpdate.history.push(systemMessage);
-                                                        await db.chats.put(chatToUpdate);
+                                                        currentChat.history.push(systemMessage);
 
                                                         // 只有在当前页面就是这个聊天时才更新UI
                                                         if (charId === currentChat.id) {

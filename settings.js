@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const ttsEditorContainer = document.getElementById('tts-profile-editor-container');
         const ttsApiKeyInput = document.getElementById('tts-api-key');
 
+        const includeCacheSwitch = document.getElementById('include-cache-switch');
+
         /**
          * 从数据库加载API和全局设置
          */
@@ -153,6 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncGitHubTokenInput.value = state.globalSettings.syncGitHubToken || '';
                 syncGistIdInput.value = state.globalSettings.syncGistId || '';
 
+                includeCacheSwitch.checked = state.globalSettings.includeCacheInBackup !== false;
+
+
                 const privateProb = (state.globalSettings.activeSimTickProb || 0.3) * 100;
                 const groupProb = (state.globalSettings.groupActiveSimTickProb || 0.15) * 100;
 
@@ -206,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         state.globalSettings.syncGitHubToken = syncGitHubTokenInput.value.trim();
                         state.globalSettings.syncGistId = syncGistIdInput.value.trim();
 
+                        //保存缓存开关状态
+                        state.globalSettings.includeCacheInBackup = includeCacheSwitch.checked;
 
                         // 保存后台活动设置
                         const oldEnableState = state.globalSettings.enableBackgroundActivity || false;
@@ -328,8 +335,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
 
                         const tableNames = db.tables.map(t => t.name);
+                        const includeCache = includeCacheSwitch.checked;
+                        if (!includeCache) {
+                                showToast('已根据设置排除缓存数据。', 'info');
+                        }
+                        const finalTableNames = includeCache ? tableNames : tableNames.filter(name => name !== 'linkPages');
+
                         const tableData = await Promise.all(
-                                tableNames.map(name => db.table(name).toArray())
+                                finalTableNames.map(name => db.table(name).toArray())
                         );
 
                         // 定义哪些表是只包含单个对象的
@@ -515,8 +528,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         timestamp: Date.now()
                 };
                 const tableNames = db.tables.map(t => t.name);
+                const includeCache = includeCacheSwitch.checked;
+                if (!includeCache) {
+                        showToast('正在根据设置排除缓存数据打包。', 'info');
+                }
+                const finalTableNames = includeCache ? tableNames : tableNames.filter(name => name !== 'linkPages');
+
                 const tableData = await Promise.all(
-                        tableNames.map(name => db.table(name).toArray())
+                        finalTableNames.map(name => db.table(name).toArray())
                 );
                 const singleObjectTables = ['globalSettings', 'musicLibrary', 'xzoneSettings'];
                 tableNames.forEach((name, i) => {
@@ -775,6 +794,10 @@ async function restoreDataFromBackup(backupData) {
                         for (const tableName in backupData) {
                                 if (['version', 'timestamp'].includes(tableName)) continue;
 
+                                if (!includeCache && tableName === 'linkPages') {
+                                        continue;
+                                }
+                                
                                 const table = db.table(tableName);
                                 const data = backupData[tableName];
                                 if (table && data) {

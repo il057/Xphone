@@ -250,45 +250,69 @@
                 </section>
 
                 <!-- 数据管理 -->
-                  <section class="bg-white p-4 rounded-xl shadow-sm">
-                    <h2 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3 mb-4">数据管理</h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                         <button id="export-data-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">导出备份</button>
-                         <button id="import-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">导入备份</button>
-                         <input id="import-data-input" type="file" accept="application/json" class="hidden">
-                    </div>
+<section class="bg-white p-4 rounded-xl shadow-sm">
+        <h2 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-3 mb-4">数据管理</h2>
 
-                   <div class="pt-4 mt-4 border-t">
-                        <h3 class="text-md font-semibold text-gray-800 mb-2">云同步 (GitHub Gist)</h3>
-                        <p class="text-xs text-gray-500 mb-3">
-                            使用 <a href="https://gist.github.com/" target="_blank" class="text-blue-500 underline">GitHub Gist</a> 实现多设备数据同步。
-                            请按指引创建 Personal Access Token (PAT) 和 Secret Gist。
-                        </p>
-                        <div>
-                            <label for="sync-github-token" class="block text-sm font-medium text-gray-700 mb-1">GitHub Personal Access Token</label>
-                            <input type="password" id="sync-github-token" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="粘贴您的 PAT (需要 gist 权限)">
-                        </div>
-                        <div class="mt-4">
-                            <label for="sync-gist-id" class="block text-sm font-medium text-gray-700 mb-1">Gist ID</label>
-                            <input type="text" id="sync-gist-id" class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" placeholder="粘贴您的 Gist ID">
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                            <button id="upload-data-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+        <div class="relative flex items-start mb-4">
+                <div class="flex h-6 items-center">
+                        <input id="include-cache-switch" name="include-cache" type="checkbox"
+                                class="h-4 w-4 rounded border-gray-300">
+                </div>
+                <div class="ml-3 text-sm leading-6">
+                        <label for="include-cache-switch" class="font-medium text-gray-900">在备份中包含缓存</label>
+                        <p class="text-xs text-gray-500">包含由AI生成的链接页面(linkPages)等缓存数据。取消勾选可以显著减小备份文件体积。</p>
+                </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button id="export-data-btn"
+                        class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">导出备份</button>
+                <button id="import-btn"
+                        class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors">导入备份</button>
+                <input id="import-data-input" type="file" accept="application/json" class="hidden">
+        </div>
+
+        <div class="pt-4 mt-4 border-t">
+                <h3 class="text-md font-semibold text-gray-800 mb-2">云同步 (GitHub Gist)</h3>
+                <p class="text-xs text-gray-500 mb-3">
+                        使用 <a href="https://gist.github.com/" target="_blank" class="text-blue-500 underline">GitHub
+                                Gist</a> 实现多设备数据同步。
+                        请按指引创建 Personal Access Token (PAT) 和 Secret Gist。
+                </p>
+                <div>
+                        <label for="sync-github-token" class="block text-sm font-medium text-gray-700 mb-1">GitHub
+                                Personal Access Token</label>
+                        <input type="password" id="sync-github-token"
+                                class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2"
+                                placeholder="粘贴您的 PAT (需要 gist 权限)">
+                </div>
+                <div class="mt-4">
+                        <label for="sync-gist-id" class="block text-sm font-medium text-gray-700 mb-1">Gist ID</label>
+                        <input type="text" id="sync-gist-id"
+                                class="form-input block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2"
+                                placeholder="粘贴您的 Gist ID">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                        <button id="upload-data-btn"
+                                class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" class="size-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                                 </svg>
                                 上传数据
-                            </button>
-                            <button id="download-data-btn" class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </button>
+                        <button id="download-data-btn"
+                                class="secondary-btn w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-md shadow-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" class="size-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                 </svg>
                                 下载数据
-                            </button>
-                       </div>
-                    </div>
-                    </div>
-                </section>
+                        </button>
+                </div>
+        </div>
+</section>
             </div>
              </div>
         </main>
