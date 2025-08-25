@@ -58,6 +58,9 @@ let callInitiator = null;
 let incomingCallOffer = null; // 用于存储来电信息 {type, from}
 let outgoingCallState = null; // 用于存储去电状态 {type, pending}
 
+let stickerPanelRendered = false;
+
+
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chat-container');
 const chatForm = document.getElementById('chat-form');
@@ -2495,17 +2498,16 @@ async function getAiResponse(charIdToTrigger = null) {
 - **\`create_memory\`**: 这个工具只用于记录客观、简短的事实，例如“用户的生日是5月10日”。
 
 # PART 9:语音表演指南 (Voice Acting Guide)
-在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
+你现在拥有了通过音频标签直接表达情感和音效的能力。在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
 
-1.  **用文字表演**: 当你需要表达笑声、咳嗽、叹气等非语言声音时。你应该【用文字将它表演出来】，让它成为对话的一部分。
-    * **错误示范**: \`[laughs] 你太逗了！\`
-    * **正确示范**: \`“哈哈...你太逗了！”\`
-    * **错误示范**: \`[sighs] 真拿你没办法。\`
-    * **正确示范**: \`“唉...真拿你没办法。”\`
-
-2.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述与对话无关的背景或动作。
+1.  **使用中文标签**: 当需要表达非语言声音时，直接在文本中使用中文方括号标签。例如：\`"[轻笑] 你真的这么觉得吗？"\` 或 \`"[叹气]……好吧。"\`
+2.  **可用标签建议 (可自行扩展)**:
+    * **情感/人声**: \`[笑]\`, \`[大笑]\`, \`[轻笑]\`, \`[叹气]\`, \`[耳语]\`, \`[哭泣]\`, \`[兴奋地]\`, \`[好奇地]\`, \`[讽刺地]\`
+    * **动作/音效**: \`[喝水声]\`, \`[鼓掌]\`, \`[脚步声]\`, \`[打哈欠]\`
+3.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述背景或动作。所有非语言信息都应通过标签完成。
     * **错误示范**: \`(他笑了起来) 你很有趣。\`
-    * **正确做法**: 你的所有动作都应该通过其他指令（如发动态、换头像等）来完成，而不是在语音内容中描述。
+    * **正确示范**: \`"[笑] 你很有趣。"\`
+4.  **自然融合**: 将标签自然地融入对话中，就像剧本中的舞台提示一样，以增强真实感和沉浸感。
                 `;
                 const simplifiedGuide = `
 # PART 8 核心指南 (Core Guide)
@@ -2525,9 +2527,15 @@ async function getAiResponse(charIdToTrigger = null) {
 - **更换昵称 (\`update_name\`)**: 你的昵称是你的“网名”，可以随时根据心情或故事发展来更改，以体现个性。
 
 ## 4. 语音表演 (Voice Acting)
-在生成 \`voice_message\` 时，你必须【用文字表演】，而不是用括号描述。
-- **正确**: “哈哈...你太逗了！”
-- **错误**: \`[laughs] 你太逗了！\` 或 \`(他笑了起来) 你太逗了！\`
+在生成 \`voice_message\` 的 \`content\` 时，你【必须】遵守以下规则：
+1.  **使用中文标签**: 当需要表达非语言声音时，直接在文本中使用中文方括号标签。例如：\`"[轻笑] 你真的这么觉得吗？"\` 或 \`"[叹气]……好吧。"\`
+2.  **可用标签建议 (可自行扩展)**:
+    * **情感/人声**: \`[笑]\`, \`[大笑]\`, \`[轻笑]\`, \`[叹气]\`, \`[耳语]\`, \`[哭泣]\`, \`[兴奋地]\`, \`[好奇地]\`, \`[讽刺地]\`
+    * **动作/音效**: \`[喝水声]\`, \`[鼓掌]\`, \`[脚步声]\`, \`[打哈欠]\`
+3.  **禁止括号描述**: 绝对禁止在 \`content\` 中使用圆括号 \`()\` 或 \`（）\` 来描述背景或动作。所有非语言信息都应通过标签完成。
+    * **错误示范**: \`(他笑了起来) 你很有趣。\`
+    * **正确示范**: \`"[笑] 你很有趣。"\`
+4.  **自然融合**: 将标签自然地融入对话中，就像剧本中的舞台提示一样，以增强真实感和沉浸感。
 `;
 
                 if (isCallActive) {
@@ -3242,7 +3250,7 @@ ${guide}
 
                 // 如果解析失败，aiResponseContent 会是 null，此时弹出警告并停止执行
                 if (!aiResponseContent) {
-                        showRawContentModal('AI响应格式错误', rawContent);
+                        showRawContentModal('AI响应格式错误');
                         sessionStorage.setItem('ai_last_call_failed', 'true');
                         // 恢复UI状态
                         headerEl.textContent = isGroupChat ? `${currentChat.name} (${currentChat.members.length + 1})` : currentChat.name;
@@ -4936,7 +4944,6 @@ function setupPlayerControls() {
 }
 
 // --- Sticker Panel Logic ---
-let stickerPanelRendered = false;
 
 async function toggleStickerPanel() {
         const panel = document.getElementById('sticker-panel');
@@ -5904,7 +5911,8 @@ async function syncCallStateToSessionStorage() {
         };
         sessionStorage.setItem('activeCallState', JSON.stringify(callState));
 }
-/*
+
+
 async function generateAudioFromText(text, voiceId, ttsProfile) {
         if (!text || !voiceId || !ttsProfile || !ttsProfile.apiKey) {
                 throw new Error("Missing required parameters for TTS generation.");
@@ -5949,9 +5957,9 @@ async function generateAudioFromText(text, voiceId, ttsProfile) {
         const audioBlob = await response.blob();
         return URL.createObjectURL(audioBlob);
 }
-*/
 
 
+/*
 async function generateAudioFromText(text, voiceId, ttsProfile) {
         if (!text || !voiceId || !ttsProfile || !ttsProfile.apiKey) {
                 throw new Error("Missing required parameters for TTS generation.");
@@ -6013,7 +6021,7 @@ function handleBroadcastMessage(event) {
                 }
         }
 }
-
+*/
 /**
  * 启动消息编辑流程
  */
